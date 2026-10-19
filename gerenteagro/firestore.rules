@@ -330,6 +330,8 @@ service cloud.firestore {
         allow update: if temAcessoAFazenda(fazendaId) && reenvioIgual();
         // visita finalizada com áudios pendentes: quem tem acesso completa com as observações transcritas
         allow update: if temAcessoAFazenda(fazendaId) && resource.data.get('audiosPendentes', 0) > 0;
+        // resumo em texto corrido pela IA ainda por escrever: quem tem acesso completa quando a internet volta
+        allow update: if temAcessoAFazenda(fazendaId) && resource.data.get('resumoPendente', false) == true;
       }
       // fotos das visitas/monitoramentos: um registro por foto (a visita guarda só a referência);
       // quem tem acesso lê e grava; só a consultoria (ou quem apaga) tira

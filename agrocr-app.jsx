@@ -22323,30 +22323,99 @@ function estruturarFalaVisita(fala, talhaoId, horaDita, talhoes) {
     });
   });
 }
-// observações da visita → itens do relatório (resumo, talhões visitados, seções por categoria)
-function montarItensVisita(prontas, talhoes, lavoura) {
+// "T1, T3 e T5"
+const listarNomes = (nomes) => (nomes.length <= 1 ? nomes.join("") : nomes.slice(0, -1).join(", ") + " e " + nomes[nomes.length - 1]);
+// Junta numa linha só os talhões que estão na MESMA situação (mesmo item, pressão e ação).
+// O técnico roda a fazenda inteira e fala talhão por talhão; o relatório não repete a
+// mesma frase cinco vezes mudando só o nome do talhão. soItem: agrupa só pelo item
+// (para a linha de urgências do resumo).
+function agruparObsVisita(prontas, soItem) {
+  const grupos = [];
+  for (const o of prontas || []) {
+    const item = String(o.item || "").trim();
+    const chave = soItem ? item.toLowerCase() : [o.cat || "", item.toLowerCase(), o.pressao || "", o.acao || ""].join("|");
+    let g = grupos.find((x) => x.chave === chave);
+    if (!g) { g = { chave, cat: o.cat || "", item, pressao: o.pressao || null, acao: o.acao || null, talhoes: [], notas: [], obs: [] }; grupos.push(g); }
+    if (o.talhaoNome && !g.talhoes.includes(o.talhaoNome)) g.talhoes.push(o.talhaoNome);
+    if (o.nota) g.notas.push({ t: o.talhaoNome || "", n: o.nota });
+    g.obs.push(o);
+  }
+  return grupos;
+}
+const ondeDoGrupo = (g) => (g.talhoes.length ? (g.talhoes.length > 1 ? "Talhões " : "") + listarNomes(g.talhoes) : "Geral");
+const linhaGrupoObs = (g) => `• ${g.item}` + (g.pressao ? ` — pressão ${g.pressao.toUpperCase()}` : "") + (g.acao ? ` · ${g.acao}` : "") + ` — ${ondeDoGrupo(g)}` + (g.notas.length ? ` (${g.notas.map((x) => (g.talhoes.length > 1 && x.t ? x.t + ": " : "") + x.n).join("; ")})` : "") + ".";
+// troca (ou cria) o item "Resumo da visita" pelo texto corrido que a IA escreveu
+function itensComResumo(itens, texto) {
+  const lista = (itens || []).slice();
+  const i = lista.findIndex((it) => it && it.titulo === "Resumo da visita");
+  if (i >= 0) lista[i] = { ...lista[i], texto }; else lista.unshift({ titulo: "Resumo da visita", texto, fotos: [] });
+  return lista;
+}
+// A IA escreve o resumo da visita em texto corrido: UMA escrita só para a fazenda inteira,
+// agrupando os talhões que estão na mesma situação. Devolve null se não der (sem nuvem).
+async function escreverResumoVisita(prontas, talhoes, lavoura) {
+  if (!window.Nuvem || !Nuvem.lerNota || !(prontas || []).length) return null;
+  const ids = []; for (const o of prontas) if (o.talhaoId && !ids.includes(o.talhaoId)) ids.push(o.talhaoId);
+  const ctx = ids.map((id) => { const t = (talhoes || []).find((x) => x.id === id); return t ? `${t.nome}: ${contextoDoTalhao(t, lavoura)}` : null; }).filter(Boolean).join("\n");
+  const texto = "TALHÕES VISITADOS:\n" + (ctx || "(sem talhão marcado)") + "\n\nOBSERVAÇÕES (já agrupadas por situação):\n" + agruparObsVisita(prontas).map((g) => `${g.cat} ${linhaGrupoObs(g)}`).join("\n");
+  const r = await Nuvem.lerNota({
+    texto, modo: "voz",
+    contexto: {
+      descricao: "ATENÇÃO: isto NÃO é uma fala. É a lista de observações já estruturadas de uma visita técnica de campo: o agrônomo da consultoria rodou vários talhões da fazenda no mesmo dia. " +
+        "Escreva o RESUMO DA VISITA em texto corrido para mandar ao produtor: UMA escrita só para a fazenda inteira, 2 a 4 parágrafos curtos. " +
+        "Comece pelo que exige ação (urgências, aplicações a programar), depois o estado geral da lavoura. " +
+        "Agrupe os talhões que estão na mesma situação numa frase só (ex.: 'Nos talhões T1, T3 e T5 a buva está com pressão alta e a aplicação deve ser programada'); " +
+        "NUNCA repita a mesma frase talhão por talhão. Cite os números informados (DAE, pressão, plantas por metro). " +
+        "Português do Brasil, direto, sem saudação, sem assinatura, sem inventar nada que não esteja na lista.",
+      formato: '{"resumo":"texto corrido do resumo, com os parágrafos separados por linha em branco"}',
+    },
+  });
+  const s = r && typeof r.resumo === "string" ? r.resumo.trim() : "";
+  return s || null;
+}
+// observações da visita → itens do relatório (resumo, talhões visitados, seções por categoria).
+// Cada seção lista a SITUAÇÃO e os talhões onde ela aparece — não uma linha por talhão.
+function montarItensVisita(prontas, talhoes, lavoura, resumoTexto) {
   const urgentes = prontas.filter((o) => o.acao === "Ação urgente");
   const aplicar = prontas.filter((o) => o.acao === "Programar aplicação");
+  const itemOnde = (g) => `${g.item}${g.talhoes.length ? ` (${listarNomes(g.talhoes)})` : ""}`;
   const linhasResumo = [];
-  if (urgentes.length) linhasResumo.push("⚠️ AÇÃO URGENTE: " + urgentes.map((o) => `${o.item}${o.talhaoNome ? ` (${o.talhaoNome})` : ""}`).join("; ") + ".");
-  if (aplicar.length) linhasResumo.push("Programar aplicação: " + aplicar.map((o) => `${o.item}${o.talhaoNome ? ` (${o.talhaoNome})` : ""}`).join("; ") + ".");
+  if (urgentes.length) linhasResumo.push("⚠️ AÇÃO URGENTE: " + agruparObsVisita(urgentes, true).map(itemOnde).join("; ") + ".");
+  if (aplicar.length) linhasResumo.push("Programar aplicação: " + agruparObsVisita(aplicar, true).map(itemOnde).join("; ") + ".");
   if (!urgentes.length && !aplicar.length) linhasResumo.push("Sem urgências nesta visita — situação sob monitoramento.");
   const idsVisitados = [];
   for (const o of prontas) if (o.talhaoId && !idsVisitados.includes(o.talhaoId)) idsVisitados.push(o.talhaoId);
   const linhasTalhoes = idsVisitados.map((id) => { const t = (talhoes || []).find((x) => x.id === id); return t ? `• ${t.nome} — ${contextoDoTalhao(t, lavoura)}` : null; }).filter(Boolean);
   const ORDEM_REL = [["🌱", "🌱 Fisiologia e estádio da lavoura"], ["🌿", "🌿 Plantas daninhas"], ["🐛", "🐛 Pragas e insetos"], ["🦠", "🦠 Doenças"], ["🧪", "🧪 Nutrição"], ["💧", "💧 Solo e água"], ["⚙️", "⚙️ Operações"], ["📝", "📝 Anotações"]];
   const emojiDe = (cat) => { const e = String(cat || "").split(" ")[0]; return e === "🍄" ? "🦠" : e; };
-  const linhaObs = (o) => `• ${o.talhaoNome || "Geral"}: ${o.item}` + (o.pressao ? ` — pressão ${o.pressao.toUpperCase()}` : "") + (o.acao ? ` · ${o.acao}` : "") + (o.nota ? ` (${o.nota})` : "") + ".";
   const usadas = new Set(); const secoes = [];
   for (const [emoji, tituloSec] of ORDEM_REL) {
     const doGrupo = prontas.filter((o) => emojiDe(o.cat) === emoji);
     if (!doGrupo.length) continue;
     doGrupo.forEach((o) => usadas.add(o.id));
-    secoes.push({ titulo: tituloSec, texto: doGrupo.map(linhaObs).join("\n"), fotos: doGrupo.flatMap(fotosDaObs).slice(0, 8) });
+    secoes.push({ titulo: tituloSec, texto: agruparObsVisita(doGrupo).map(linhaGrupoObs).join("\n"), fotos: doGrupo.flatMap(fotosDaObs).slice(0, 8) });
   }
   const fora = prontas.filter((o) => !usadas.has(o.id));
-  if (fora.length) secoes.push({ titulo: "Outras observações", texto: fora.map(linhaObs).join("\n"), fotos: fora.flatMap(fotosDaObs).slice(0, 8) });
-  return [{ titulo: "Resumo da visita", texto: linhasResumo.join("\n"), fotos: [] }, ...(linhasTalhoes.length ? [{ titulo: "Talhões visitados", texto: linhasTalhoes.join("\n"), fotos: [] }] : []), ...secoes];
+  if (fora.length) secoes.push({ titulo: "Outras observações", texto: agruparObsVisita(fora).map(linhaGrupoObs).join("\n"), fotos: fora.flatMap(fotosDaObs).slice(0, 8) });
+  const resumo = resumoTexto && String(resumoTexto).trim() ? String(resumoTexto).trim() : linhasResumo.join("\n");
+  return [{ titulo: "Resumo da visita", texto: resumo, fotos: [] }, ...(linhasTalhoes.length ? [{ titulo: "Talhões visitados", texto: linhasTalhoes.join("\n"), fotos: [] }] : []), ...secoes];
+}
+// o mesmo relatório visto talhão por talhão (das observações originais da visita)
+function itensPorTalhao(visita, talhoes, lavoura) {
+  const obs = (visita && visita.obsCampo) || []; const nomes = [];
+  for (const o of obs) { const n = o.talhaoNome || "Geral"; if (!nomes.includes(n)) nomes.push(n); }
+  return nomes.map((n) => {
+    const dele = obs.filter((o) => (o.talhaoNome || "Geral") === n);
+    const t = (talhoes || []).find((x) => x.nome === n);
+    const linha = (o) => `• ${String(o.cat || "").split(" ")[0]} ${o.item}` + (o.pressao ? ` — pressão ${o.pressao.toUpperCase()}` : "") + (o.acao ? ` · ${o.acao}` : "") + (o.nota ? ` (${o.nota})` : "") + ".";
+    return { titulo: t ? `${n} — ${contextoDoTalhao(t, lavoura)}` : n, texto: dele.map(linha).join("\n"), fotos: dele.flatMap(fotosDaObs).slice(0, 12) };
+  });
+}
+// texto do relatório para mandar no WhatsApp (sem fotos): uma escrita só da fazenda inteira
+function textoResumoVisita(fazenda, visita) {
+  const linhas = [`*Visita técnica — ${fazenda.nome}*`, `${fmtD(visita.data)}${visita.tecnico ? " · " + visita.tecnico : ""}`, ""];
+  for (const it of visita.itens || []) { if (!it || !it.texto) continue; linhas.push(`*${it.titulo}*`); linhas.push(it.texto); linhas.push(""); }
+  return linhas.join("\n").trim();
 }
 // Rascunhos grandes (visita com áudios) ficam no IndexedDB do aparelho; se ele falhar, cai no localStorage.
 const idbAbrir = () => new Promise((ok, err) => { try { const r = indexedDB.open("agrocr-rascunhos", 1); r.onupgradeneeded = () => r.result.createObjectStore("kv"); r.onsuccess = () => ok(r.result); r.onerror = () => err(r.error); } catch (e) { err(e); } });
@@ -22424,10 +22493,37 @@ function AudiosPendentesVisita({ fazenda, lavoura, visitas, onSalvar }) {
     })();
     return () => { vivo = false; };
   }, [tick, fazenda.id, (visitas || []).length]);
+  // resumo em texto corrido pela IA: visita finalizada com resumoPendente e sem áudio esperando.
+  // Até 3 tentativas por sessão; se não der, fica o resumo montado pelo app mesmo.
+  const tentativasResumo = useRef({});
+  const ocupadoResumo = useRef(false);
+  useEffect(() => {
+    if (ocupadoResumo.current || !navigator.onLine || !window.Nuvem || !Nuvem.lerNota) return;
+    const v = (visitas || []).find((x) => x.resumoPendente && !(num(x.audiosPendentes) > 0) && (x.obsCampo || []).length);
+    if (!v) return;
+    ocupadoResumo.current = true;
+    (async () => {
+      const n = tentativasResumo.current[v.id] || 0;
+      try {
+        if (n >= 3) throw new Error("desisti");
+        setEstado({ resumo: true, visita: v.data });
+        const s = await escreverResumoVisita(v.obsCampo, fazenda.talhoes || [], lavoura);
+        if (!s) throw new Error("sem resumo");
+        const atual = (visitasRef.current || []).find((x) => x.id === v.id) || v;
+        onSalvar((visitasRef.current || []).map((x) => (x.id === v.id ? { ...atual, itens: itensComResumo(atual.itens || [], s), resumoPorIA: true, resumoPendente: false } : x)));
+        setEstado({ resumoPronto: true, visita: v.data });
+        setTimeout(() => setEstado(null), 8000);
+      } catch (e) {
+        tentativasResumo.current[v.id] = n + 1;
+        if (n + 1 >= 3) { const atual = (visitasRef.current || []).find((x) => x.id === v.id); if (atual) onSalvar((visitasRef.current || []).map((x) => (x.id === v.id ? { ...atual, resumoPendente: false } : x))); }
+        setEstado(null);
+      } finally { ocupadoResumo.current = false; }
+    })();
+  }, [tick, fazenda.id, (visitas || []).length, (visitas || []).filter((x) => x.resumoPendente && !(num(x.audiosPendentes) > 0)).length]);
   if (!estado) return null;
   return (
     <div className="nao-imprimir" style={{ position: "fixed", left: 10, right: 10, bottom: 86, zIndex: 55, background: estado.erro ? "#FDF0ED" : C.verdeBg, color: estado.erro ? C.vermelho : C.verdeEscuro, border: `1.5px solid ${estado.erro ? C.vermelho : C.verde}`, borderRadius: 12, padding: "8px 12px", fontSize: 12.5, fontWeight: 700, boxShadow: "0 4px 14px rgba(0,0,0,.15)" }}>
-      {estado.erro ? `⚠️ Áudio da visita de ${fmtD(estado.visita)} não transcreveu (${estado.erro}). Tento de novo em 1 minuto.`
+      {estado.resumo ? "✍️ Escrevendo o resumo da visita de " + fmtD(estado.visita) + " com IA…" : estado.resumoPronto ? "✓ Resumo da visita de " + fmtD(estado.visita) + " pronto — uma escrita só para a fazenda inteira." : estado.erro ? `⚠️ Áudio da visita de ${fmtD(estado.visita)} não transcreveu (${estado.erro}). Tento de novo em 1 minuto.`
         : estado.pronto ? `✓ Visita de ${fmtD(estado.visita)}: ${estado.feitos} áudio${estado.feitos === 1 ? "" : "s"} transcrito${estado.feitos === 1 ? "" : "s"} e acrescentado${estado.feitos === 1 ? "" : "s"} ao relatório.`
         : `🎙 Transcrevendo áudios da visita de ${fmtD(estado.visita)}… (${estado.feitos + 1} de ${estado.total})`}
     </div>
@@ -22673,56 +22769,8 @@ function ChatVisita({ fazenda, lavoura, kml, usuario, onFechar, onSalvar }) {
     // áudios ainda não transcritos: ficam no aparelho, ligados a esta visita, para o processador de fundo
     if (pend.length) idbSet("audios:" + fazenda.id + ":" + visitaId, { visitaId, fazendaId: fazenda.id, em: new Date().toISOString(), obs: pend.map((o) => ({ ...o, erro: null })) });
 
-    // 1) resumo do que precisa de atenção — urgências primeiro
-    const urgentes = prontas.filter((o) => o.acao === "Ação urgente");
-    const aplicar = prontas.filter((o) => o.acao === "Programar aplicação");
-    const linhasResumo = [];
-    if (urgentes.length) linhasResumo.push("⚠️ AÇÃO URGENTE: " + urgentes.map((o) => `${o.item}${o.talhaoNome ? ` (${o.talhaoNome})` : ""}`).join("; ") + ".");
-    if (aplicar.length) linhasResumo.push("Programar aplicação: " + aplicar.map((o) => `${o.item}${o.talhaoNome ? ` (${o.talhaoNome})` : ""}`).join("; ") + ".");
-    if (!urgentes.length && !aplicar.length) linhasResumo.push("Sem urgências nesta visita — situação sob monitoramento.");
-
-    // 2) os talhões visitados, com os dados da lavoura (área, cultura, variedade, DAE)
-    const idsVisitados = [];
-    for (const o of prontas) if (o.talhaoId && !idsVisitados.includes(o.talhaoId)) idsVisitados.push(o.talhaoId);
-    const linhasTalhoes = idsVisitados.map((id) => {
-      const t = talhoes.find((x) => x.id === id);
-      return t ? `• ${t.nome} — ${contextoDe(t)}` : null;
-    }).filter(Boolean);
-
-    // 3) as observações organizadas POR CATEGORIA, na ordem técnica:
-    //    fisiologia da lavoura → daninhas → pragas → doenças → o resto
-    const ORDEM_REL = [
-      ["🌱", "🌱 Fisiologia e estádio da lavoura"],
-      ["🌿", "🌿 Plantas daninhas"],
-      ["🐛", "🐛 Pragas e insetos"],
-      ["🦠", "🦠 Doenças"],
-      ["🧪", "🧪 Nutrição"],
-      ["💧", "💧 Solo e água"],
-      ["⚙️", "⚙️ Operações"],
-    ];
-    const emojiDe = (cat) => { const e = String(cat || "").split(" ")[0]; return e === "🍄" ? "🦠" : e; };   // visitas antigas gravaram 🍄 em Doença
-    const linhaObs = (o) => `• ${o.talhaoNome || "Geral"}: ${o.item}` +
-      (o.pressao ? ` — pressão ${o.pressao.toUpperCase()}` : "") +
-      (o.acao ? ` · ${o.acao}` : "") +
-      (o.nota ? ` (${o.nota})` : "") + ".";
-    const usadas = new Set();
-    const secoes = [];
-    for (const [emoji, tituloSec] of ORDEM_REL) {
-      const doGrupo = prontas.filter((o) => emojiDe(o.cat) === emoji);
-      if (!doGrupo.length) continue;
-      doGrupo.forEach((o) => usadas.add(o.id));
-      secoes.push({
-        titulo: tituloSec,
-        texto: doGrupo.map(linhaObs).join("\n"),
-        fotos: doGrupo.flatMap(fotosDaObs).slice(0, 8),
-      });
-    }
-    // categoria que não está na ordem (garantia de não perder nada)
-    const fora = prontas.filter((o) => !usadas.has(o.id));
-    if (fora.length) secoes.push({ titulo: "Outras observações", texto: fora.map(linhaObs).join("\n"), fotos: fora.flatMap(fotosDaObs).slice(0, 8) });
-
     const itens = montarItensVisita(prontas, talhoes, lavoura);
-    onSalvar({ id: visitaId, data: hojeISO(), tecnico: (usuario && usuario.nomeUsuario) || "Técnico", itens, obsCampo: prontas.map((o) => { const { audioB64, ...resto } = o; return resto; }), audiosPendentes: pend.length });
+    onSalvar({ id: visitaId, data: hojeISO(), tecnico: (usuario && usuario.nomeUsuario) || "Técnico", itens, obsCampo: prontas.map((o) => { const { audioB64, ...resto } = o; return resto; }), audiosPendentes: pend.length, resumoPendente: prontas.length > 0 && !!window.AGROCR_FIREBASE });
     idbDel(kRascunho);
   }
 
@@ -23788,7 +23836,7 @@ function SecaoVisitas({ podeApagar, fazenda, lavoura, kml, visitas, consultor, u
     ) : null;
     const rel = v && v.ehRegulagem ? <RelatorioRegulagem fazenda={fazenda} reg={v} onVoltar={() => setAberta(null)} />
       : v && v.ehMonitoramento ? <RelatorioMonitoramento fazenda={fazenda} mon={v} kml={kml} soResumo={soResumoPragas} onVoltar={() => setAberta(null)} />
-      : <RelatorioVisita fazenda={fazenda} visita={v} onVoltar={() => setAberta(null)} />;
+      : <RelatorioVisita fazenda={fazenda} visita={v} lavoura={lavoura} podeEditar={podeEditar} onAtualizar={(nv) => onSalvar(visitas.map((x) => (x.id === v.id ? nv : x)))} onVoltar={() => setAberta(null)} />;
     return <div>{botaoApagar}{rel}{modalEditar}</div>;
   }
 
@@ -24000,24 +24048,54 @@ function ModalEditarVisita({ visita, onFechar, onSalvar }) {
     </Modal>
   );
 }
-function RelatorioVisita({ fazenda, visita, onVoltar }) {
+function RelatorioVisita({ fazenda, visita, lavoura, podeEditar, onAtualizar, onVoltar }) {
+  const [visao, setVisao] = useState("resumo");   // resumo (para enviar) · talhao (talhão por talhão)
+  const [refazendo, setRefazendo] = useState("");
+  const temTalhoes = (visita.obsCampo || []).some((o) => o.talhaoNome);
+  const itens = visao === "talhao" && temTalhoes ? itensPorTalhao(visita, fazenda.talhoes, lavoura) : (visita.itens || []);
+  const podeIA = !!(podeEditar && onAtualizar && window.AGROCR_FIREBASE && (visita.obsCampo || []).length && !(num(visita.audiosPendentes) > 0));
+  async function refazerResumo() {
+    if (!navigator.onLine) { setRefazendo("Sem internet agora — tente quando o sinal voltar."); return; }
+    setRefazendo("gerando");
+    try {
+      const s = await escreverResumoVisita(visita.obsCampo || [], fazenda.talhoes || [], lavoura);
+      if (!s) throw new Error("a IA não devolveu o resumo");
+      onAtualizar({ ...visita, itens: itensComResumo(visita.itens || [], s), resumoPorIA: true, resumoPendente: false });
+      setRefazendo("");
+    } catch (e) { setRefazendo("Não deu: " + String((e && e.message) || e)); }
+  }
+  const chip = (ativo) => ({ flex: 1, padding: "8px 10px", borderRadius: 10, fontWeight: 800, fontSize: 12.5, border: "none", background: ativo ? C.navy : "#fff", color: ativo ? "#fff" : C.navy, boxShadow: ativo ? "none" : `inset 0 0 0 1.5px ${C.borda}` });
   return (
     <div>
-      <div className="nao-imprimir" style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+      <div className="nao-imprimir" style={{ display: "flex", gap: 8, marginBottom: 8 }}>
         <button onClick={onVoltar} style={{ padding: "9px 14px", background: "#fff", border: `1.5px solid ${C.borda}`, borderRadius: 10, fontWeight: 800, color: C.navy }}>← Visitas</button>
         <button onClick={() => window.print()} style={{ flex: 1, padding: "9px 14px", background: C.navy, color: "#fff", border: "none", borderRadius: 10, fontWeight: 800 }}>🖨️ Gerar PDF do relatório</button>
         <BotaoPdfWhats estilo={{ marginLeft: 6, flex: 1 }} />
       </div>
+      {temTalhoes && (
+        <div className="nao-imprimir" style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+          <button onClick={() => setVisao("resumo")} style={chip(visao === "resumo")}>📄 Resumo para enviar</button>
+          <button onClick={() => setVisao("talhao")} style={chip(visao === "talhao")}>🗂 Talhão por talhão</button>
+        </div>
+      )}
+      {visao === "resumo" && (
+        <div className="nao-imprimir" style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
+          <a href={linkWhatsApp(textoResumoVisita(fazenda, visita))} target="_blank" rel="noreferrer" style={{ flex: 1, textAlign: "center", padding: 9, background: "#25D366", color: "#fff", borderRadius: 10, fontWeight: 800, fontSize: 12.5, textDecoration: "none" }}>💬 Texto no WhatsApp</a>
+          {podeIA && <button onClick={refazerResumo} disabled={refazendo === "gerando"} style={{ flex: 1, padding: 9, background: C.verdeBg, color: C.verdeEscuro, border: "none", borderRadius: 10, fontWeight: 800, fontSize: 12.5 }}>{refazendo === "gerando" ? "✍️ Escrevendo…" : visita.resumoPorIA ? "✨ Refazer o resumo" : "✨ Escrever resumo com IA"}</button>}
+          {refazendo && refazendo !== "gerando" && <div style={{ width: "100%", fontSize: 12, color: C.vermelho, fontWeight: 700 }}>{refazendo}</div>}
+          {visita.resumoPendente && !refazendo && window.AGROCR_FIREBASE ? <div style={{ width: "100%", fontSize: 12, color: "#7A5C00", fontWeight: 700 }}>✍️ A IA ainda vai escrever o resumo em texto corrido desta visita — acontece sozinho quando houver internet{num(visita.audiosPendentes) > 0 ? ", depois que os áudios forem transcritos" : ""}.</div> : null}
+        </div>
+      )}
       <div className="imprimivel" style={{ background: "#fff", borderRadius: 12, padding: 22, border: `1.5px solid ${C.borda}` }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: `3px solid ${C.verde}`, paddingBottom: 10, marginBottom: 14 }}>
           <img src={LOGO} alt="AgroCR" style={{ height: 44 }} />
-          <div style={{ textAlign: "right", fontSize: 12, color: C.cinza }}>Relatório de visita técnica<br />{fmtD(visita.data)}</div>
+          <div style={{ textAlign: "right", fontSize: 12, color: C.cinza }}>Relatório de visita técnica{visao === "talhao" && temTalhoes ? " — talhão por talhão" : ""}<br />{fmtD(visita.data)}</div>
         </div>
         <div style={{ fontSize: 15, marginBottom: 12 }}>
           <b>{fazenda.nome}</b> — {fazenda.produtor}{fazenda.municipio ? ` — ${fazenda.municipio}` : ""}<br />
           <span style={{ color: C.cinza }}>Responsável técnico: {visita.tecnico}</span>
         </div>
-        {(visita.itens || []).map((it, i) => (
+        {itens.map((it, i) => (
           <div key={i} style={{ marginBottom: 16 }}>
             <div style={{ fontWeight: 800, color: C.navy, background: C.verdeBg, padding: "5px 10px", borderRadius: 6 }}>{i + 1}. {it.titulo}</div>
             {it.texto && <div style={{ fontSize: 14, padding: "6px 10px", whiteSpace: "pre-wrap" }}>{it.texto}</div>}
