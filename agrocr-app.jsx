@@ -22446,6 +22446,8 @@ function montarItensVisita(prontas, talhoes, lavoura, resumoTexto) {
   const resumo = resumoTexto && String(resumoTexto).trim() ? String(resumoTexto).trim() : linhasResumo.join("\n");
   return [{ titulo: "Resumo da visita", texto: resumo, fotos: [] }, ...(linhasTalhoes.length ? [{ titulo: "Talhões visitados", texto: linhasTalhoes.join("\n"), fotos: [] }] : []), ...secoes];
 }
+// observações só dos talhões escolhidos (nomes); "Geral" = sem talhão
+const obsDosTalhoes = (obsCampo, nomes) => (obsCampo || []).filter((o) => nomes.includes(o.talhaoNome || "Geral"));
 // o mesmo relatório visto talhão por talhão (das observações originais da visita)
 function itensPorTalhao(visita, talhoes, lavoura) {
   const obs = (visita && visita.obsCampo) || []; const nomes = [];
@@ -22826,6 +22828,10 @@ function ChatVisita({ fazenda, lavoura, kml, usuario, onFechar, onSalvar }) {
     idbDel(kRascunho);
   }
 
+  // quais talhões já têm observação nesta visita (para marcar na lista e contar no Finalizar)
+  const obsPorTalhao = {};
+  for (const o of obs) if (o.talhaoId) obsPorTalhao[o.talhaoId] = (obsPorTalhao[o.talhaoId] || 0) + 1;
+  const visitados = talhoes.filter((t) => obsPorTalhao[t.id]);
   const chip = (ativo) => ({
     padding: "9px 12px", borderRadius: 10, fontWeight: 800, fontSize: 13, border: "none",
     background: ativo ? C.navy : C.fundo, color: ativo ? "#fff" : C.navyEscuro,
@@ -22842,14 +22848,14 @@ function ChatVisita({ fazenda, lavoura, kml, usuario, onFechar, onSalvar }) {
         </div>
         <button disabled={!obs.length} onClick={finalizar}
           style={{ marginLeft: "auto", background: C.verde, color: "#fff", border: "none", borderRadius: 8, padding: "8px 12px", fontWeight: 800, fontSize: 13, opacity: obs.length ? 1 : 0.5 }}>
-          ✓ Finalizar ({obs.length})
+          ✓ Finalizar ({obs.length}{visitados.length ? ` · ${visitados.length} talh${visitados.length === 1 ? "ão" : "ões"}` : ""})
         </button>
       </div>
 
       <div style={{ padding: "8px 12px", background: "#fff", borderBottom: `1px solid ${C.borda}`, display: "flex", gap: 6, alignItems: "center" }}>
         <select style={{ flex: 1 }} value={talhaoAtual || ""} onChange={(e) => { setTalhaoAtual(e.target.value || null); setAutoGps(false); }}>
           <option value="">📍 Talhão…</option>
-          {talhoes.map((t) => <option key={t.id} value={t.id}>{t.nome} · {fmtN(t.areaHa)} ha</option>)}
+          {talhoes.map((t) => <option key={t.id} value={t.id}>{obsPorTalhao[t.id] ? "✓ " : ""}{t.nome} · {fmtN(t.areaHa)} ha{obsPorTalhao[t.id] ? ` · ${obsPorTalhao[t.id]} obs` : ""}</option>)}
         </select>
         {kml && kml.poligonos && (
           <button onClick={() => setAutoGps(!autoGps)} style={{ flex: "none", background: autoGps ? "#1E88E5" : "#fff", color: autoGps ? "#fff" : "#1E88E5", border: "1.5px solid #1E88E5", borderRadius: 8, padding: "8px 10px", fontWeight: 800, fontSize: 12 }}>
@@ -22860,6 +22866,17 @@ function ChatVisita({ fazenda, lavoura, kml, usuario, onFechar, onSalvar }) {
       {tAtual && (
         <div style={{ background: C.verdeBg, color: C.verdeEscuro, fontSize: 12, fontWeight: 800, padding: "5px 12px" }}>
           📍 {tAtual.nome} — {contextoDe(tAtual)}{autoGps && gpsNome === tAtual.nome ? " · achado pelo GPS" : ""}
+        </div>
+      )}
+      {visitados.length > 0 && (
+        <div className="nao-imprimir" style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", padding: "6px 12px", background: "#fff", borderBottom: `1px solid ${C.borda}` }}>
+          <span style={{ fontSize: 11, fontWeight: 800, color: C.cinza }}>Já visitados · {visitados.length} de {talhoes.length}:</span>
+          {visitados.map((t) => (
+            <button key={t.id} onClick={() => { setTalhaoAtual(t.id); setAutoGps(false); }} title="voltar a este talhão"
+              style={{ background: t.id === talhaoAtual ? C.navy : C.verdeBg, color: t.id === talhaoAtual ? "#fff" : C.verdeEscuro, border: "none", borderRadius: 8, padding: "4px 9px", fontWeight: 800, fontSize: 12 }}>
+              ✓ {t.nome} · {obsPorTalhao[t.id]}
+            </button>
+          ))}
         </div>
       )}
 
@@ -23925,7 +23942,7 @@ function SecaoVisitas({ podeApagar, fazenda, lavoura, kml, visitas, consultor, u
               borderRadius: 12, padding: 14, marginBottom: 10,
             }}>
               <div style={{ fontWeight: 800, color: C.navy }}>Visita de {fmtD(v.data)} — {v.tecnico}</div>
-              <div style={{ fontSize: 13, color: C.cinza }}>{(v.itens || []).length} observações · toque para abrir o relatório{num(v.audiosPendentes) > 0 ? <span style={{ color: "#7A5C00", fontWeight: 800 }}> · ⏳ {v.audiosPendentes} áudio{v.audiosPendentes === 1 ? "" : "s"} aguardando internet</span> : null}</div>
+              <div style={{ fontSize: 13, color: C.cinza }}>{(v.itens || []).length} observações{(() => { const n = [...new Set((v.obsCampo || []).map((o) => o.talhaoNome).filter(Boolean))]; return n.length ? <span> · {n.length} {n.length === 1 ? "talhão" : "talhões"}: {n.join(", ")}</span> : null; })()} · toque para abrir o relatório{num(v.audiosPendentes) > 0 ? <span style={{ color: "#7A5C00", fontWeight: 800 }}> · ⏳ {v.audiosPendentes} áudio{v.audiosPendentes === 1 ? "" : "s"} aguardando internet</span> : null}</div>
             </button>
           ))}
         </>
@@ -24103,27 +24120,56 @@ function ModalEditarVisita({ visita, onFechar, onSalvar }) {
 function RelatorioVisita({ fazenda, visita, lavoura, podeEditar, onAtualizar, onVoltar }) {
   const [visao, setVisao] = useState("resumo");   // resumo (para enviar) · talhao (talhão por talhão)
   const [refazendo, setRefazendo] = useState("");
-  const temTalhoes = (visita.obsCampo || []).some((o) => o.talhaoNome);
-  const itens = visao === "talhao" && temTalhoes ? itensPorTalhao(visita, fazenda.talhoes, lavoura) : (visita.itens || []);
-  const podeIA = !!(podeEditar && onAtualizar && window.AGROCR_FIREBASE && (visita.obsCampo || []).length && !(num(visita.audiosPendentes) > 0));
+  const obsCampo = visita.obsCampo || [];
+  // talhões desta visita, na ordem em que foram visitados — o relatório pode sair de todos ou só de alguns
+  const nomesVisita = []; for (const o of obsCampo) { const n = o.talhaoNome || "Geral"; if (!nomesVisita.includes(n)) nomesVisita.push(n); }
+  const [escolhidos, setEscolhidos] = useState(null);   // null = todos · lista de nomes = só esses
+  const [resumoSelecao, setResumoSelecao] = useState({});   // resumo da IA por seleção (não grava)
+  const chaveSel = escolhidos ? escolhidos.join("|") : "";
+  const subconjunto = !!(escolhidos && escolhidos.length && escolhidos.length < nomesVisita.length);
+  const obsUsadas = subconjunto ? obsDosTalhoes(obsCampo, escolhidos) : obsCampo;
+  const temTalhoes = obsCampo.some((o) => o.talhaoNome);
+  const itens = visao === "talhao" && temTalhoes ? itensPorTalhao({ obsCampo: obsUsadas }, fazenda.talhoes, lavoura)
+    : subconjunto ? montarItensVisita(obsUsadas, fazenda.talhoes || [], lavoura, resumoSelecao[chaveSel] || null)
+    : (visita.itens || []);
+  const podeIA = !!(window.AGROCR_FIREBASE && obsCampo.length && !(num(visita.audiosPendentes) > 0));
+  const alternar = (n) => {
+    const base = escolhidos || nomesVisita.slice();
+    const nova = base.includes(n) ? base.filter((x) => x !== n) : [...base, n];
+    setEscolhidos(nova.length === nomesVisita.length ? null : nova);
+  };
   async function refazerResumo() {
     if (!navigator.onLine) { setRefazendo("Sem internet agora — tente quando o sinal voltar."); return; }
     setRefazendo("gerando");
     try {
-      const s = await escreverResumoVisita(visita.obsCampo || [], fazenda.talhoes || [], lavoura);
+      const s = await escreverResumoVisita(obsUsadas, fazenda.talhoes || [], lavoura);
       if (!s) throw new Error("a IA não devolveu o resumo");
-      onAtualizar({ ...visita, itens: itensComResumo(visita.itens || [], s), resumoPorIA: true, resumoPendente: false });
-      setRefazendo("");
+      if (subconjunto) setResumoSelecao({ ...resumoSelecao, [chaveSel]: s });
+      else if (podeEditar && onAtualizar) onAtualizar({ ...visita, itens: itensComResumo(visita.itens || [], s), resumoPorIA: true, resumoPendente: false });
+      else setRefazendo("Só a consultoria grava o resumo na visita.");
+      if (subconjunto || (podeEditar && onAtualizar)) setRefazendo("");
     } catch (e) { setRefazendo("Não deu: " + String((e && e.message) || e)); }
   }
   const chip = (ativo) => ({ flex: 1, padding: "8px 10px", borderRadius: 10, fontWeight: 800, fontSize: 12.5, border: "none", background: ativo ? C.navy : "#fff", color: ativo ? "#fff" : C.navy, boxShadow: ativo ? "none" : `inset 0 0 0 1.5px ${C.borda}` });
+  const chipT = (ativo) => ({ padding: "6px 10px", borderRadius: 8, fontWeight: 800, fontSize: 12, border: "none", background: ativo ? C.verde : "#fff", color: ativo ? "#fff" : C.navy, boxShadow: ativo ? "none" : `inset 0 0 0 1.5px ${C.borda}` });
+  const rotuloSel = subconjunto ? escolhidos.join(", ") : "";
+  const visitaTexto = { ...visita, itens };
   return (
     <div>
       <div className="nao-imprimir" style={{ display: "flex", gap: 8, marginBottom: 8 }}>
         <button onClick={onVoltar} style={{ padding: "9px 14px", background: "#fff", border: `1.5px solid ${C.borda}`, borderRadius: 10, fontWeight: 800, color: C.navy }}>← Visitas</button>
         <button onClick={() => window.print()} style={{ flex: 1, padding: "9px 14px", background: C.navy, color: "#fff", border: "none", borderRadius: 10, fontWeight: 800 }}>🖨️ Gerar PDF do relatório</button>
-        <BotaoPdfWhats estilo={{ marginLeft: 6, flex: 1 }} />
+        <BotaoPdfWhats nome={`visita-${visita.data}${subconjunto ? "-" + escolhidos.join("-") : ""}-${fazenda.nome}`} titulo={`Visita de ${fmtD(visita.data)}${rotuloSel ? " · " + rotuloSel : ""} · ${fazenda.nome}`} estilo={{ marginLeft: 6, flex: 1 }} />
       </div>
+      {nomesVisita.length > 1 && (
+        <div className="nao-imprimir" style={{ background: "#fff", border: `1.5px solid ${C.borda}`, borderRadius: 12, padding: "8px 10px", marginBottom: 8 }}>
+          <div style={{ fontSize: 11.5, fontWeight: 800, color: C.cinza, marginBottom: 6 }}>Relatório de quais talhões? Toque para tirar ou pôr — todos juntos ou só alguns.</div>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            <button onClick={() => setEscolhidos(null)} style={chipT(!subconjunto)}>Todos ({nomesVisita.length})</button>
+            {nomesVisita.map((n) => <button key={n} onClick={() => alternar(n)} style={chipT(!subconjunto || escolhidos.includes(n))}>{!subconjunto || escolhidos.includes(n) ? "✓ " : ""}{n}</button>)}
+          </div>
+        </div>
+      )}
       {temTalhoes && (
         <div className="nao-imprimir" style={{ display: "flex", gap: 6, marginBottom: 8 }}>
           <button onClick={() => setVisao("resumo")} style={chip(visao === "resumo")}>📄 Resumo para enviar</button>
@@ -24132,10 +24178,11 @@ function RelatorioVisita({ fazenda, visita, lavoura, podeEditar, onAtualizar, on
       )}
       {visao === "resumo" && (
         <div className="nao-imprimir" style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
-          <a href={linkWhatsApp(textoResumoVisita(fazenda, visita))} target="_blank" rel="noreferrer" style={{ flex: 1, textAlign: "center", padding: 9, background: "#25D366", color: "#fff", borderRadius: 10, fontWeight: 800, fontSize: 12.5, textDecoration: "none" }}>💬 Texto no WhatsApp</a>
-          {podeIA && <button onClick={refazerResumo} disabled={refazendo === "gerando"} style={{ flex: 1, padding: 9, background: C.verdeBg, color: C.verdeEscuro, border: "none", borderRadius: 10, fontWeight: 800, fontSize: 12.5 }}>{refazendo === "gerando" ? "✍️ Escrevendo…" : visita.resumoPorIA ? "✨ Refazer o resumo" : "✨ Escrever resumo com IA"}</button>}
+          <a href={linkWhatsApp(textoResumoVisita(fazenda, visitaTexto))} target="_blank" rel="noreferrer" style={{ flex: 1, textAlign: "center", padding: 9, background: "#25D366", color: "#fff", borderRadius: 10, fontWeight: 800, fontSize: 12.5, textDecoration: "none" }}>💬 Texto no WhatsApp</a>
+          {podeIA && (subconjunto || (podeEditar && onAtualizar)) && <button onClick={refazerResumo} disabled={refazendo === "gerando"} style={{ flex: 1, padding: 9, background: C.verdeBg, color: C.verdeEscuro, border: "none", borderRadius: 10, fontWeight: 800, fontSize: 12.5 }}>{refazendo === "gerando" ? "✍️ Escrevendo…" : subconjunto ? (resumoSelecao[chaveSel] ? "✨ Refazer o resumo destes talhões" : "✨ Escrever resumo destes talhões") : visita.resumoPorIA ? "✨ Refazer o resumo" : "✨ Escrever resumo com IA"}</button>}
           {refazendo && refazendo !== "gerando" && <div style={{ width: "100%", fontSize: 12, color: C.vermelho, fontWeight: 700 }}>{refazendo}</div>}
-          {visita.resumoPendente && !refazendo && window.AGROCR_FIREBASE ? <div style={{ width: "100%", fontSize: 12, color: "#7A5C00", fontWeight: 700 }}>✍️ A IA ainda vai escrever o resumo em texto corrido desta visita — acontece sozinho quando houver internet{num(visita.audiosPendentes) > 0 ? ", depois que os áudios forem transcritos" : ""}.</div> : null}
+          {visita.resumoPendente && !subconjunto && !refazendo && window.AGROCR_FIREBASE ? <div style={{ width: "100%", fontSize: 12, color: "#7A5C00", fontWeight: 700 }}>✍️ A IA ainda vai escrever o resumo em texto corrido desta visita — acontece sozinho quando houver internet{num(visita.audiosPendentes) > 0 ? ", depois que os áudios forem transcritos" : ""}.</div> : null}
+          {subconjunto && visita.editadaEm ? <div style={{ width: "100%", fontSize: 11.5, color: C.cinza }}>Relatório de parte dos talhões sai das observações originais — correções feitas em "Editar esta visita" valem só para o relatório completo.</div> : null}
         </div>
       )}
       <div className="imprimivel" style={{ background: "#fff", borderRadius: 12, padding: 22, border: `1.5px solid ${C.borda}` }}>
@@ -24146,6 +24193,7 @@ function RelatorioVisita({ fazenda, visita, lavoura, podeEditar, onAtualizar, on
         <div style={{ fontSize: 15, marginBottom: 12 }}>
           <b>{fazenda.nome}</b> — {fazenda.produtor}{fazenda.municipio ? ` — ${fazenda.municipio}` : ""}<br />
           <span style={{ color: C.cinza }}>Responsável técnico: {visita.tecnico}</span>
+          {rotuloSel ? <><br /><span style={{ color: C.navy, fontWeight: 800 }}>Talhões: {rotuloSel}</span></> : null}
         </div>
         {itens.map((it, i) => (
           <div key={i} style={{ marginBottom: 16 }}>
