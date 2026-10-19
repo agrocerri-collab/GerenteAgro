@@ -22196,6 +22196,32 @@ function pontoNoAnel(lon, lat, anel) {
   }
   return dentro;
 }
+// distância (m) de um ponto ao contorno do anel — para saber se o GPS está "bem dentro" do talhão
+function distanciaAoAnel(lon, lat, anel) {
+  const { kx, ky } = escalasLocais(lat);
+  let melhor = Infinity;
+  for (let i = 1; i < (anel || []).length; i++) {
+    const [ax, ay] = anel[i - 1], [bx, by] = anel[i];
+    const dx = (bx - ax) * kx, dy = (by - ay) * ky, px = (lon - ax) * kx, py = (lat - ay) * ky;
+    const l2 = dx * dx + dy * dy;
+    const u = l2 > 0 ? Math.max(0, Math.min(1, (px * dx + py * dy) / l2)) : 0;
+    const d = Math.hypot(px - u * dx, py - u * dy);
+    if (d < melhor) melhor = d;
+  }
+  return melhor;
+}
+// Qual talhão o GPS indica, sem pular na divisa: se o ponto ainda está dentro do talhão atual,
+// fica nele; só sugere outro quando o ponto está dentro dele por uma margem maior que o erro
+// do GPS (mínimo 15 m). Leitura ruim (erro > 60 m) não conta. Devolve null = não mexer.
+function talhaoPeloGps(kml, lon, lat, precisaoM, atualId) {
+  if (!kml || !kml.poligonos || !(precisaoM <= 60)) return null;
+  const dentro = kml.poligonos.filter((g) => g.talhaoId && g.aneis && g.aneis[0] && pontoNoAnel(lon, lat, g.aneis[0]));
+  if (!dentro.length) return null;
+  if (atualId && dentro.some((g) => g.talhaoId === atualId)) return atualId;
+  const margem = Math.max(15, precisaoM || 0);
+  const firme = dentro.find((g) => distanciaAoAnel(lon, lat, g.aneis[0]) >= margem);
+  return firme ? firme.talhaoId : null;
+}
 
 // Fotos tiradas no campo (visita e monitoramento): miniaturas, botão de câmera e limite de
 // tamanho — cada visita/monitoramento é um documento na nuvem (máximo 1 MB), então as fotos
@@ -22578,16 +22604,22 @@ function ChatVisita({ fazenda, lavoura, kml, usuario, onFechar, onSalvar }) {
   // GPS → talhão: acha o polígono do KML que contém o ponto e usa o
   // talhão ligado a ele; muda sozinho conforme o técnico anda
   useTelaAcesa(!!autoGps);
+  const gpsCandidatoRef = useRef(null);   // talhão que o GPS sugeriu na última leitura (precisa repetir para valer)
   useEffect(() => {
     if (!autoGps || !navigator.geolocation || !kml || !kml.poligonos) return;
     const id = navigator.geolocation.watchPosition((p) => {
-      const { longitude: lon, latitude: lat } = p.coords;
-      const pg = kml.poligonos.find((g) => g.talhaoId && pontoNoAnel(lon, lat, g.aneis[0]));
-      if (pg && pg.talhaoId !== talhaoAtual) {
-        setTalhaoAtual(pg.talhaoId);
-        const t = talhoes.find((x) => x.id === pg.talhaoId);
+      const { longitude: lon, latitude: lat, accuracy: acc } = p.coords;
+      // na divisa de dois talhões o GPS oscila: só troca quando está bem dentro do outro,
+      // e confirmado em duas leituras seguidas (senão a observação cai no talhão errado)
+      const sugerido = talhaoPeloGps(kml, lon, lat, num(acc) || 999, talhaoAtual);
+      if (!sugerido || sugerido === talhaoAtual) { gpsCandidatoRef.current = null; return; }
+      const c = gpsCandidatoRef.current;
+      if (c && c.id === sugerido) {
+        gpsCandidatoRef.current = null;
+        setTalhaoAtual(sugerido);
+        const t = talhoes.find((x) => x.id === sugerido);
         setGpsNome(t ? t.nome : "");
-      }
+      } else gpsCandidatoRef.current = { id: sugerido };
     }, () => {}, { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 });
     return () => { try { navigator.geolocation.clearWatch(id); } catch (e) {} };
   }, [autoGps, talhaoAtual]);
