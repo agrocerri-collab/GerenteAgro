@@ -21294,6 +21294,48 @@ const classCV = (cv) => (cv <= 15 ? ["ótimo", C.verdeEscuro] : cv <= 25 ? ["ace
 // A nuvem (Firestore) NÃO aceita lista dentro de lista. As regulagens
 // guardam resumo como [{r, v}] e linhas de tabela como [{c: [...]}] —
 // esta função converte qualquer formato antigo que tenha ficado preso.
+// ---------- teste de calda (teste do jarro) ----------
+// Quanto de cada produto vai num recipiente pequeno para reproduzir a calda do tanque:
+// quantidade = dose/ha × volume do recipiente ÷ vazão (L/ha). Líquido sai em mL, pó em g.
+// Quantidade pequena demais para medir (< 2 mL ou g): pré-diluição de 10 mL (ou g) em 1 L
+// de água — cada mL dessa solução tem 0,01 do produto.
+const FORMULACOES_CALDA = [
+  ["WG", "WG — grânulo dispersível"], ["WP", "WP — pó molhável"], ["SP", "SP — pó solúvel"], ["SG", "SG — grânulo solúvel"],
+  ["SC", "SC — suspensão concentrada"], ["FS", "FS — suspensão p/ semente"], ["CS", "CS — suspensão de cápsulas"], ["SE", "SE — suspo-emulsão"],
+  ["EC", "EC — concentrado emulsionável"], ["EW", "EW — emulsão óleo em água"], ["ME", "ME — microemulsão"], ["OD", "OD — dispersão em óleo"],
+  ["SL", "SL — concentrado solúvel"], ["foliar", "Fertilizante foliar"], ["adjuvante", "Adjuvante / óleo"], ["bio", "Biológico"], ["", "não sei"],
+];
+const ehPoFormulacao = (f) => ["WG", "WP", "SP", "SG"].includes(String(f || "").toUpperCase());
+function quantidadesTesteCalda(produtos, vazaoLha, volumeL) {
+  const vz = num(vazaoLha), V = num(volumeL);
+  if (!(vz > 0) || !(V > 0)) return [];
+  return (produtos || []).filter((p) => p && p.nome && num(p.dose) > 0).map((p) => {
+    const un = String(p.unidade || "L/ha").toLowerCase();
+    const po = /^(kg|g)/.test(un);                                             // kg/ha ou g/ha
+    const porHaBase = /^(l|kg)/.test(un) ? num(p.dose) * 1000 : num(p.dose);   // mL ou g por ha
+    const qtd = porHaBase * V / vz;
+    const unid = po ? "g" : "mL";
+    const pre = qtd < 2 ? { solucaoMl: Math.round(qtd * 100 * 100) / 100 } : null;   // mL da solução 10 mL/g em 1 L
+    return { nome: p.nome, formulacao: p.formulacao || "", dose: num(p.dose), unidade: p.unidade || "L/ha", qtd: Math.round(qtd * 100) / 100, un: unid, preDiluicao: pre };
+  });
+}
+// informação para a ordem de mistura a partir da formulação escolhida (não depende do catálogo)
+function infoCaldaDe(p) {
+  const f = String((p && p.formulacao) || "");
+  if (f === "foliar") return { categoria: "fertilizante foliar", unidade: p.unidade, ativo: "" };
+  if (f === "adjuvante") return { categoria: "adjuvante", unidade: p.unidade, ativo: "" };
+  if (f === "bio") return { categoria: "biológico", unidade: p.unidade, ativo: "" };
+  return { categoria: "", unidade: /kg|^g/.test(String((p && p.unidade) || "").toLowerCase()) ? "kg" : "L", ativo: "" };
+}
+const nomeComFormulacao = (p) => (p && p.formulacao && !["foliar", "adjuvante", "bio"].includes(p.formulacao) ? `${p.nome} ${p.formulacao}` : (p && p.nome) || "");
+const PASSOS_TESTE_CALDA = [
+  "1. Use a MESMA água que vai no tanque (fonte, pH, temperatura). Encha o recipiente até a metade.",
+  "2. Ponha os produtos na ordem da tabela, UM de cada vez: tampe e agite (10 inversões) antes do próximo. Pó e grânulo: dissolva antes num copo com água.",
+  "3. Complete o volume com água, agite de novo e deixe parado 15 minutos. Olhe outra vez aos 30 minutos.",
+  "4. Aprovado: calda uniforme, sem grumos, sem camada de óleo em cima, sem borra que não volta ao agitar, sem espuma ou calor fora do normal.",
+  "5. Reprovado: troque a ordem, troque a formulação (ex.: EC por SC), ajuste o pH da água (a maioria vai bem entre 5 e 6,5; biológico perto do neutro) ou aplique separado.",
+  "6. Aprovou? Prepare o tanque na mesma ordem, com a agitação ligada e o tanque pela metade, e aplique no mesmo dia. Nunca deixe calda pronta de um dia para o outro.",
+];
 const normalizarReg = (v) => {
   if (!v || !v.ehRegulagem) return v;
   const resumo = (v.resumo || []).map((x) => (Array.isArray(x) ? { r: x[0], v: x[1] } : x));
@@ -21301,6 +21343,110 @@ const normalizarReg = (v) => {
   return { ...v, resumo, tabelas };
 };
 
+function RegTesteCalda({ usuario, produtosConhecidos, onFechar, onSalvar }) {
+  const [linhas, setLinhas] = useState([{ nome: "", formulacao: "", dose: "", unidade: "L/ha" }, { nome: "", formulacao: "", dose: "", unidade: "L/ha" }]);
+  const [vazao, setVazao] = useState("100");
+  const [volumeMl, setVolumeMl] = useState("1000");
+  const [resultado, setResultado] = useState("");   // "" · compativel · ressalva · incompativel
+  const [obs, setObs] = useState("");
+  const mudar = (i, campo, v) => setLinhas(linhas.map((l, j) => (j === i ? { ...l, [campo]: v } : l)));
+  const tirar = (i) => setLinhas(linhas.filter((_, j) => j !== i));
+  const prontos = linhas.filter((l) => l.nome.trim() && num(l.dose) > 0).map((l) => ({ ...l, nome: l.nome.trim() }));
+  const V = num(volumeMl) / 1000;
+  const qtds = quantidadesTesteCalda(prontos, vazao, V);
+  const ordem = ordemDeMistura(prontos.map((p) => ({ ...p, nome: nomeComFormulacao(p) })), (nome) => infoCaldaDe(prontos.find((p) => nomeComFormulacao(p) === nome)));
+  const qtdDe = (p) => qtds.find((q) => q.nome === p.nome);
+  const dicas = dicasDaCalda(prontos.map((p) => ({ ...p, nome: nomeComFormulacao(p) })), (nome) => infoCaldaDe(prontos.find((p) => nomeComFormulacao(p) === nome)));
+  const rotuloVol = num(volumeMl) >= 1000 ? `${fmtN(num(volumeMl) / 1000)} L` : `${fmtN(num(volumeMl))} mL`;
+  const ok = qtds.length > 0 && num(vazao) > 0;
+  const chip = (ativo, cor) => ({ flex: "1 1 30%", padding: "9px 6px", borderRadius: 10, fontWeight: 800, fontSize: 12.5, border: "none", background: ativo ? (cor || C.navy) : C.fundo, color: ativo ? "#fff" : C.navyEscuro });
+  function salvar() {
+    const linhasTab = ordem.ordenados.map((p, i) => { const orig = prontos.find((x) => nomeComFormulacao(x) === p.nome) || p; const qq = qtdDe(orig); return [`${i + 1}º · ${orig.nome}${orig.formulacao ? ` (${orig.formulacao})` : ""}`, `${fmtN(num(orig.dose))} ${orig.unidade}`, qq ? `${fmtN(qq.qtd)} ${qq.un}${qq.preDiluicao ? ` · pré-diluir: ${fmtN(qq.preDiluicao.solucaoMl)} mL da solução 10 ${qq.un}/L` : ""}` : "—"]; });
+    onSalvar({
+      ehRegulagem: true, tipoReg: "Teste de calda", data: hojeISO(), maquina: "",
+      quem: (usuario && usuario.nomeUsuario) || "",
+      resumo: [
+        ["Vazão da aplicação", `${fmtN(num(vazao))} L/ha`],
+        ["Recipiente do teste", rotuloVol],
+        ["Produtos", String(prontos.length)],
+        ["Resultado", resultado === "compativel" ? "✓ compatível" : resultado === "ressalva" ? "⚠ compatível com ressalva" : resultado === "incompativel" ? "✗ incompatível" : "não informado"],
+        ...(obs.trim() ? [["Observação", obs.trim()]] : []),
+      ],
+      tabelas: [
+        { titulo: `Quanto pôr no recipiente de ${rotuloVol} — na ordem de mistura`, colunas: ["Ordem · produto", "Dose/ha", "No recipiente"], linhas: linhasTab },
+        { titulo: "Como fazer o teste", colunas: ["Passo"], linhas: PASSOS_TESTE_CALDA.map((p) => [p]) },
+        ...((ordem.avisos.length || dicas.length) ? [{ titulo: "Orientações desta mistura", colunas: ["Orientação"], linhas: [...ordem.avisos.map((a) => ["⚠ " + a]), ...dicas.map((d) => [d])] }] : []),
+      ],
+      testeCalda: { vazao: num(vazao), volumeMl: num(volumeMl), produtos: prontos.map((p) => ({ nome: p.nome, formulacao: p.formulacao, dose: num(p.dose), unidade: p.unidade })), resultado, obs: obs.trim() },
+    });
+  }
+  return (
+    <Modal titulo="🧪 Teste de calda (teste do jarro)" onFechar={onFechar}>
+      <div style={{ fontSize: 12.5, color: C.cinza }}>Coloque os produtos da receita, a vazão e o tamanho do recipiente: o app diz quanto de cada um vai no jarro, em que ordem, e como fazer o teste.</div>
+      <datalist id="produtos-calda">{(produtosConhecidos || []).map((n) => <option key={n} value={n} />)}</datalist>
+      <label>Produtos da calda</label>
+      {linhas.map((l, i) => (
+        <div key={i} style={{ background: C.fundo, borderRadius: 10, padding: "8px 10px", marginBottom: 6 }}>
+          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            <input list="produtos-calda" value={l.nome} onChange={(e) => { const nome = e.target.value; const m = nome.toUpperCase().match(/\b(WG|WP|SP|SG|SC|FS|CS|SE|EC|EW|ME|OD|SL)\b/); mudar(i, "nome", nome); if (m && !l.formulacao) setLinhas((ls) => ls.map((x, j) => (j === i ? { ...x, nome, formulacao: m[1] } : x))); }} placeholder={`Produto ${i + 1}`} style={{ flex: 1, marginTop: 0 }} />
+            {linhas.length > 1 && <button onClick={() => tirar(i)} style={{ background: "transparent", border: "none", color: C.vermelho, fontWeight: 800, fontSize: 16 }}>✕</button>}
+          </div>
+          <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+            <select value={l.formulacao} onChange={(e) => mudar(i, "formulacao", e.target.value)} style={{ flex: 1.4, marginTop: 0 }}>
+              {FORMULACOES_CALDA.map(([v, r]) => <option key={v} value={v}>{r}</option>)}
+            </select>
+            <input type="number" inputMode="decimal" value={l.dose} onChange={(e) => mudar(i, "dose", e.target.value)} placeholder="dose" style={{ flex: 0.8, marginTop: 0 }} />
+            <select value={l.unidade} onChange={(e) => mudar(i, "unidade", e.target.value)} style={{ flex: 0.9, marginTop: 0 }}>
+              {["L/ha", "mL/ha", "kg/ha", "g/ha"].map((u) => <option key={u}>{u}</option>)}
+            </select>
+          </div>
+        </div>
+      ))}
+      <button onClick={() => setLinhas([...linhas, { nome: "", formulacao: "", dose: "", unidade: "L/ha" }])} style={{ padding: "8px 12px", background: C.verdeBg, color: C.verdeEscuro, border: "none", borderRadius: 10, fontWeight: 800, fontSize: 13 }}>+ produto</button>
+      <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ flex: 1 }}><label>Vazão (L/ha)</label><input type="number" inputMode="decimal" value={vazao} onChange={(e) => setVazao(e.target.value)} placeholder="Ex.: 100" /></div>
+        <div style={{ flex: 1 }}><label>Recipiente (mL)</label><input type="number" inputMode="decimal" value={volumeMl} onChange={(e) => setVolumeMl(e.target.value)} placeholder="Ex.: 1000" /></div>
+      </div>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
+        {[["500", "copo 500 mL"], ["1000", "garrafa 1 L"], ["2000", "PET 2 L"], ["5000", "galão 5 L"], ["10000", "balde 10 L"]].map(([v, r]) => (
+          <button key={v} onClick={() => setVolumeMl(v)} style={{ background: volumeMl === v ? C.navy : C.fundo, color: volumeMl === v ? "#fff" : C.navyEscuro, border: "none", borderRadius: 8, padding: "6px 10px", fontWeight: 800, fontSize: 12 }}>{r}</button>
+        ))}
+      </div>
+      {ok && (
+        <div style={{ marginTop: 12 }}>
+          <div style={{ fontWeight: 900, fontSize: 13, color: C.navy, marginBottom: 6 }}>🧮 Quanto pôr no recipiente de {rotuloVol} — na ordem de mistura</div>
+          {ordem.ordenados.map((p, i) => {
+            const orig = prontos.find((x) => nomeComFormulacao(x) === p.nome) || p;
+            const q = qtdDe(orig); const g = ordem.grupos[i];
+            return (
+              <div key={i} style={{ background: C.verdeBg, borderRadius: 10, padding: "8px 12px", marginBottom: 6, fontSize: 13 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontWeight: 900 }}>
+                  <span>{i + 1}º · {orig.nome}{orig.formulacao ? <span style={{ fontWeight: 600, color: C.cinza }}> ({orig.formulacao})</span> : null}</span>
+                  <b style={{ whiteSpace: "nowrap", color: C.navy, fontSize: 15 }}>{q ? `${fmtN(q.qtd)} ${q.un}` : "—"}</b>
+                </div>
+                <div style={{ fontSize: 11.5, color: C.cinza }}>{fmtN(num(orig.dose))} {orig.unidade} · {g ? g.rotulo : ""}</div>
+                {q && q.preDiluicao && <div style={{ fontSize: 12, color: "#7A5C00", fontWeight: 700, marginTop: 2 }}>Pouco para medir: dissolva 10 {q.un} do produto em 1 L de água e use {fmtN(q.preDiluicao.solucaoMl)} mL dessa solução.</div>}
+              </div>
+            );
+          })}
+          {ordem.avisos.map((a, i) => <div key={i} style={{ background: C.amareloBg, color: "#7A5C00", borderRadius: 10, padding: "8px 12px", fontSize: 12.5, fontWeight: 700, marginBottom: 6 }}>⚠ {a}</div>)}
+          {dicas.map((d, i) => <div key={i} style={{ fontSize: 12.5, color: C.navyEscuro, padding: "3px 0" }}>{d}</div>)}
+          <div style={{ fontWeight: 900, fontSize: 13, color: C.navy, margin: "12px 0 6px" }}>📋 Como fazer o teste</div>
+          {PASSOS_TESTE_CALDA.map((p, i) => <div key={i} style={{ fontSize: 12.5, color: C.navyEscuro, padding: "3px 0", borderBottom: `1px dashed ${C.borda}` }}>{p}</div>)}
+          <label>Resultado do teste</label>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            <button onClick={() => setResultado("compativel")} style={chip(resultado === "compativel", C.verde)}>✓ Compatível</button>
+            <button onClick={() => setResultado("ressalva")} style={chip(resultado === "ressalva", C.amarelo)}>⚠ Com ressalva</button>
+            <button onClick={() => setResultado("incompativel")} style={chip(resultado === "incompativel", C.vermelho)}>✗ Incompatível</button>
+          </div>
+          <label>Observação (opcional)</label>
+          <input value={obs} onChange={(e) => setObs(e.target.value)} placeholder="Ex.: formou grumos aos 15 min; trocar a ordem do óleo" />
+        </div>
+      )}
+      <BotaoSalvar disabled={!ok} texto="Salvar o teste e gerar o relatório" onClick={salvar} />
+    </Modal>
+  );
+}
 function RegPulverizador({ usuario, onFechar, onSalvar }) {
   const [alvo, setAlvo] = useState("");
   const [esp, setEsp] = useState("0.5");
@@ -23911,7 +24057,7 @@ function SecaoVisitas({ podeApagar, fazenda, lavoura, kml, visitas, consultor, u
 
   // salvou a regulagem: já abre o relatório dela, com o botão de PDF ali mesmo
   const salvarReg = (r) => { const id = idNovo(); onSalvar([...visitas, normalizarReg({ id, ...r })]); setReg(null); setAberta(id); };
-  const ABAS = [["campo", "🧑‍🌾", "Visita de campo", soVisitas.length], ["regulagem", "🔧", "Regulagem de máquina", regulagens.length], ["pragas", "🐛", "Monitoramento de pragas", monitoramentos.length], ["armadilhas", "🪤", "Armadilhas", nArmadilhas]];
+  const ABAS = [["campo", "🧑‍🌾", "Visita de campo", soVisitas.length], ["regulagem", "🔧", "Regulagem e calda", regulagens.length], ["pragas", "🐛", "Monitoramento de pragas", monitoramentos.length], ["armadilhas", "🪤", "Armadilhas", nArmadilhas]];
 
   return (
     <div>
@@ -23952,11 +24098,11 @@ function SecaoVisitas({ podeApagar, fazenda, lavoura, kml, visitas, consultor, u
         <div style={{ background: "#fff", border: `1.5px solid ${C.borda}`, borderRadius: 12, padding: "10px 14px", marginBottom: 14 }}>
           <div style={{ fontWeight: 900, color: C.navy, fontSize: 14, marginBottom: 6 }}>🔧 Regulagem de máquinas</div>
           <div style={{ fontSize: 12, color: C.cinza, marginBottom: 8 }}>
-            Digite as coletas e o app faz a conta na hora, com relatório em PDF.
+            Digite as coletas e o app faz a conta na hora, com relatório em PDF. O teste de calda diz quanto de cada produto vai no jarro e em que ordem.
           </div>
           {consultor && (
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {[["pulv", "💦 Pulverizador"], ["lanco", "🌾 Faixa a lanço"], ["plantadeira", "🌱 Plantadeira (adubo)"]].map(([id, rot]) => (
+              {[["pulv", "💦 Pulverizador"], ["lanco", "🌾 Faixa a lanço"], ["plantadeira", "🌱 Plantadeira (adubo)"], ["calda", "🧪 Teste de calda"]].map(([id, rot]) => (
                 <button key={id} onClick={() => setReg(id)} style={{
                   flex: "1 1 30%", padding: "10px 6px", borderRadius: 10, fontWeight: 800, fontSize: 12,
                   background: C.verdeBg, color: C.verdeEscuro, border: "none",
@@ -24074,6 +24220,7 @@ function SecaoVisitas({ podeApagar, fazenda, lavoura, kml, visitas, consultor, u
       {reg === "pulv" && <RegPulverizador usuario={usuario} onFechar={() => setReg(null)} onSalvar={salvarReg} />}
       {reg === "lanco" && <RegLanco usuario={usuario} maquinas={maquinas} onFechar={() => setReg(null)} onSalvar={salvarReg} />}
       {reg === "plantadeira" && <RegPlantadeira usuario={usuario} maquinas={maquinas} onFechar={() => setReg(null)} onSalvar={salvarReg} />}
+      {reg === "calda" && <RegTesteCalda usuario={usuario} produtosConhecidos={[...new Set((apls || []).flatMap((a) => (a.produtos || []).map((p) => p.nome)).filter(Boolean))].sort()} onFechar={() => setReg(null)} onSalvar={salvarReg} />}
     </div>
   );
 }
