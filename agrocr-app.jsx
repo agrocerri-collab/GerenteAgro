@@ -21460,7 +21460,23 @@ const normalizarReg = (v) => {
   return { ...v, resumo, tabelas };
 };
 
-function RegTesteCalda({ usuario, produtosConhecidos, onFechar, onSalvar }) {
+// produtos de uma recomendação de pulverização → linhas do teste de calda (dose/ha e formulação pela sigla do nome)
+function linhasDaRecomendacao(a) {
+  const un = (p) => {
+    const u = String(p.unidade || "L").toLowerCase();
+    if (u === "dose") return num(p.mlPorDose) > 0 ? { dose: num(p.dose) * num(p.mlPorDose), unidade: "mL/ha" } : { dose: num(p.dose), unidade: "mL/ha" };
+    if (u === "kg") return { dose: num(p.dose), unidade: "kg/ha" };
+    if (u === "g") return { dose: num(p.dose), unidade: "g/ha" };
+    if (u === "ml") return { dose: num(p.dose), unidade: "mL/ha" };
+    return { dose: num(p.dose), unidade: "L/ha" };
+  };
+  return ((a && a.produtos) || []).filter((p) => p && p.nome && num(p.dose) > 0).map((p) => {
+    const m = String(p.nome).toUpperCase().match(/\b(WG|WP|SP|SG|SC|FS|CS|SE|EC|EW|ME|OD|SL)\b/);
+    const d = un(p);
+    return { nome: String(p.nome).trim(), formulacao: m ? m[1] : "", dose: String(d.dose), unidade: d.unidade };
+  });
+}
+function RegTesteCalda({ usuario, produtosConhecidos, recomendacoes, onFechar, onSalvar }) {
   const [linhas, setLinhas] = useState([{ nome: "", formulacao: "", dose: "", unidade: "L/ha" }, { nome: "", formulacao: "", dose: "", unidade: "L/ha" }]);
   const [vazao, setVazao] = useState("100");
   const [volumeMl, setVolumeMl] = useState("1000");
@@ -21501,6 +21517,16 @@ function RegTesteCalda({ usuario, produtosConhecidos, onFechar, onSalvar }) {
     <Modal titulo="🧪 Teste de calda (teste do jarro)" onFechar={onFechar}>
       <div style={{ fontSize: 12.5, color: C.cinza }}>Coloque os produtos da receita, a vazão e o tamanho do recipiente: o app diz quanto de cada um vai no jarro, em que ordem, e como fazer o teste.</div>
       <datalist id="produtos-calda">{(produtosConhecidos || []).map((n) => <option key={n} value={n} />)}</datalist>
+      {(recomendacoes || []).length > 0 && (
+        <>
+          <label>📋 Trazer de uma recomendação ainda não aplicada</label>
+          <select value="" onChange={(e) => { const a = (recomendacoes || []).find((x) => x.id === e.target.value); if (!a) return; const ls = linhasDaRecomendacao(a); if (ls.length) setLinhas(ls); if (num(a.vazao) > 0) setVazao(String(num(a.vazao))); }}>
+            <option value="">— escolher uma recomendação —</option>
+            {(recomendacoes || []).map((a) => <option key={a.id} value={a.id}>{fmtD(a.dataRecomendada)} · {a.tipo || "Pulverização"}{a.alvo ? ` — ${a.alvo}` : ""}{(a.talhoesNomes || []).length ? ` · ${a.talhoesNomes.join(", ")}` : ""} · {(a.produtos || []).filter((p) => p && p.nome).length} produto{(a.produtos || []).filter((p) => p && p.nome).length === 1 ? "" : "s"}{num(a.vazao) > 0 ? ` · ${fmtN(num(a.vazao))} L/ha` : ""}</option>)}
+          </select>
+          <div style={{ fontSize: 11.5, color: C.cinza, marginTop: 2 }}>Preenche os produtos, as doses e a vazão da receita — confira a formulação de cada um.</div>
+        </>
+      )}
       <label>Produtos da calda</label>
       {linhas.map((l, i) => (
         <div key={i} style={{ background: C.fundo, borderRadius: 10, padding: "8px 10px", marginBottom: 6 }}>
@@ -24397,7 +24423,7 @@ function SecaoVisitas({ podeApagar, fazenda, lavoura, kml, visitas, consultor, u
       {reg === "pulv" && <RegPulverizador usuario={usuario} onFechar={() => setReg(null)} onSalvar={salvarReg} />}
       {reg === "lanco" && <RegLanco usuario={usuario} maquinas={maquinas} onFechar={() => setReg(null)} onSalvar={salvarReg} />}
       {reg === "plantadeira" && <RegPlantadeira usuario={usuario} maquinas={maquinas} onFechar={() => setReg(null)} onSalvar={salvarReg} />}
-      {reg === "calda" && <RegTesteCalda usuario={usuario} produtosConhecidos={[...new Set((apls || []).flatMap((a) => (a.produtos || []).map((p) => p.nome)).filter(Boolean))].sort()} onFechar={() => setReg(null)} onSalvar={salvarReg} />}
+      {reg === "calda" && <RegTesteCalda usuario={usuario} recomendacoes={(apls || []).filter((a) => moduloDe(a) === "pulverizacao" && !a.prevista && (a.talhaoIds || []).some((tid) => { const ex = (a.execucoes || {})[tid]; return !ex || ex.aberto; })).map((a) => ({ ...a, talhoesNomes: (a.talhaoIds || []).map((tid) => ((fazenda.talhoes || []).find((x) => x.id === tid) || {}).nome).filter(Boolean) }))} produtosConhecidos={[...new Set((apls || []).flatMap((a) => (a.produtos || []).map((p) => p.nome)).filter(Boolean))].sort()} onFechar={() => setReg(null)} onSalvar={salvarReg} />}
     </div>
   );
 }
