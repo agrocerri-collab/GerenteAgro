@@ -112,6 +112,7 @@ const ITENS_ACESSO = [
   ["programa", "📅 Programa prévio de insumos", "Campo"],
   ["ndvi", "🛰️ Mapa NDVI", "Campo"],
   ["pluviometria", "🌧️ Pluviometria", "Campo"],
+  ["previsao", "🌦️ Previsão do tempo (chuva prevista, radar)", "Campo"],
   ["colheita", "🌾 Colheita", "Campo"],
   ["visitas", "🧑‍🌾 Visitas técnicas (visita, regulagem, pragas)", "Campo"],
   ["diesel", "⛽ Máquinas, diesel e manutenção", "Máquinas"],
@@ -144,14 +145,14 @@ const funcaoMonitor = (f) => /monitor/i.test(String(f || ""));
 const padraoAreaFazenda = (funcao, chave) => chave === "apagar" ? /produtor|gerente/i.test(String(funcao || "")) : LANCAR_FAZENDA.includes(chave) ? false : !(["financeiro", "cotacoes", "programa"].includes(chave) && funcaoDeCampo(funcao));
 // O que cada função pode, por padrão, nos acessos da EQUIPE (GerenteAgro): o titular escolhe a função e
 // ajusta se quiser. Chave ausente = pode (para as funções de confiança) — a lista diz o que NÃO pode.
-const CAMPO_VER = ["panorama", "dadosfazenda", "lavoura", "solo", "operacoes", "fungicidas", "estoque", "ndvi", "pluviometria", "colheita", "visitas", "comunidade", "suporte"];
+const CAMPO_VER = ["panorama", "dadosfazenda", "lavoura", "solo", "operacoes", "fungicidas", "estoque", "ndvi", "pluviometria", "previsao", "colheita", "visitas", "comunidade", "suporte"];
 const PADRAO_FUNCAO_EQUIPE = {
   "Produtor": { tudo: true },
   "Gerente": { tudo: true, nao: ["acessos"] },
   "Engenheiro agrônomo": { tudo: true, nao: ["custos", "simulacoes", "excluir", "acessos"] },
   "Escritório": { so: ["panorama", "estoque", "programa", "diesel", "almoxarifado", "financeiro", "custos", "cotacoes", "simulacoes", "relatorios", "documentos", "comunidade", "suporte", "cadastrar"] },
   "Monitor de campo": { so: CAMPO_VER },
-  "Operador de máquinas": { so: ["panorama", "operacoes", "fungicidas", "estoque", "pluviometria", "colheita", "diesel", "almoxarifado", "comunidade", "suporte"] },
+  "Operador de máquinas": { so: ["panorama", "operacoes", "fungicidas", "estoque", "pluviometria", "previsao", "colheita", "diesel", "almoxarifado", "comunidade", "suporte"] },
 };
 // valores antigos de função ("Monitor", "Operador", "Agrônomo") → nome atual da lista FUNCOES
 const normalizarFuncao = (f) => {
@@ -386,6 +387,7 @@ const ICONES_SVG = {
   escudo: ["M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z", "M9 12l2 2 4-4"],
   caixa: ["M3.5 8 12 4l8.5 4v9L12 21l-8.5-4z", "M3.5 8 12 12l8.5-4", "M12 12v9"],
   chuva: ["M7 15a4 4 0 0 1-.5-8A5.5 5.5 0 0 1 17 8a3.5 3.5 0 0 1 .5 7", "M9 17l-1 3M13 17l-1 3M17 17l-1 3"],
+  previsao: ["M9 3v1.5", "M3.5 8.5H5", "M5.1 4.6l1.1 1.1", "M12.9 4.6l-1.1 1.1", "M6 9.5a3.2 3.2 0 0 1 6-1.4", "M8.5 20a3.5 3.5 0 0 1-.4-7A5 5 0 0 1 17.8 13a3.2 3.2 0 0 1 .2 6.4z"],
   colheita: ["M12 21V8", "M12 8c-3 0-4-2-4-4 3 0 4 2 4 4zM12 8c3 0 4-2 4-4-3 0-4 2-4 4z", "M12 13c-3 0-4.5-2-4.5-4.5 3 0 4.5 2 4.5 4.5zM12 13c3 0 4.5-2 4.5-4.5-3 0-4.5 2-4.5 4.5z", "M12 18c-3 0-4.5-2-4.5-4.5 3 0 4.5 2 4.5 4.5zM12 18c3 0 4.5-2 4.5-4.5-3 0-4.5 2-4.5 4.5z"],
   visita: ["M7 4h10a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z", "M9 4V3h6v1", "M8.5 12.5l2.5 2.5 4.5-5"],
   carteira: ["M5.5 6h13A2.5 2.5 0 0 1 21 8.5v8a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 16.5v-8A2.5 2.5 0 0 1 5.5 6z", "M3 10h18", "M15.5 14.5h2"],
@@ -417,7 +419,7 @@ const ICONES_SVG = {
 };
 // qual ícone cada cartão usa (id do cartão → nome acima); sem correspondência, fica o emoji
 const ICONE_DE = {
-  panorama: "panorama", geral: "resumo", dados: "fazenda", lavoura: "lavoura", apl: "trator", fungicidas: "escudo", estoque: "caixa", mapa: "sat", chuva: "chuva",
+  panorama: "panorama", geral: "resumo", dados: "fazenda", lavoura: "lavoura", apl: "trator", fungicidas: "escudo", estoque: "caixa", mapa: "sat", chuva: "chuva", previsao: "previsao",
   colheita: "colheita", visitas: "visita", cotacoes: "cotacoes", fin: "carteira", diesel: "diesel", rel: "relatorio", comunidade: "comunidade", suporte: "suporte",
   doc: "documentos", documentos: "documentos", safras: "safras",
   planocompras: "lista", cotacao: "cotacao", prog: "carrinho", notas: "nota", func: "pessoas", maq: "ferramenta", custos: "cifrao", caixa: "caixaFluxo", vendas: "vendas", dre: "dre", plano: "plano", relfin: "relatorio",
@@ -458,7 +460,7 @@ const CLASSES_MENU = {
 };
 const CLASSE_DO_CARTAO = {
   panorama: "campo", dados: "campo", lavoura: "campo", solo: "campo", apl: "campo", fungicidas: "campo", mapa: "campo", visitas: "campo",
-  chuva: "agua",
+  chuva: "agua", previsao: "agua",
   diesel: "maquinas", colheita: "maquinas", maq: "maquinas",
   estoque: "insumos", prog: "insumos", planocompras: "insumos", cotacao: "insumos",
   fin: "dinheiro", geral: "dinheiro", cotacoes: "dinheiro", custos: "dinheiro", caixa: "dinheiro", vendas: "dinheiro", dre: "dinheiro", notas: "dinheiro", plano: "dinheiro", func: "dinheiro",
@@ -5516,7 +5518,7 @@ function TelaFazenda({ fazenda, fazendas, grupos, papel, usuario, naNuvem, equip
   const [combustivel, setCombustivel] = useState([]);
   const [manutencoes, setManutencoes] = useState([]);
   const [almox, setAlmox] = useState([]);
-  const SECAO_PERMISSAO = { panorama: "panorama", dados: "dadosfazenda", lavoura: "lavoura", solo: "solo", apl: "operacoes", fungicidas: "fungicidas", estoque: "estoque", mapa: "ndvi", chuva: "pluviometria", colheita: "colheita", visitas: "visitas", diesel: "diesel", rel: "relatorios", doc: "documentos", comunidade: "comunidade", suporte: "suporte", cotacoes: "cotacoes" };
+  const SECAO_PERMISSAO = { panorama: "panorama", dados: "dadosfazenda", lavoura: "lavoura", solo: "solo", apl: "operacoes", fungicidas: "fungicidas", estoque: "estoque", mapa: "ndvi", chuva: "pluviometria", previsao: "previsao", colheita: "colheita", visitas: "visitas", diesel: "diesel", rel: "relatorios", doc: "documentos", comunidade: "comunidade", suporte: "suporte", cotacoes: "cotacoes" };
   const almoxPendRef = useRef("");
   const [funcionarios, setFuncionarios] = useState([]);
   const [notas, setNotas] = useState([]);
@@ -5795,6 +5797,7 @@ function TelaFazenda({ fazenda, fazendas, grupos, papel, usuario, naNuvem, equip
       const mm = mediaChuva(chuvas.filter((c) => (c.data || "").slice(0, 7) === mes));
       return chuvas.length > 0 ? `${mm.toFixed(0)} mm no mês` : "Lançar chuvas";
     })()]] : []),
+    ...(mostrar("previsao") ? [["previsao", "🌦️", "Previsão do tempo", "Chuva prevista por talhão · 7 dias · radar"]] : []),
     ...(mostrar("colheita") ? [["colheita", "🌾", "Colheita", (() => {
       const cargas = colheitas.filter((c) => c.tipo === "carga");
       const kg = cargas.reduce((s, c) => s + num(c.pesoDescarga || c.pesoKg), 0);
@@ -5944,7 +5947,7 @@ function TelaFazenda({ fazenda, fazendas, grupos, papel, usuario, naNuvem, equip
             // blocos visuais do menu (pedido do Daniel): campo em cima, dinheiro
             // no meio, acompanhamento embaixo — cada bloco com um traço verde
             const GRUPOS = [
-              ["Fazenda e lavoura", ["dados", "lavoura", "solo", "apl", "fungicidas", "estoque", "mapa", "chuva", "colheita", "visitas"]],
+              ["Fazenda e lavoura", ["dados", "lavoura", "solo", "apl", "fungicidas", "estoque", "mapa", "chuva", "previsao", "colheita", "visitas"]],
               ["Dinheiro e máquinas", ["cotacoes", "fin", "diesel"]],
               ["Acompanhamento e ajuda", ["rel", "comunidade", "suporte"]],
             ];
@@ -6362,7 +6365,8 @@ function TelaFazenda({ fazenda, fazendas, grupos, papel, usuario, naNuvem, equip
           comandoIA={comandoRel} aoConsumirComando={() => setComandoRel(null)} />
       )}
 
-      {secao === "chuva" && <SecaoChuva fazenda={fazenda} safra={safra} kml={kml} chuvas={chuvas} lavoura={lavoura} consultor={consultor} usuario={usuario} podeMedidores={!!onAtualizarFazenda}
+      {secao === "previsao" && <SecaoPrevisao fazenda={fazenda} kml={kml} onIrChuva={() => setSecao("chuva")} />}
+      {secao === "chuva" && <SecaoChuva irPrevisao={() => setSecao("previsao")} fazenda={fazenda} safra={safra} kml={kml} chuvas={chuvas} lavoura={lavoura} consultor={consultor} usuario={usuario} podeMedidores={!!onAtualizarFazenda}
         abrirRelatorio={(cmd) => { setComandoRel(cmd); setSecao("rel"); }}
         registrar={registrar} onAtualizarFazenda={onAtualizarFazenda}
         carregarTodas={async () => {
@@ -29777,7 +29781,62 @@ function PrevisaoChuvaMapa({ fazenda, kml }) {
   );
 }
 
-function SecaoChuva({ fazenda, safra, kml, chuvas, lavoura, consultor, usuario, registrar, onAtualizarFazenda, onSalvar, carregarTodas, podeMedidores, abrirRelatorio }) {
+// Tela "Previsão do tempo": tudo que é PREVISÃO mora aqui (pedido do Daniel, 19/10/2026) —
+// a Pluviometria fica só com o que CHOVEU (lançamentos, acumulados, chuva por satélite do passado).
+function SecaoPrevisao({ fazenda, kml, onIrChuva }) {
+  const [camadaMapa, setCamadaMapa] = useState("radar");
+  const medidores = (fazenda && fazenda.pluviometros) || [];
+  return (
+    <div>
+      <div className="nao-imprimir" style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
+        <div style={{ flex: "1 1 200px", fontSize: 12.5, color: C.cinza }}>Chuva prevista por talhão, previsão de 7 dias e mapa ao vivo. O que já choveu fica na Pluviometria.</div>
+        {onIrChuva && <button onClick={onIrChuva} style={{ flex: "none", padding: "8px 12px", background: "#fff", color: C.navy, border: `1.5px solid ${C.borda}`, borderRadius: 10, fontWeight: 800, fontSize: 12.5 }}>🌧️ Lançar chuva</button>}
+      </div>
+      <PrevisaoChuvaMapa fazenda={fazenda} kml={kml} />
+      {/* Clima DENTRO do app: previsão de 7 dias no ponto da fazenda e o mapa
+          animado embutido (chuva/satélite), centrado no pluviômetro ou no KML. */}
+      {(() => {
+        const m = medidores.find((x) => coordOk(x.lat) && coordOk(x.lng));
+        const p0 = !m && kml && kml.poligonos && kml.poligonos[0] ? kml.poligonos[0].aneis[0][0] : null;
+        const centro = m ? [m.lat, m.lng] : p0 ? [p0[1], p0[0]] : null;
+        return (
+          <div className="nao-imprimir">
+            <div style={{ background: "#fff", border: `1.5px solid ${C.borda}`, borderRadius: 14, padding: 14, marginBottom: 14 }}>
+              <div style={{ fontWeight: 900, color: C.navy, fontSize: 14, marginBottom: 6 }}>
+                Previsão — {(fazenda && fazenda.municipio) || (fazenda && fazenda.nome) || "fazenda"}
+              </div>
+              {centro
+                ? <PrevisaoTempo lat={centro[0]} lng={centro[1]} />
+                : <div style={{ fontSize: 12, color: C.cinza }}>Cadastre um pluviômetro com posição (ou o KML) e a previsão do ponto exato da fazenda aparece aqui.</div>}
+            </div>
+            <div style={{ background: "#fff", border: `1.5px solid ${C.borda}`, borderRadius: 14, padding: 10, marginBottom: 14 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8, flexWrap: "wrap" }}>
+                <div className="titulo" style={{ fontWeight: 800, color: C.navy, fontSize: 14, flex: "1 1 150px", whiteSpace: "nowrap" }}>Mapa do tempo ao vivo</div>
+                {[["radar", "🌦️ Radar"], ["satellite", "🛰️ Satélite"], ["rain", "🌧️ Chuva prevista"]].map(([id, rot]) => (
+                  <button key={id} onClick={() => setCamadaMapa(id)} style={{
+                    background: camadaMapa === id ? C.navy : "#fff", color: camadaMapa === id ? "#fff" : C.cinza,
+                    border: `1.5px solid ${camadaMapa === id ? C.navy : C.borda}`, borderRadius: 8, padding: "5px 8px", fontWeight: 800, fontSize: 11, flex: "none",
+                  }}>{rot}</button>
+                ))}
+              </div>
+              <iframe title="mapa do tempo"
+                src={`https://embed.windy.com/embed2.html?lat=${(centro ? centro[0] : -10.2).toFixed(3)}&lon=${(centro ? centro[1] : -48.3).toFixed(3)}` +
+                  `&detailLat=${(centro ? centro[0] : -10.2).toFixed(3)}&detailLon=${(centro ? centro[1] : -48.3).toFixed(3)}` +
+                  `&zoom=${centro ? 8 : 5}&level=surface&overlay=${camadaMapa}&menu=&message=&marker=true&calendar=now&type=map&location=coordinates&metricWind=km%2Fh&metricTemp=%C2%B0C`}
+                style={{ width: "100%", height: 320, border: "none", borderRadius: 10, display: "block" }} loading="lazy" />
+              <div style={{ fontSize: 10, color: C.cinza, marginTop: 4 }}>
+                Toque no ▶ do mapa para rodar a animação · precisa de internet ·{" "}
+                <a href="https://satelite.inmet.gov.br/BR" target="_blank" rel="noreferrer" style={{ color: C.navy }}>satélite oficial INMET</a>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+    </div>
+  );
+}
+function SecaoChuva({ fazenda, safra, kml, chuvas, lavoura, consultor, usuario, registrar, onAtualizarFazenda, onSalvar, carregarTodas, podeMedidores, abrirRelatorio, irPrevisao }) {
   // Ponto de atenção de seca só faz sentido com LAVOURA NO CAMPO
   // (plantio/emergência nos últimos 150 dias). Solo vazio: contagem cinza.
   const lavouraAtiva = (lavoura || []).some((l) => [l.dataEmergencia, l.dataPlantio].some((d) => {
@@ -29818,7 +29877,6 @@ function SecaoChuva({ fazenda, safra, kml, chuvas, lavoura, consultor, usuario, 
   for (const c of noPeriodo) { const k = c.pluviometroId || c.local || "_"; porMedidor[k] = (porMedidor[k] || 0) + num(c.mm); }
   const nMedidores = Object.keys(porMedidor).length;
   const mmPeriodo = nMedidores > 1 ? Object.values(porMedidor).reduce((s, v) => s + v, 0) / nMedidores : noPeriodo.reduce((s, c) => s + num(c.mm), 0);
-  const [camadaMapa, setCamadaMapa] = useState("radar");
   const medidores = (fazenda && fazenda.pluviometros) || [];
   // ---- chuva por satélite no mesmo período, por pluviômetro e por talhão ----
   const [sat, setSat] = useState(null);          // null = não buscou · [] · lista
@@ -29957,6 +30015,7 @@ function SecaoChuva({ fazenda, safra, kml, chuvas, lavoura, consultor, usuario, 
           <button onClick={() => abrirRelatorio({ id: "chuva", compartilhar: true, imagem: true })} title="manda o relatório como figura, direto na conversa" style={{ flex: "none", padding: "11px 12px", background: "#fff", color: "#128C7E", border: "1.5px solid #25D366", borderRadius: 12, fontWeight: 800, fontSize: 13 }}>🖼 Imagem</button>
         </div>
       )}
+      {irPrevisao && <button className="nao-imprimir" onClick={irPrevisao} style={{ width: "100%", padding: "9px 12px", background: "#F4F9FF", color: C.navy, border: `1.5px solid ${C.borda}`, borderRadius: 12, fontWeight: 800, fontSize: 13, marginBottom: 8, textAlign: "left" }}>🌦️ Previsão do tempo agora tem tela própria → abrir</button>}
       {(chuvas || []).some((c) => num(c.mm) > 0 && c.data) && (() => {
         // cartão da última chuva (ou de um dia escolhido): mm por pluviômetro, média e acumulado do mês — para mandar
         const comMm = (chuvas || []).filter((c) => num(c.mm) > 0 && c.data).map((c) => ({ ...c, d: String(c.data).slice(0, 10) }));
@@ -29993,7 +30052,6 @@ function SecaoChuva({ fazenda, safra, kml, chuvas, lavoura, consultor, usuario, 
           </div>
         );
       })()}
-      <PrevisaoChuvaMapa fazenda={fazenda} kml={kml} />
       {/* várias chuvas de uma vez, pela planilha — recolhido para não poluir */}
       <button onClick={() => setVerPlanilhaChuva(!verPlanilhaChuva)} className="nao-imprimir"
         style={{ width: "100%", padding: 11, background: "#fff", color: C.navy, border: `1.5px solid ${C.borda}`, borderRadius: 12, fontWeight: 800, fontSize: 13, marginBottom: verPlanilhaChuva ? 0 : 8, textAlign: "left" }}>
@@ -30043,46 +30101,6 @@ function SecaoChuva({ fazenda, safra, kml, chuvas, lavoura, consultor, usuario, 
           )}
         </div>
       )}
-      {/* Clima DENTRO do app: previsão de 7 dias no ponto da fazenda e o mapa
-          animado embutido (chuva/satélite), centrado no pluviômetro ou no KML. */}
-      {(() => {
-        const m = medidores.find((x) => coordOk(x.lat) && coordOk(x.lng));
-        const p0 = !m && kml && kml.poligonos && kml.poligonos[0] ? kml.poligonos[0].aneis[0][0] : null;
-        const centro = m ? [m.lat, m.lng] : p0 ? [p0[1], p0[0]] : null;
-        return (
-          <div className="nao-imprimir">
-            <div style={{ background: "#fff", border: `1.5px solid ${C.borda}`, borderRadius: 14, padding: 14, marginBottom: 14 }}>
-              <div style={{ fontWeight: 900, color: C.navy, fontSize: 14, marginBottom: 6 }}>
-                Previsão — {(fazenda && fazenda.municipio) || (fazenda && fazenda.nome) || "fazenda"}
-              </div>
-              {centro
-                ? <PrevisaoTempo lat={centro[0]} lng={centro[1]} />
-                : <div style={{ fontSize: 12, color: C.cinza }}>Cadastre um pluviômetro com posição (ou o KML) e a previsão do ponto exato da fazenda aparece aqui.</div>}
-            </div>
-            <div style={{ background: "#fff", border: `1.5px solid ${C.borda}`, borderRadius: 14, padding: 10, marginBottom: 14 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8, flexWrap: "wrap" }}>
-                <div className="titulo" style={{ fontWeight: 800, color: C.navy, fontSize: 14, flex: "1 1 150px", whiteSpace: "nowrap" }}>Mapa do tempo ao vivo</div>
-                {[["radar", "🌦️ Radar"], ["satellite", "🛰️ Satélite"], ["rain", "🌧️ Chuva prevista"]].map(([id, rot]) => (
-                  <button key={id} onClick={() => setCamadaMapa(id)} style={{
-                    background: camadaMapa === id ? C.navy : "#fff", color: camadaMapa === id ? "#fff" : C.cinza,
-                    border: `1.5px solid ${camadaMapa === id ? C.navy : C.borda}`, borderRadius: 8, padding: "5px 8px", fontWeight: 800, fontSize: 11, flex: "none",
-                  }}>{rot}</button>
-                ))}
-              </div>
-              <iframe title="mapa do tempo"
-                src={`https://embed.windy.com/embed2.html?lat=${(centro ? centro[0] : -10.2).toFixed(3)}&lon=${(centro ? centro[1] : -48.3).toFixed(3)}` +
-                  `&detailLat=${(centro ? centro[0] : -10.2).toFixed(3)}&detailLon=${(centro ? centro[1] : -48.3).toFixed(3)}` +
-                  `&zoom=${centro ? 8 : 5}&level=surface&overlay=${camadaMapa}&menu=&message=&marker=true&calendar=now&type=map&location=coordinates&metricWind=km%2Fh&metricTemp=%C2%B0C`}
-                style={{ width: "100%", height: 320, border: "none", borderRadius: 10, display: "block" }} loading="lazy" />
-              <div style={{ fontSize: 10, color: C.cinza, marginTop: 4 }}>
-                Toque no ▶ do mapa para rodar a animação · precisa de internet ·{" "}
-                <a href="https://satelite.inmet.gov.br/BR" target="_blank" rel="noreferrer" style={{ color: C.navy }}>satélite oficial INMET</a>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
-
       {/* período: dias corridos, ano-safra (jul → jun), ano civil ou de/até */}
       <div className="nao-imprimir" style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginBottom: 8 }}>
         <span style={{ fontSize: 12, fontWeight: 800, color: C.navy, flex: "none" }}>Período:</span>

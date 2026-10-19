@@ -670,6 +670,8 @@ O QUE O APLICATIVO TEM (menu de cada fazenda):
 - 🛰️ Mapa NDVI: talhões sobre imagem de satélite (precisa do arquivo KML dos talhões).
 - 🌧️ Pluviometria: cadastra pluviômetros e lança chuvas (dá para falar: "choveu 20 milímetros
   ontem no retiro"). Chuvas somam, nunca se apagam sozinhas.
+- 🌦️ Previsão do tempo: chuva prevista por talhão (hoje, amanhã, 7, 15 e 30 dias), previsão de 7 dias
+  no ponto da fazenda e mapa ao vivo (radar, satélite, chuva prevista). O que já choveu fica na Pluviometria.
 - 🌾 Colheita: escolhe a cultura, lança as cargas por caminhão (com placa), dá baixa quando o
   caminhão descarrega, mostra sacas colhidas, média sc/ha, % da área colhida e o que está na estrada.
 - 💹 Cotações: dólar, soja, milho B3, algodão, com preço regional.
