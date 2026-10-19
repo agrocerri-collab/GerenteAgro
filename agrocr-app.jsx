@@ -29526,6 +29526,179 @@ function SecaoColheita({ kml, podeApagar, fazenda, colheitas, lavoura, consultor
   );
 }
 
+// ===== Previsão de chuva no mapa (Daniel, 19/10/2026) =====
+// Open-Meteo: previsão diária de 16 dias para o centro de cada talhão (uma chamada só, vários pontos) e tendência
+// sazonal (45 dias, média do conjunto) para completar os 30 dias. Períodos: hoje, amanhã, 7, 15 e 30 dias.
+// Mapa dos talhões pintado pelos mm do período, gráfico diário, tabela por talhão, PDF/imagem. Cache 6 h.
+const PERIODOS_PREV = [["hoje", "Hoje", 0, 1], ["amanha", "Amanhã", 1, 2], ["7", "7 dias", 0, 7], ["15", "15 dias", 0, 15], ["30", "30 dias", 0, 30]];
+function centroidesDosTalhoes(kml, talhoes) {
+  const out = [];
+  for (const pg of (kml && kml.poligonos) || []) {
+    if (!pg.talhaoId || !pg.aneis || !pg.aneis[0] || out.some((o) => o.id === pg.talhaoId)) continue;
+    const t = (talhoes || []).find((x) => x.id === pg.talhaoId); if (!t) continue;
+    const a = pg.aneis[0];
+    out.push({ id: pg.talhaoId, nome: t.nome, areaHa: num(t.areaHa), lat: a.reduce((s, p) => s + p[1], 0) / a.length, lng: a.reduce((s, p) => s + p[0], 0) / a.length });
+  }
+  return out;
+}
+async function buscarPrevisaoMapa(pontos, centro) {
+  const lats = pontos.map((p) => p.lat.toFixed(4)).join(","), lngs = pontos.map((p) => p.lng.toFixed(4)).join(",");
+  const j = await (await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lats}&longitude=${lngs}&daily=precipitation_sum,precipitation_probability_max&forecast_days=16&timezone=America%2FSao_Paulo`)).json();
+  const lista = Array.isArray(j) ? j : [j];
+  if (!lista[0] || !lista[0].daily) throw new Error("sem previsão");
+  const porPonto = lista.map((r) => ({ dias: r.daily.time, mm: (r.daily.precipitation_sum || []).map((v) => num(v)), prob: (r.daily.precipitation_probability_max || []).map((v) => num(v)) }));
+  let sazonal = null;
+  try {
+    const s = await (await fetch(`https://seasonal-api.open-meteo.com/v1/seasonal?latitude=${centro.lat.toFixed(4)}&longitude=${centro.lng.toFixed(4)}&daily=precipitation_sum&forecast_days=45&timezone=America%2FSao_Paulo`)).json();
+    if (s && s.daily && s.daily.precipitation_sum) sazonal = { dias: s.daily.time, mm: s.daily.precipitation_sum.map((v) => num(v)) };
+  } catch (e) {}
+  return { em: Date.now(), porPonto, sazonal };
+}
+// mm de um ponto no período [de, ate) em dias a partir de hoje: até 16 dias é previsão; depois, tendência sazonal
+function mmDoPeriodo(p, sazonal, de, ate) {
+  let s = 0, temSaz = false;
+  for (let d = de; d < ate; d++) {
+    if (d < p.mm.length) s += num(p.mm[d]);
+    else if (sazonal && p.dias && p.dias[0]) { const i = sazonal.dias.indexOf(somarDias(p.dias[0], d)); if (i >= 0) { s += num(sazonal.mm[i]); temSaz = true; } }
+  }
+  return { mm: Math.round(s * 10) / 10, tendencia: temSaz };
+}
+function MapaMmTalhoes({ kml, talhoes, valores, max }) {
+  const poligonos = (kml && kml.poligonos || []).filter((p) => p.talhaoId && (talhoes || []).some((t) => t.id === p.talhaoId) && p.aneis && p.aneis[0]);
+  if (!poligonos.length) return null;
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const pg of poligonos) for (const [x, y] of pg.aneis[0]) { if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y; }
+  const zoom = 15;
+  const canto = paraMundo(minX, maxY, zoom), fim = paraMundo(maxX, minY, zoom);
+  const folga = Math.max((fim[0] - canto[0]) * 0.05, 20);
+  const W = (fim[0] - canto[0]) + 2 * folga, H = (fim[1] - canto[1]) + 2 * folga;
+  const fonte = Math.max(W / 50, 8);
+  return (
+    <svg className="mapa-impresso" viewBox={`${(canto[0] - folga).toFixed(1)} ${(canto[1] - folga).toFixed(1)} ${W.toFixed(1)} ${H.toFixed(1)}`} style={{ width: "100%", maxHeight: 420, border: `1px solid ${C.borda}`, borderRadius: 8, background: "#fff", display: "block", margin: "0 auto" }}>
+      {poligonos.map((pg, i) => {
+        const d = pg.aneis.map((anel) => anel.map(([x, y], j) => { const p = paraMundo(x, y, zoom); return `${j === 0 ? "M" : "L"}${p[0].toFixed(1)},${p[1].toFixed(1)}`; }).join(" ") + " Z").join(" ");
+        const pts = pg.aneis[0].map(([x, y]) => paraMundo(x, y, zoom));
+        const cx = pts.reduce((s, p) => s + p[0], 0) / pts.length, cy = pts.reduce((s, p) => s + p[1], 0) / pts.length;
+        const v = (valores || []).find((x) => x.id === pg.talhaoId);
+        const tl = (talhoes || []).find((t) => t.id === pg.talhaoId);
+        const mm = v ? v.mm : null;
+        return (
+          <g key={i}>
+            <path d={d} fillRule="evenodd" fill={mm == null ? "#E0E0E0" : corChuva(mm, 0, max)} fillOpacity={0.85} stroke={C.navy} strokeWidth={Math.max(W / 500, 0.6)} />
+            {num(tl && tl.areaHa) >= 3 && <text x={cx} y={cy - fonte * 0.2} textAnchor="middle" fontSize={fonte * 0.8} fontWeight="900" fill="#fff" stroke="rgba(0,0,0,.6)" strokeWidth={fonte / 5} paintOrder="stroke">{tl ? tl.nome : pg.nome}</text>}
+            {num(tl && tl.areaHa) >= 3 && mm != null && <text x={cx} y={cy + fonte * 0.85} textAnchor="middle" fontSize={fonte} fontWeight="900" fill="#fff" stroke="rgba(0,0,0,.6)" strokeWidth={fonte / 5} paintOrder="stroke">{fmtN(mm)} mm</text>}
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+function PrevisaoChuvaMapa({ fazenda, kml }) {
+  const talhoes = fazenda.talhoes || [];
+  const pontos = centroidesDosTalhoes(kml, talhoes);
+  const centro = pontoDaFazenda(fazenda, kml);
+  const [dados, setDados] = useState(null);
+  const [erro, setErro] = useState("");
+  const [periodo, setPeriodo] = useState("7");
+  const [carregando, setCarregando] = useState(false);
+  const [tick, setTick] = useState(0);
+  const folhaRef = useRef(null);
+  const chave = `agrocr:prevmapa:${fazenda.id}:${pontos.map((p) => p.id).join(",").length}`;
+  useEffect(() => {
+    if (!centro) return;
+    let vivo = true;
+    try { const c = JSON.parse(localStorage.getItem(chave) || "null"); if (c && c.em && c.porPonto) { setDados(c); if (Date.now() - c.em < 6 * 3600 * 1000 && !tick) return; } } catch (e) {}
+    if (!navigator.onLine) { setErro("Sem internet agora — mostrando a última previsão guardada."); return; }
+    setCarregando(true);
+    buscarPrevisaoMapa(pontos.length ? pontos.slice(0, 40) : [centro], centro)
+      .then((d) => { if (!vivo) return; setDados(d); setErro(""); try { localStorage.setItem(chave, JSON.stringify(d)); } catch (e) {} })
+      .catch(() => { if (vivo) setErro("Não consegui buscar a previsão agora — tente de novo mais tarde."); })
+      .finally(() => { if (vivo) setCarregando(false); });
+    return () => { vivo = false; };
+  }, [chave, centro && centro.lat, tick]);
+  if (!centro) return null;
+  const per = PERIODOS_PREV.find((p) => p[0] === periodo) || PERIODOS_PREV[2];
+  const rotulo = per[1], de = per[2], ate = per[3];
+  const lista = pontos.length ? pontos : [{ id: "_", nome: fazenda.nome, lat: centro.lat, lng: centro.lng, areaHa: 0 }];
+  const valores = dados ? lista.map((p, i) => { const pp = dados.porPonto[Math.min(i, dados.porPonto.length - 1)]; const r = mmDoPeriodo(pp, dados.sazonal, de, ate); return { ...p, mm: r.mm, tendencia: r.tendencia }; }) : [];
+  const max = Math.max(5, ...valores.map((v) => v.mm));
+  const media = valores.length ? Math.round((valores.reduce((s, v) => s + v.mm, 0) / valores.length) * 10) / 10 : 0;
+  const temTend = valores.some((v) => v.tendencia);
+  const serie = dados ? (() => {
+    const pp = dados.porPonto, out = [];
+    for (let d = de; d < ate; d++) {
+      let s = 0, k = 0, pr = 0;
+      for (const p of pp) if (d < p.mm.length) { s += num(p.mm[d]); pr = Math.max(pr, num(p.prob[d])); k++; }
+      if (k) out.push({ dia: pp[0].dias[d], mm: Math.round((s / k) * 10) / 10, prob: pr, saz: false });
+      else if (dados.sazonal && pp[0].dias[0]) { const dia = somarDias(pp[0].dias[0], d); const i = dados.sazonal.dias.indexOf(dia); if (i >= 0) out.push({ dia, mm: Math.round(num(dados.sazonal.mm[i]) * 10) / 10, prob: null, saz: true }); }
+    }
+    return out;
+  })() : [];
+  const maxSerie = Math.max(5, ...serie.map((s) => s.mm));
+  const dd = (iso) => String(iso || "").slice(8, 10) + "/" + String(iso || "").slice(5, 7);
+  return (
+    <div style={{ background: "#fff", border: `1.5px solid ${C.borda}`, borderRadius: 12, padding: "10px 12px", marginBottom: 8 }}>
+      <div className="nao-imprimir" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 6 }}>
+        <span style={{ fontWeight: 900, color: C.navy, fontSize: 14, flex: 1 }}>🗺️ Previsão de chuva no mapa</span>
+        <button onClick={() => setTick(tick + 1)} disabled={carregando} style={{ background: C.fundo, border: "none", borderRadius: 8, padding: "6px 10px", fontWeight: 800, fontSize: 12, color: C.navy }}>{carregando ? "buscando…" : "↻ atualizar"}</button>
+        <BotaoPdfWhats compacto nome={`previsao-chuva-${periodo}-${fazenda.nome}`} titulo={`Previsão de chuva · ${rotulo} · ${fazenda.nome}`} alvo={() => folhaRef.current} />
+      </div>
+      <div className="nao-imprimir" style={{ display: "flex", gap: 6, marginBottom: 8, flexWrap: "wrap" }}>
+        {PERIODOS_PREV.map(([id, rot]) => (
+          <button key={id} onClick={() => setPeriodo(id)} style={{ flex: 1, minWidth: 64, padding: "8px 6px", borderRadius: 10, fontWeight: 800, fontSize: 12.5, background: periodo === id ? C.navy : "#fff", color: periodo === id ? "#fff" : C.navyEscuro, border: `1.5px solid ${periodo === id ? C.navy : C.borda}` }}>{rot}</button>
+        ))}
+      </div>
+      {erro && <div style={{ fontSize: 12.5, color: "#7A5C00", fontWeight: 700, marginBottom: 6 }}>{erro}</div>}
+      {!dados && !erro && <div style={{ fontSize: 13, color: C.cinza }}>Buscando a previsão para a fazenda…</div>}
+      {dados && (
+        <div ref={folhaRef} style={{ background: "#F4F9FF", borderRadius: 10, padding: "10px 12px" }}>
+          <div style={{ fontWeight: 900, color: C.navy, fontSize: 15 }}>🌧️ Previsão de chuva · {rotulo}{serie.length ? ` · ${dd(serie[0].dia)}${serie.length > 1 ? ` a ${dd(serie[serie.length - 1].dia)}` : ""}` : ""}</div>
+          <div style={{ fontSize: 12, color: C.cinza, marginBottom: 6 }}>{fazenda.nome}{fazenda.municipio ? ` · ${fazenda.municipio}` : ""} · previsão de {new Date(dados.em).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</div>
+          <div style={{ display: "flex", gap: 10, alignItems: "baseline", flexWrap: "wrap", marginBottom: 6 }}>
+            <span style={{ fontSize: 30, fontWeight: 900, color: C.navy, lineHeight: 1 }}>{fmtN(media)} mm</span>
+            <span style={{ fontSize: 12.5, color: C.navyEscuro }}>{pontos.length > 1 ? `média dos ${pontos.length} talhões · de ${fmtN(Math.min(...valores.map((v) => v.mm)))} a ${fmtN(Math.max(...valores.map((v) => v.mm)))} mm` : "na fazenda"}{temTend ? " · depois do 16º dia é tendência sazonal (menos certeira)" : ""}</span>
+          </div>
+          {pontos.length > 0 && (
+            <>
+              <MapaMmTalhoes kml={kml} talhoes={talhoes} valores={valores} max={max} />
+              <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: C.cinza, marginTop: 4 }}>
+                <span>0 mm</span>
+                <span style={{ flex: 1, height: 10, borderRadius: 5, background: `linear-gradient(90deg, ${[0, 0.25, 0.5, 0.75, 1].map((f) => corChuva(f * max, 0, max)).join(", ")})` }} />
+                <span>{fmtN(max)} mm</span>
+              </div>
+            </>
+          )}
+          {serie.length > 1 && (
+            <div style={{ marginTop: 8 }}>
+              <div style={{ fontSize: 11.5, fontWeight: 800, color: C.navy }}>Dia a dia (média da fazenda)</div>
+              <svg viewBox={`0 0 ${serie.length * 22} 100`} style={{ width: "100%", maxHeight: 140, display: "block" }} preserveAspectRatio="none">
+                {serie.map((s, i) => { const h = Math.max(1, (s.mm / maxSerie) * 60); return (
+                  <g key={i}>
+                    <rect x={i * 22 + 3} y={76 - h} width={16} height={h} rx={2} fill={s.saz ? "#9EC5E8" : "#1E88E5"} />
+                    {s.mm > 0 && <text x={i * 22 + 11} y={72 - h} textAnchor="middle" fontSize="7" fontWeight="800" fill={C.navy}>{fmtN(s.mm)}</text>}
+                    <text x={i * 22 + 11} y={88} textAnchor="middle" fontSize="6.5" fill={C.cinza}>{s.dia.slice(8, 10)}/{s.dia.slice(5, 7)}</text>
+                    {s.prob != null && s.prob > 0 && <text x={i * 22 + 11} y={97} textAnchor="middle" fontSize="6" fill={C.cinza}>{s.prob}%</text>}
+                  </g>
+                ); })}
+              </svg>
+              <div style={{ fontSize: 10.5, color: C.cinza }}>Barras escuras: previsão (16 dias) · claras: tendência sazonal · % = chance de chuva no dia.</div>
+            </div>
+          )}
+          {valores.length > 1 && (
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5, marginTop: 8 }}>
+              <thead><tr style={{ background: C.navy, color: "#fff" }}><th style={{ textAlign: "left", padding: "4px 6px" }}>Talhão</th><th style={{ textAlign: "right", padding: "4px 6px" }}>ha</th><th style={{ textAlign: "right", padding: "4px 6px" }}>{rotulo}</th></tr></thead>
+              <tbody>{valores.slice().sort((a, b) => b.mm - a.mm).map((v) => (
+                <tr key={v.id} style={{ borderTop: `1px solid ${C.borda}` }}><td style={{ padding: "4px 6px", fontWeight: 800, color: C.navy }}>{v.nome}</td><td style={{ padding: "4px 6px", textAlign: "right", color: C.cinza }}>{v.areaHa ? fmtN(v.areaHa) : ""}</td><td style={{ padding: "4px 6px", textAlign: "right", fontWeight: 900, color: C.navyEscuro }}><span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 5, background: corChuva(v.mm, 0, max), marginRight: 6, verticalAlign: "middle" }} />{fmtN(v.mm)} mm{v.tendencia ? "*" : ""}</td></tr>
+              ))}</tbody>
+            </table>
+          )}
+          <div style={{ fontSize: 10.5, color: C.cinza, marginTop: 6 }}>Fonte: Open-Meteo (modelos globais) no centro de cada talhão. Previsão é estimativa — o pluviômetro é o que vale.</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SecaoChuva({ fazenda, safra, kml, chuvas, lavoura, consultor, usuario, registrar, onAtualizarFazenda, onSalvar, carregarTodas, podeMedidores, abrirRelatorio }) {
   // Ponto de atenção de seca só faz sentido com LAVOURA NO CAMPO
   // (plantio/emergência nos últimos 150 dias). Solo vazio: contagem cinza.
@@ -29742,6 +29915,7 @@ function SecaoChuva({ fazenda, safra, kml, chuvas, lavoura, consultor, usuario, 
           </div>
         );
       })()}
+      <PrevisaoChuvaMapa fazenda={fazenda} kml={kml} />
       {/* várias chuvas de uma vez, pela planilha — recolhido para não poluir */}
       <button onClick={() => setVerPlanilhaChuva(!verPlanilhaChuva)} className="nao-imprimir"
         style={{ width: "100%", padding: 11, background: "#fff", color: C.navy, border: `1.5px solid ${C.borda}`, borderRadius: 12, fontWeight: 800, fontSize: 13, marginBottom: verPlanilhaChuva ? 0 : 8, textAlign: "left" }}>
