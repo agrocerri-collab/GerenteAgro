@@ -7546,24 +7546,30 @@ function resumoFungicidas(fazenda, apls, lavoura, hoje) {
   const out = [];
   for (const t of talhoes) {
     const lv = (lavoura || []).find((l) => l.talhaoId === t.id);
-    if (!lv || !lv.dataEmergencia) continue;
-    const dae = diasEntreISO(lv.dataEmergencia, hoje);
-    const regra = regraFungicida(fazenda, lv.cultura || t.cultura || "Soja");
-    if (dae < 0 || dae > regra.fim + 30) continue;
-    const feitas = [];
-    for (const a of apls || []) {
-      if (moduloDe(a) !== "pulverizacao" || (a.tipo || "").trim().toLowerCase() !== "fungicida") continue;
-      const ex = (a.execucoes || {})[t.id];
-      if (ex && ex.data) feitas.push({ data: String(ex.data).slice(0, 10), produtos: (a.produtos || []).map((p) => p.nome).filter(Boolean).join(" + "), alvo: a.alvo || "" });
+    if (!lv) continue;
+    // talhão plantado em partes (A/B): cada parte tem a sua emergência e o seu calendário
+    const pl = partesDaLavoura(lv, t, hoje).filter((p) => p.dataEmergencia);
+    const alvos = pl.length ? pl.map((p) => ({ parte: p.nome, emergencia: p.dataEmergencia, areaHa: p.areaHa || t.areaHa })) : (lv.dataEmergencia ? [{ parte: null, emergencia: lv.dataEmergencia, areaHa: t.areaHa }] : []);
+    for (const alvo of alvos) {
+      const dae = diasEntreISO(alvo.emergencia, hoje);
+      const regra = regraFungicida(fazenda, lv.cultura || t.cultura || "Soja");
+      if (dae < 0 || dae > regra.fim + 30) continue;
+      const feitas = [];
+      for (const a of apls || []) {
+        if (moduloDe(a) !== "pulverizacao" || (a.tipo || "").trim().toLowerCase() !== "fungicida") continue;
+        if (alvo.parte && a.partesAlvo && a.partesAlvo[t.id] && a.partesAlvo[t.id] !== alvo.parte) continue;   // aplicação só na outra parte
+        const ex = (a.execucoes || {})[t.id];
+        if (ex && ex.data) feitas.push({ data: String(ex.data).slice(0, 10), produtos: (a.produtos || []).map((p) => p.nome).filter(Boolean).join(" + "), alvo: a.alvo || "" });
+      }
+      feitas.sort((x, y) => x.data.localeCompare(y.data));
+      const ultima = feitas.length ? feitas[feitas.length - 1] : null;
+      const proxima = ultima ? somarDias(ultima.data, regra.intervalo) : somarDias(alvo.emergencia, regra.primeira);
+      const diasPara = diasEntreISO(hoje, proxima);
+      const diasDesde = ultima ? diasEntreISO(ultima.data, hoje) : null;
+      const encerrado = dae > regra.fim;
+      out.push({ t, parte: alvo.parte, areaHa: alvo.areaHa, cultura: lv.cultura || t.cultura || "", dae, feitas, ultima, diasDesde, proxima, diasPara, encerrado, regra,
+        status: encerrado ? "fim" : diasPara < 0 ? "vencida" : diasPara <= 3 ? "proxima" : "ok" });
     }
-    feitas.sort((x, y) => x.data.localeCompare(y.data));
-    const ultima = feitas.length ? feitas[feitas.length - 1] : null;
-    const proxima = ultima ? somarDias(ultima.data, regra.intervalo) : somarDias(lv.dataEmergencia, regra.primeira);
-    const diasPara = diasEntreISO(hoje, proxima);
-    const diasDesde = ultima ? diasEntreISO(ultima.data, hoje) : null;
-    const encerrado = dae > regra.fim;
-    out.push({ t, cultura: lv.cultura || t.cultura || "", dae, feitas, ultima, diasDesde, proxima, diasPara, encerrado, regra,
-      status: encerrado ? "fim" : diasPara < 0 ? "vencida" : diasPara <= 3 ? "proxima" : "ok" });
   }
   return out.sort((a, b) => (a.encerrado ? 999 : a.diasPara) - (b.encerrado ? 999 : b.diasPara));
 }
@@ -7607,7 +7613,7 @@ function SecaoFungicidas({ fazenda, apls, lavoura, irPara, onAtualizarFazenda, c
       {lista.map((f) => (
         <div key={f.t.id} style={{ background: fundo(f.status), border: `1.5px solid ${C.borda}`, borderLeft: `6px solid ${cor(f.status)}`, borderRadius: 12, padding: "10px 12px", marginBottom: 8 }}>
           <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "baseline" }}>
-            <div style={{ fontWeight: 900, color: C.navy, fontSize: 15 }}>{f.t.nome} <span style={{ fontWeight: 600, fontSize: 12, color: C.cinza }}>· {f.cultura} · {f.dae} DAE · {fmtN(f.t.areaHa)} ha</span></div>
+            <div style={{ fontWeight: 900, color: C.navy, fontSize: 15 }}>{f.t.nome}{f.parte ? ` · parte ${f.parte}` : ""} <span style={{ fontWeight: 600, fontSize: 12, color: C.cinza }}>· {f.cultura} · {f.dae} DAE · {fmtN(f.areaHa || f.t.areaHa)} ha</span></div>
             <b style={{ color: cor(f.status), fontSize: 13, flex: "none" }}>
               {f.encerrado ? "ciclo encerrado" : f.diasPara < 0 ? `vencida há ${-f.diasPara} dia${f.diasPara === -1 ? "" : "s"}` : f.diasPara === 0 ? "aplicar hoje" : `próxima em ${f.diasPara} dia${f.diasPara === 1 ? "" : "s"}`}
             </b>
@@ -19729,7 +19735,101 @@ function MapaVariedades({ fazenda, safra, kml, lavoura, apls, prog, custos, onVo
   );
 }
 
+// Marca no mapa onde o plantio parou: dois toques (ou o GPS na divisa) cortam o talhão em A e B,
+// e as áreas de cada lado aparecem na hora para a pessoa acertar a linha pelos hectares plantados.
+function ModalDivisaoTalhao({ talhao, poligono, partes, divisaoInicial, onFechar, onSalvar }) {
+  const anel = poligono && poligono.aneis && poligono.aneis[0] ? fecharAnel(poligono.aneis[0]) : [];
+  const [pts, setPts] = useState(() => { const d = anelDeObjetos(Array.isArray(divisaoInicial) && divisaoInicial.length === 2 ? [...divisaoInicial, ...divisaoInicial] : null); return d ? d.slice(0, 2) : []; });
+  const [invertido, setInvertido] = useState(null);   // null = automático: o lado que mais parece com a área cadastrada vira A
+  const [usarAreas, setUsarAreas] = useState(true);
+  const [msg, setMsg] = useState("");
+  const svgRef = useRef(null);
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const [x, y] of anel) { if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y; }
+  const dx = Math.max((maxX - minX) * 0.15, 0.002), dy = Math.max((maxY - minY) * 0.15, 0.002);
+  minX -= dx; maxX += dx; minY -= dy; maxY += dy;
+  let zoom = 12;
+  for (let z = 18; z >= 10; z--) { const a = paraMundo(minX, maxY, z), b = paraMundo(maxX, minY, z); if (b[0] - a[0] <= 900 && b[1] - a[1] <= 900) { zoom = z; break; } }
+  const canto = paraMundo(minX, maxY, zoom), fim = paraMundo(maxX, minY, zoom);
+  const vbX = canto[0], vbY = canto[1], W = Math.max(fim[0] - canto[0], 160), H = Math.max(fim[1] - canto[1], 160);
+  const xy = (p) => { const q = paraMundo(p[0], p[1], zoom); return [q[0] - vbX, q[1] - vbY]; };
+  const geo = (x, y) => deMundo(x + vbX, y + vbY, zoom);
+  const tiles = [];
+  for (let tx = Math.floor(vbX / TAM_TILE); tx <= Math.floor((vbX + W) / TAM_TILE); tx++) for (let ty = Math.floor(vbY / TAM_TILE); ty <= Math.floor((vbY + H) / TAM_TILE); ty++) tiles.push([tx, ty]);
+  const lados = pts.length === 2 ? dividirAnelPorLinha(anel, pts[0], pts[1]) : null;
+  const areaE = lados && lados[0] ? areaPoligonoHa([lados[0]]) : 0, areaD = lados && lados[1] ? areaPoligonoHa([lados[1]]) : 0;
+  const cadA = partes[0] ? num(partes[0].areaHa) : 0, cadB = partes[1] ? num(partes[1].areaHa) : 0;
+  const autoInv = cadA > 0 ? Math.abs(areaD - cadA) < Math.abs(areaE - cadA) : false;
+  const inv = invertido == null ? autoInv : invertido;
+  const anelA = lados ? (inv ? lados[1] : lados[0]) : null, anelB = lados ? (inv ? lados[0] : lados[1]) : null;
+  const areaA = inv ? areaD : areaE, areaB = inv ? areaE : areaD;
+  const ok = !!(anelA && anelB);
+  const pontoDoEvento = (e) => {
+    const svg = svgRef.current; if (!svg) return null;
+    const pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+    const m = svg.getScreenCTM(); if (!m) return null;
+    const q = pt.matrixTransform(m.inverse()); return geo(q.x, q.y);
+  };
+  const porPonto = (g) => { if (pts.length < 2) setPts([...pts, g]); else { const a = xy(pts[0]), b = xy(pts[1]), c = xy(g); setPts(Math.hypot(a[0] - c[0], a[1] - c[1]) <= Math.hypot(b[0] - c[0], b[1] - c[1]) ? [g, pts[1]] : [pts[0], g]); } };
+  const tocar = (e) => { const g = pontoDoEvento(e); if (!g) return; setMsg(""); porPonto(g); };
+  const gps = () => {
+    if (!navigator.geolocation) { setMsg("Sem GPS neste aparelho — toque no mapa."); return; }
+    setMsg("Pegando o GPS…");
+    navigator.geolocation.getCurrentPosition((p) => { setMsg(`GPS ±${Math.round(p.coords.accuracy)} m`); porPonto([p.coords.longitude, p.coords.latitude]); },
+      () => setMsg("Não consegui o GPS — toque no mapa."), { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
+  };
+  const d = (an) => an.map((p, i) => { const q = xy(p); return `${i ? "L" : "M"}${q[0].toFixed(1)},${q[1].toFixed(1)}`; }).join(" ") + " Z";
+  const centro = (an) => { let sx = 0, sy = 0; for (const p of an) { const q = xy(p); sx += q[0]; sy += q[1]; } return [sx / an.length, sy / an.length]; };
+  const tr = Math.max(W, H) / 220, fonte = Math.max(W, H) / 16;
+  const nomeA = partes[0] ? partes[0].nome : "A", nomeB = partes[1] ? partes[1].nome : "B";
+  const dif = (mapa, cad) => (cad > 0 ? (Math.abs(mapa - cad) <= Math.max(0.5, cad * 0.03) ? " ✓" : ` (cadastro ${fmtN(cad)} ha)`) : "");
+  const salvar = () => {
+    const arr = (an) => an.map(([x, y]) => ({ x, y }));
+    const limpa = (p) => { const { dae, ...r } = p; return r; };
+    onSalvar({
+      partes: [{ ...limpa(partes[0]), anel: arr(anelA), ...(usarAreas ? { areaHa: Math.round(areaA * 100) / 100 } : {}) }, { ...limpa(partes[1]), anel: arr(anelB), ...(usarAreas ? { areaHa: Math.round(areaB * 100) / 100 } : {}) }],
+      divisao: arr(pts),
+    });
+  };
+  const botao = (rot, onClick, cor) => <button onClick={onClick} style={{ flex: 1, padding: "9px 8px", background: cor || "#fff", color: cor ? "#fff" : C.navy, border: `1.5px solid ${cor || C.borda}`, borderRadius: 10, fontWeight: 800, fontSize: 12.5 }}>{rot}</button>;
+  return (
+    <Modal titulo={`🗺️ Onde é a divisão do ${talhao.nome}`} onFechar={onFechar}>
+      <div style={{ fontSize: 12.5, color: C.cinza }}>Toque no mapa nas duas beiradas do talhão por onde passa a divisão (onde o plantio parou). Ou fique em cima da divisa e use o GPS, numa beirada e depois na outra. Acerte a linha até a área de cada lado bater com o que foi plantado.</div>
+      {anel.length < 4 ? <div style={{ marginTop: 10, color: C.vermelho, fontWeight: 700 }}>Este talhão não tem contorno no mapa (KML).</div> : (
+        <svg ref={svgRef} viewBox={`0 0 ${W.toFixed(1)} ${H.toFixed(1)}`} onPointerDown={tocar} style={{ width: "100%", marginTop: 10, touchAction: "none", borderRadius: 10, background: "#2B3A2A", display: "block", cursor: "crosshair" }}>
+          {navigator.onLine && tiles.map(([tx, ty]) => <image key={`${tx}_${ty}`} href={`https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${zoom}/${ty}/${tx}`} x={tx * TAM_TILE - vbX} y={ty * TAM_TILE - vbY} width={TAM_TILE + 0.5} height={TAM_TILE + 0.5} />)}
+          <path d={d(anel)} fill={lados ? "none" : "rgba(255,214,0,.18)"} stroke="#fff" strokeWidth={tr * 1.4} />
+          {anelA && <path d={d(anelA)} fill="rgba(140,224,90,.45)" stroke="#B7FF6B" strokeWidth={tr} />}
+          {anelB && <path d={d(anelB)} fill="rgba(43,123,228,.45)" stroke="#8BB9FF" strokeWidth={tr} />}
+          {anelA && (() => { const [x, y] = centro(anelA); return <text x={x} y={y} textAnchor="middle" fontSize={fonte} fontWeight="900" fill="#fff" stroke="rgba(0,0,0,.6)" strokeWidth={fonte / 8} paintOrder="stroke">{nomeA}</text>; })()}
+          {anelB && (() => { const [x, y] = centro(anelB); return <text x={x} y={y} textAnchor="middle" fontSize={fonte} fontWeight="900" fill="#fff" stroke="rgba(0,0,0,.6)" strokeWidth={fonte / 8} paintOrder="stroke">{nomeB}</text>; })()}
+          {pts.length === 2 && (() => { const a = xy(pts[0]), b = xy(pts[1]); return <line x1={a[0]} y1={a[1]} x2={b[0]} y2={b[1]} stroke="#FFD600" strokeWidth={tr * 1.6} strokeDasharray={`${tr * 4} ${tr * 3}`} />; })()}
+          {pts.map((p, i) => { const q = xy(p); return <circle key={i} cx={q[0]} cy={q[1]} r={tr * 3.2} fill="#FFD600" stroke="#000" strokeWidth={tr * 0.5} />; })}
+        </svg>
+      )}
+      <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+        {botao("📍 Marcar com o GPS", gps)}
+        {botao("⇄ Trocar A e B", () => setInvertido(!inv))}
+        {botao("limpar", () => { setPts([]); setInvertido(null); })}
+      </div>
+      {msg && <div style={{ fontSize: 12, color: C.cinza, marginTop: 4 }}>{msg}</div>}
+      <div style={{ marginTop: 10, fontSize: 13 }}>
+        {pts.length < 2 && <div style={{ color: C.cinza }}>{pts.length === 0 ? "Marque o 1º ponto da divisão." : "Agora o 2º ponto, na outra beirada."}</div>}
+        {ok && (<>
+          <div style={{ display: "flex", justifyContent: "space-between", padding: "5px 8px", background: "rgba(140,224,90,.25)", borderRadius: 8 }}><span><b>{nomeA}</b>{partes[0] && partes[0].variedade ? ` · ${partes[0].variedade}` : ""}{partes[0] && partes[0].dataEmergencia ? ` · emergência ${fmtD(partes[0].dataEmergencia)}` : ""}</span><b>{fmtN(Math.round(areaA * 100) / 100)} ha{dif(areaA, cadA)}</b></div>
+          <div style={{ display: "flex", justifyContent: "space-between", padding: "5px 8px", background: "rgba(43,123,228,.2)", borderRadius: 8, marginTop: 4 }}><span><b>{nomeB}</b>{partes[1] && partes[1].variedade ? ` · ${partes[1].variedade}` : ""}{partes[1] && partes[1].dataEmergencia ? ` · emergência ${fmtD(partes[1].dataEmergencia)}` : ""}</span><b>{fmtN(Math.round(areaB * 100) / 100)} ha{dif(areaB, cadB)}</b></div>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, cursor: "pointer" }}>
+            <input type="checkbox" checked={usarAreas} onChange={(e) => setUsarAreas(e.target.checked)} style={{ width: 20, height: 20, margin: 0 }} />
+            <span style={{ fontSize: 12.5 }}>Atualizar a área das partes com o que o mapa mediu</span>
+          </label>
+        </>)}
+      </div>
+      <BotaoSalvar disabled={!ok} texto="Salvar a divisão" onClick={salvar} />
+    </Modal>
+  );
+}
 function SecaoLavoura({ fazenda, lavoura, apls, prog, consultor, registrar, onSalvar, kml, safra, custos }) {
+  const [dividindo, setDividindo] = useState(null);   // talhão cuja divisão A/B está sendo marcada no mapa
   const [verMapa, setVerMapa] = useState(false);   // 🗺️ mapa de variedades (programado × plantado)
   const [editando, setEditando] = useState(null); // talhão sendo editado
   const talhoes = fazenda.talhoes || [];
@@ -19826,13 +19926,23 @@ function SecaoLavoura({ fazenda, lavoura, apls, prog, consultor, registrar, onSa
                       <div style={{ margin: "4px 0", display: "grid", gap: 3 }}>
                         {l.partes.map((p, k) => { const d = diasDesde(p.dataEmergencia); return (
                           <div key={p.id || k} style={{ background: C.fundo, borderRadius: 8, padding: "4px 8px", fontSize: 12.5, display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
-                            <span><b style={{ color: C.navy }}>{p.variedade || "variedade?"}</b> · {fmtN(num(p.areaHa))} ha{p.dataPlantio ? ` · plantio ${fmtD(p.dataPlantio)}${p.dataPlantioFim && p.dataPlantioFim !== p.dataPlantio ? " a " + fmtD(p.dataPlantioFim) : ""}` : ""}{p.dataEmergencia ? ` · emergência ${fmtD(p.dataEmergencia)}` : " · emergência não informada"}</span>
+                            <span><b style={{ color: C.navy }}>{p.nome || NOMES_PARTES[k] || k + 1}</b> · {p.variedade || "variedade?"} · {fmtN(num(p.areaHa))} ha{p.anel ? " 🗺️" : ""}{p.dataPlantio ? ` · plantio ${fmtD(p.dataPlantio)}${p.dataPlantioFim && p.dataPlantioFim !== p.dataPlantio ? " a " + fmtD(p.dataPlantioFim) : ""}` : ""}{p.dataEmergencia ? ` · emergência ${fmtD(p.dataEmergencia)}` : " · emergência não informada"}</span>
                             {d != null && <b style={{ color: C.verdeEscuro }}>{d} DAE</b>}
                           </div>
                         ); })}
                         {Math.abs(l.partes.reduce((s2, p) => s2 + num(p.areaHa), 0) - num(t.areaHa)) > 0.05 && (
                           <div style={{ fontSize: 11.5, color: C.amarelo, fontWeight: 700 }}>as partes somam {fmtN(l.partes.reduce((s2, p) => s2 + num(p.areaHa), 0))} ha de {fmtN(t.areaHa)} ha do talhão</div>
                         )}
+                        {(() => {
+                          if (!consultor) return null;
+                          const pg = ((kml && kml.poligonos) || []).find((g) => g.talhaoId === t.id && g.aneis && g.aneis[0] && g.aneis[0].length >= 4);
+                          const pl = partesDaLavoura(l, t);
+                          if (pl.length > 2) return <div style={{ fontSize: 11.5, color: C.cinza }}>A divisão no mapa funciona com 2 partes.</div>;
+                          if (pl.length !== 2) return null;
+                          if (!pg) return <div style={{ fontSize: 11.5, color: C.cinza }}>Ligue o talhão ao mapa (Dados da fazenda → KML) para marcar onde é a divisão.</div>;
+                          const marcada = pl.every((p) => p.anel);
+                          return <button onClick={() => setDividindo(t.id)} style={{ justifySelf: "start", background: marcada ? C.verdeBg : C.navy, color: marcada ? C.verdeEscuro : "#fff", border: "none", borderRadius: 8, padding: "6px 12px", fontWeight: 800, fontSize: 12.5 }}>{marcada ? "✓ Divisão marcada no mapa · ajustar" : "🗺️ Marcar no mapa onde é a divisão"}</button>;
+                        })()}
                       </div>
                     )}
                     {l.culturaAnterior ? <div style={{ color: C.navyEscuro }}>antes: {l.culturaAnterior}{l.variedadeAnterior ? ` ${l.variedadeAnterior}` : ""}{l.tecnologiaAnterior ? ` · ${l.tecnologiaAnterior}` : ""}</div> : null}
@@ -19890,6 +20000,13 @@ function SecaoLavoura({ fazenda, lavoura, apls, prog, consultor, registrar, onSa
         );
       })}
 
+      {dividindo && (() => {
+        const t = talhoes.find((x) => x.id === dividindo); const l = doTalhao(dividindo);
+        const pg = ((kml && kml.poligonos) || []).find((g) => g.talhaoId === dividindo && g.aneis && g.aneis[0]);
+        if (!t || !l || !pg) return null;
+        return <ModalDivisaoTalhao talhao={t} poligono={pg} partes={partesDaLavoura(l, t)} divisaoInicial={l.divisao} onFechar={() => setDividindo(null)}
+          onSalvar={(r) => { onSalvar((lavoura || []).map((x) => (x.talhaoId === dividindo ? { ...x, partes: r.partes, divisao: r.divisao } : x))); registrar && registrar("Dados da lavoura", `${t.nome} · divisão A/B marcada no mapa`); setDividindo(null); }} />;
+      })()}
       {editando && (
         <ModalLavoura talhao={editando} inicial={doTalhao(editando.id)} sugestao={sugerir(editando)}
           ciclos={(() => { const m = {}; for (const l of lavoura || []) { if (l.variedade && num(l.cicloDias) > 0) m[String(l.variedade).trim().toLowerCase()] = l.cicloDias; for (const p of l.partes || []) if (p.variedade && num(p.cicloDias) > 0) m[String(p.variedade).trim().toLowerCase()] = p.cicloDias; } return m; })()}
@@ -20136,7 +20253,7 @@ function ModalLavoura({ talhao, inicial, sugestao, variedades, onFechar, onSalva
           cultura, variedade: variedadeFinal, dataPlantio: plantioFinal, dataEmergencia: emergenciaFinal,
           dataPlantioFim: partesOk.length ? (partesOk.map((p) => p.dataPlantioFim).filter(Boolean).sort().pop() || "") : (dataPlantioFim || ""),
           cicloDias: partesOk.length ? null : (num(cicloDias) > 0 ? Math.round(num(cicloDias)) : null),
-          partes: partesOk.length ? partesOk.map((p) => ({ id: p.id, variedade: (p.variedade || "").trim(), areaHa: num(p.areaHa), dataPlantio: p.dataPlantio || "", dataPlantioFim: p.dataPlantioFim || "", dataEmergencia: p.dataEmergencia || "", cicloDias: num(p.cicloDias) > 0 ? Math.round(num(p.cicloDias)) : (num(cicloConhecido(p.variedade)) || null) })) : [],
+          partes: partesOk.length ? partesOk.map((p) => ({ id: p.id, variedade: (p.variedade || "").trim(), areaHa: num(p.areaHa), dataPlantio: p.dataPlantio || "", dataPlantioFim: p.dataPlantioFim || "", dataEmergencia: p.dataEmergencia || "", cicloDias: num(p.cicloDias) > 0 ? Math.round(num(p.cicloDias)) : (num(cicloConhecido(p.variedade)) || null), nome: p.nome || "", anel: Array.isArray(p.anel) ? p.anel : null })) : [],
           estandeFinal, espacamento, populacaoSemeada, obs: obs.trim(),
           culturaAnterior, variedadeAnterior: variedadeAnterior.trim(), tecnologia, tecnologiaAnterior: culturaAnterior ? tecnologiaAnterior : "",
         })} />
@@ -22342,6 +22459,41 @@ function pontoNoAnel(lon, lat, anel) {
   }
   return dentro;
 }
+// ---------- partes do talhão (A/B): o MESMO talhão plantado em datas diferentes ----------
+// A lavoura guarda `partes` (variedade, área, plantio, emergência). A divisão marcada no mapa dá a
+// cada parte o seu contorno (`anel`, guardado como [{x,y}] porque a nuvem não aceita lista dentro de
+// lista) — aí o GPS sabe em que parte a pessoa está, e cada parte tem o seu DAE para o manejo.
+const NOMES_PARTES = ["A", "B", "C", "D", "E", "F"];
+const anelDeObjetos = (a) => (Array.isArray(a) && a.length >= 4 ? a.map((q) => (Array.isArray(q) ? q : [num(q.x), num(q.y)])) : null);
+function partesDaLavoura(l, t, hoje) {
+  const lista = l && Array.isArray(l.partes) ? l.partes.filter(Boolean) : [];
+  if (lista.length < 2) return [];
+  const h = hoje || hojeISO();
+  return lista.map((p, k) => ({ ...p, id: p.id || `p${k}`, nome: p.nome || NOMES_PARTES[k] || String(k + 1), areaHa: num(p.areaHa), dae: p.dataEmergencia ? diasEntreISO(p.dataEmergencia, h) : null, anel: anelDeObjetos(p.anel) }));
+}
+const parteDoPonto = (partes, lon, lat) => (partes || []).find((p) => p.anel && pontoNoAnel(lon, lat, p.anel)) || null;
+// Corta o contorno do talhão por uma reta (dois pontos [lng, lat]) → [lado esquerdo, lado direito]
+// (anéis fechados, olhando do 1º para o 2º ponto). Conta em metros, no plano local.
+function dividirAnelPorLinha(anel, p1, p2) {
+  const pts = fecharAnel(anel || []); if (pts.length < 4 || !p1 || !p2) return null;
+  const lat0 = pts.reduce((s, p) => s + p[1], 0) / pts.length;
+  const { kx, ky } = escalasLocais(lat0);
+  const M = (p) => [(p[0] - p1[0]) * kx, (p[1] - p1[1]) * ky];
+  const G = (m) => [m[0] / kx + p1[0], m[1] / ky + p1[1]];
+  const d = M(p2); if (Math.hypot(d[0], d[1]) < 1e-6) return null;
+  const lado = (m) => d[0] * m[1] - d[1] * m[0];
+  const corta = (sinal) => {
+    const fonte = pts.slice(0, -1).map(M); const out = [];
+    for (let i = 0; i < fonte.length; i++) {
+      const a = fonte[i], b = fonte[(i + 1) % fonte.length];
+      const la = lado(a) * sinal, lb = lado(b) * sinal;
+      if (la >= 0) out.push(a);
+      if ((la >= 0) !== (lb >= 0)) { const tt = la / (la - lb); out.push([a[0] + (b[0] - a[0]) * tt, a[1] + (b[1] - a[1]) * tt]); }
+    }
+    return out.length >= 3 ? fecharAnel(out.map(G)) : null;
+  };
+  return [corta(1), corta(-1)];
+}
 // distância (m) de um ponto ao contorno do anel — para saber se o GPS está "bem dentro" do talhão
 function distanciaAoAnel(lon, lat, anel) {
   const { kx, ky } = escalasLocais(lat);
@@ -22477,6 +22629,8 @@ function contextoDoTalhao(t, lavoura) {
   if (lv.cultura || t.cultura) partes.push(lv.cultura || t.cultura);
   if (lv.variedade) partes.push(lv.variedade);
   if (dae != null) partes.push(`${dae} DAE`);
+  const pl = partesDaLavoura(lv, t);
+  if (pl.length >= 2) partes.push("partes: " + pl.map((p) => `${p.nome} ${p.dae != null ? p.dae + " DAE" : "sem emergência"}`).join(" · "));
   return partes.join(" · ");
 }
 // dicionário que vai junto com o áudio: o transcritor prioriza estas palavras
@@ -22665,7 +22819,7 @@ function AudiosPendentesVisita({ fazenda, lavoura, visitas, onSalvar }) {
             setEstado({ total: d.obs.length, feitos, visita: visita.data });
             try {
               const texto = await Nuvem.transcreverAudio(p.audioB64, dicasVozDe(talhoes));
-              const novas = await estruturarFalaVisita(texto, p.talhaoId, p.hora, talhoes);
+              const novas = (await estruturarFalaVisita(texto, p.talhaoId, p.hora, talhoes)).map((n) => (p.parteNome ? { ...n, talhaoNome: n.talhaoNome ? `${n.talhaoNome} (${p.parteNome})` : n.talhaoNome, parteNome: p.parteNome } : n));
               const acrescentar = novas.length ? novas : [{ ...p, pendente: false, audioB64: null, cat: "🌱 Lavoura", item: "áudio sem observação clara", nota: String(texto || "").slice(0, 160) }];
               restantes = restantes.filter((x) => x.id !== p.id);
               const atual = (visitasRef.current || []).find((v) => v.id === d.visitaId) || visita;
@@ -22732,6 +22886,9 @@ function ChatVisita({ fazenda, lavoura, kml, usuario, onFechar, onSalvar }) {
   const [talhaoAtual, setTalhaoAtual] = useState(null);
   const [autoGps, setAutoGps] = useState(true);
   const [gpsNome, setGpsNome] = useState("");
+  const [parteAtual, setParteAtual] = useState("");   // parte (A/B) do talhão, pela divisão no mapa ou escolhida na mão
+  const parteAtualRef = useRef("");
+  useEffect(() => { setParteAtual(""); parteAtualRef.current = ""; }, [talhaoAtual]);
   // composer em etapas: categoria -> item -> pressão/ação/nota
   const [cat, setCat] = useState(null);
   const [item, setItem] = useState(null);
@@ -22757,6 +22914,12 @@ function ChatVisita({ fazenda, lavoura, kml, usuario, onFechar, onSalvar }) {
     if (!autoGps || !navigator.geolocation || !kml || !kml.poligonos) return;
     const id = navigator.geolocation.watchPosition((p) => {
       const { longitude: lon, latitude: lat, accuracy: acc } = p.coords;
+      // dentro do talhão, a parte (A/B) pela divisão marcada no mapa — só bem dentro dela
+      if (talhaoAtual) {
+        const tv = talhoes.find((x) => x.id === talhaoAtual);
+        const pp = parteDoPonto(partesDaLavoura((lavoura || []).find((l) => l.talhaoId === talhaoAtual), tv), lon, lat);
+        if (pp && pp.nome !== parteAtualRef.current && distanciaAoAnel(lon, lat, pp.anel) >= Math.min(15, Math.max(8, num(acc) || 0))) { parteAtualRef.current = pp.nome; setParteAtual(pp.nome); }
+      }
       // na divisa de dois talhões o GPS oscila: só troca quando está bem dentro do outro,
       // e confirmado em duas leituras seguidas (senão a observação cai no talhão errado)
       const sugerido = talhaoPeloGps(kml, lon, lat, num(acc) || 999, talhaoAtual);
@@ -22781,7 +22944,7 @@ function ChatVisita({ fazenda, lavoura, kml, usuario, onFechar, onSalvar }) {
     if (!cat || !itemFinal) return;
     const t = talhoes.find((x) => x.id === talhaoAtual);
     setObs((o) => [...o, {
-      id: idNovo(), hora: hora(), talhaoId: talhaoAtual, talhaoNome: t ? t.nome : null,
+      id: idNovo(), hora: hora(), talhaoId: talhaoAtual, talhaoNome: nomeTalhaoObs(t), parteNome: parteAtual || null,
       cat, item: itemFinal,
       pressao: precisaGravidade ? pressao : null,
       acao: precisaGravidade ? acao : null,
@@ -22866,7 +23029,7 @@ function ChatVisita({ fazenda, lavoura, kml, usuario, onFechar, onSalvar }) {
         leitor.onload = () => {
           const t = talhoes.find((x) => x.id === talhaoAtual);
           setObs((o) => [...o, {
-            id: idNovo(), hora: hora(), talhaoId: talhaoAtual || null, talhaoNome: t ? t.nome : null,
+            id: idNovo(), hora: hora(), talhaoId: talhaoAtual || null, talhaoNome: nomeTalhaoObs(t), parteNome: parteAtual || null,
             cat: "🎙 Áudio", item: "áudio gravado — vira resumo quando o sinal voltar",
             pressao: null, acao: null, nota: null, img: null, audioB64: leitor.result, pendente: true,
           }]);
@@ -22913,7 +23076,7 @@ function ChatVisita({ fazenda, lavoura, kml, usuario, onFechar, onSalvar }) {
   const anotar = () => {
     const txt = anotacao.trim(); if (!txt) return;
     const tt = talhoes.find((x) => x.id === talhaoAtual);
-    setObs((o) => [...o, { id: idNovo(), hora: hora(), talhaoId: talhaoAtual || null, talhaoNome: tt ? tt.nome : null, cat: "📝 Anotação", item: txt, pressao: null, acao: null, nota: null, img: null, porTexto: true }]);
+    setObs((o) => [...o, { id: idNovo(), hora: hora(), talhaoId: talhaoAtual || null, talhaoNome: nomeTalhaoObs(tt), parteNome: parteAtual || null, cat: "📝 Anotação", item: txt, pressao: null, acao: null, nota: null, img: null, porTexto: true }]);
     setAnotacao("");
   };
 
@@ -22933,7 +23096,7 @@ function ChatVisita({ fazenda, lavoura, kml, usuario, onFechar, onSalvar }) {
         try {
           setVozMsg("🤖 Transcrevendo áudio de " + p.hora + "…");
           const texto = await Nuvem.transcreverAudio(p.audioB64, dicasVoz());
-          const novas = await estruturarFala(texto, p.talhaoId, p.hora);
+          const novas = (await estruturarFala(texto, p.talhaoId, p.hora)).map((n) => (p.parteNome ? { ...n, talhaoNome: n.talhaoNome ? `${n.talhaoNome} (${p.parteNome})` : n.talhaoNome, parteNome: p.parteNome } : n));
           setObs((atual) => {
             const resto = atual.filter((x) => x.id !== p.id);
             return novas.length ? [...resto, ...novas]
@@ -22983,6 +23146,8 @@ function ChatVisita({ fazenda, lavoura, kml, usuario, onFechar, onSalvar }) {
     background: ativo ? C.navy : C.fundo, color: ativo ? "#fff" : C.navyEscuro,
   });
   const tAtual = talhoes.find((x) => x.id === talhaoAtual);
+  const partesAtual = tAtual ? partesDaLavoura((lavoura || []).find((l) => l.talhaoId === tAtual.id), tAtual) : [];
+  const nomeTalhaoObs = (t) => (t ? t.nome + (parteAtual && t.id === talhaoAtual ? ` (${parteAtual})` : "") : null);
 
   return (
     <div style={{ position: "fixed", inset: 0, background: C.fundo, zIndex: 60, display: "flex", flexDirection: "column" }}>
@@ -23011,7 +23176,13 @@ function ChatVisita({ fazenda, lavoura, kml, usuario, onFechar, onSalvar }) {
       </div>
       {tAtual && (
         <div style={{ background: C.verdeBg, color: C.verdeEscuro, fontSize: 12, fontWeight: 800, padding: "5px 12px" }}>
-          📍 {tAtual.nome} — {contextoDe(tAtual)}{autoGps && gpsNome === tAtual.nome ? " · achado pelo GPS" : ""}
+          📍 {tAtual.nome} — {contextoDe(tAtual)}{autoGps && gpsNome === tAtual.nome ? " · achado pelo GPS" : ""}{parteAtual ? ` · parte ${parteAtual}${(() => { const p = partesAtual.find((x) => x.nome === parteAtual); return p && p.dae != null ? ` (${p.dae} DAE)` : ""; })()}` : ""}
+        </div>
+      )}
+      {tAtual && partesAtual.length >= 2 && (
+        <div className="nao-imprimir" style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", padding: "5px 12px", background: "#fff", borderBottom: `1px solid ${C.borda}` }}>
+          <span style={{ fontSize: 11, fontWeight: 800, color: C.cinza }}>Parte do talhão:</span>
+          {partesAtual.map((p) => <button key={p.id} onClick={() => { setParteAtual(parteAtual === p.nome ? "" : p.nome); parteAtualRef.current = parteAtual === p.nome ? "" : p.nome; }} style={{ background: parteAtual === p.nome ? C.navy : C.verdeBg, color: parteAtual === p.nome ? "#fff" : C.verdeEscuro, border: "none", borderRadius: 8, padding: "4px 9px", fontWeight: 800, fontSize: 12 }}>{p.nome}{p.dae != null ? ` · ${p.dae} DAE` : " · sem emergência"}</button>)}
         </div>
       )}
       {visitados.length > 0 && (
@@ -23305,8 +23476,13 @@ function MonitoramentoPragas({ fazenda, lavoura, kml, usuario, onFechar, onSalva
   const [emergenciaSel, setEmergenciaSel] = useState("");    // emergência digitada quando a lavoura não tem
   const culturaLavoura = (lv && lv.cultura) || (t && t.cultura) || "";
   const cultura = culturaSel || culturaLavoura;
-  const emergencia = (lv && lv.dataEmergencia) || emergenciaSel || "";
+  const [parteSel, setParteSel] = useState("");               // parte do talhão (A/B) quando o plantio foi em datas diferentes
+  const partesLv = partesDaLavoura(lv, t);
+  const parteObj = partesLv.find((p) => p.nome === parteSel) || null;
+  const emergencia = (parteObj && parteObj.dataEmergencia) || (lv && lv.dataEmergencia) || emergenciaSel || "";
   const dae = emergencia ? Math.floor((Date.now() - new Date(emergencia + "T12:00:00").getTime()) / 86400000) : null;
+  // o 1º ponto marcado diz em que parte (A/B) o monitor está, quando a divisão foi marcada no mapa
+  useEffect(() => { const u = pontos[pontos.length - 1]; if (!u || parteSel || !partesLv.length) return; const p = parteDoPonto(partesLv, u.lng, u.lat); if (p) setParteSel(p.nome); }, [pontos.length]);
   const CULTURAS_MONITOR = ["Soja", "Milho", "Algodão", "Feijão", "Sorgo", "Gergelim", "Outra"];
   const trocarCultura = (c) => { const m = metodoPadraoDe(c); const f = fichaDe(c, m); setCulturaSel(c); setMetodo(m); setItens(f); setPragas(f.map((x) => x.chave)); };
   const poligonoDo = (tid) => (kml && kml.poligonos ? kml.poligonos.find((g) => g.talhaoId === tid) : null);
@@ -23357,7 +23533,7 @@ function MonitoramentoPragas({ fazenda, lavoura, kml, usuario, onFechar, onSalva
     const c = (l && l.cultura) || tt.cultura || "";
     const m = metodoPadraoDe(c);
     const f = fichaDe(c, m);
-    setTalhaoId(tid); setCulturaSel(c); setEmergenciaSel(""); setMetodo(m); setItens(f); setPragas(f.map((x) => x.chave)); setPontos([]); setAtual(null); setMsg("");
+    setTalhaoId(tid); setCulturaSel(c); setEmergenciaSel(""); setParteSel(""); setMetodo(m); setItens(f); setPragas(f.map((x) => x.chave)); setPontos([]); setAtual(null); setMsg("");
   };
   const trocarMetodo = (m) => { const f = fichaDe(cultura, m); setMetodo(m); setItens(f); setPragas(f.map((x) => x.chave)); };
   const tirarItem = (chave) => { setItens(itens.filter((x) => x.chave !== chave)); setPragas(pragas.filter((x) => x !== chave)); };
@@ -23420,7 +23596,7 @@ function MonitoramentoPragas({ fazenda, lavoura, kml, usuario, onFechar, onSalva
     if (!t || !pontos.length) return;
     onSalvar({
       ehMonitoramento: true, data: hojeISO(), hora: new Date().toTimeString().slice(0, 5), quem: (usuario && usuario.nomeUsuario) || "",
-      talhaoId: t.id, talhaoNome: t.nome, areaHa: t.areaHa, cultura, variedade: (lv && lv.variedade) || "", dae, emergencia: emergencia || null, metodo, pragas, itens, pontos, obs: obs.trim(), fotos: fotosGeral,
+      talhaoId: t.id, talhaoNome: t.nome, parteNome: parteSel || null, areaHa: parteObj ? parteObj.areaHa : t.areaHa, cultura, variedade: (lv && lv.variedade) || "", dae, emergencia: emergencia || null, metodo, pragas, itens, pontos, obs: obs.trim(), fotos: fotosGeral,
       modoPontos, planejados: modoPontos === "planejado" ? planejados : [], estandeMedio: estandeMedio > 0 ? Math.round(estandeMedio) : null,
     });
     // estande contado aqui vai para a lavoura do talhão (quando ela ainda não tinha)
@@ -23440,6 +23616,7 @@ function MonitoramentoPragas({ fazenda, lavoura, kml, usuario, onFechar, onSalva
       <div style={{ fontWeight: 800, color: C.navy, fontSize: 13 }}>1. Talhão {t ? <span style={{ color: C.verdeEscuro }}>· {t.nome} · {cultura}{lv && lv.variedade ? ` ${lv.variedade}` : ""}{dae != null ? ` · ${dae} DAE` : ""}</span> : <span style={{ color: C.cinza, fontWeight: 600 }}>— toque no mapa ou escolha na lista</span>}</div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6, margin: "6px 0" }}>
         {talhoes.map((x) => <button key={x.id} onClick={() => escolherTalhao(x.id)} style={chip(talhaoId === x.id)}>{x.nome}</button>)}
+        {partesLv.length >= 2 && partesLv.map((p) => <button key={"parte" + p.id} onClick={() => setParteSel(parteSel === p.nome ? "" : p.nome)} style={{ ...chip(parteSel === p.nome), background: parteSel === p.nome ? C.verde : C.verdeBg, color: parteSel === p.nome ? "#fff" : C.verdeEscuro }}>parte {p.nome}{p.dae != null ? ` · ${p.dae} DAE` : " · sem emergência"}</button>)}
       </div>
       {t && (
         <div style={{ background: C.fundo, borderRadius: 10, padding: "6px 8px", marginBottom: 6 }}>
@@ -23767,7 +23944,7 @@ function RelatorioMonitoramento({ fazenda, mon, kml, onVoltar, soResumo }) {
           <img src={LOGO} alt="AgroCR" style={{ height: 44 }} />
           <div style={{ textAlign: "right", fontSize: 12, color: C.cinza }}>MONITORAMENTO DE PRAGAS<br /><b>{fazenda.nome}</b> · {fmtD(mon.data)}{mon.hora ? ` ${mon.hora}` : ""}</div>
         </div>
-        <div style={{ fontWeight: 900, fontSize: 17, color: C.navy }}>🐛 {mon.talhaoNome} · {mon.cultura}{mon.variedade ? ` ${mon.variedade}` : ""}{mon.dae != null ? ` · ${mon.dae} DAE` : ""}</div>
+        <div style={{ fontWeight: 900, fontSize: 17, color: C.navy }}>🐛 {mon.talhaoNome}{mon.parteNome ? ` · parte ${mon.parteNome}` : ""} · {mon.cultura}{mon.variedade ? ` ${mon.variedade}` : ""}{mon.dae != null ? ` · ${mon.dae} DAE` : ""}</div>
         <div style={{ fontSize: 12.5, color: C.cinza, marginBottom: 8 }}>{fmtN(mon.areaHa)} ha · {(mon.pontos || []).length} pontos{(mon.planejados || []).length ? ` de ${mon.planejados.length} planejados` : ""} · {mon.metodo === "pano" ? "pano de batida (nº por metro linear)" : "presença / ausência (% dos pontos)"} · por {mon.quem}{mon.estandeMedio ? <> · <b style={{ color: C.verdeEscuro }}>estande médio {fmtN(mon.estandeMedio)} plantas/ha</b></> : null}</div>
         {pg && !soResumo && <MapaToque talhoes={fazenda.talhoes} kml={{ ...kml, poligonos: [pg] }} medidores={marcadores} aoTocar={() => {}} />}
         <div style={{ fontWeight: 900, color: C.navy, fontSize: 14, margin: "12px 0 4px" }}>Quadro das pragas</div>
@@ -24203,7 +24380,7 @@ function SecaoVisitas({ podeApagar, fazenda, lavoura, kml, visitas, consultor, u
                 width: "100%", textAlign: "left", background: acima.length ? "#FFF0F0" : "#fff", border: `1.5px solid ${acima.length ? C.vermelho : C.borda}`, borderLeft: `6px solid ${acima.length ? C.vermelho : q.length ? C.amarelo : C.verde}`,
                 borderRadius: 12, padding: 14, marginBottom: 10,
               }}>
-                <div style={{ fontWeight: 800, color: C.navy }}>🐛 {m.talhaoNome} · {m.cultura}{m.dae != null ? ` · ${m.dae} DAE` : ""} — {fmtD(m.data)}</div>
+                <div style={{ fontWeight: 800, color: C.navy }}>🐛 {m.talhaoNome}{m.parteNome ? ` · parte ${m.parteNome}` : ""} · {m.cultura}{m.dae != null ? ` · ${m.dae} DAE` : ""} — {fmtD(m.data)}</div>
                 {acima.length > 0 && <div style={{ fontSize: 12.5, color: C.vermelho, fontWeight: 800 }}>⚠ Acima do nível de controle: {acima.map((a) => `${a.nome} ${fmtN(a.valor)}${a.unidade} (nível ${fmtN(a.nivel)}${a.unidade})`).join(" · ")} → recomendar</div>}
                 <div style={{ fontSize: 13, color: C.cinza }}>{(m.pontos || []).length} pontos · {m.quem}{q.length ? ` · ${q.slice(0, 3).map((x) => (m.metodo === "pano" ? `${rotuloItem(x)} ${fmtN(x.media)}/m` : `${rotuloItem(x)} ${fmtN(x.pct)}%`)).join(" · ")}` : " · nada encontrado"}</div>
               </button>
@@ -24997,6 +25174,7 @@ function OrdemDeCampo({ fazenda, apl, talhoes, capacidade, onTrocarTanque, onVol
         </div>
 
         <div style={{ fontSize: 16, fontWeight: 900, color: C.navy }}>{apl.tipo}{apl.alvo ? ` — ${apl.alvo}` : ""}</div>
+        {apl.partesAlvo && Object.keys(apl.partesAlvo).length > 0 && <div style={{ fontSize: 13, fontWeight: 800, color: C.navy }}>🧩 Só parte do talhão: {Object.entries(apl.partesAlvo).map(([tid, n]) => `${((talhoes || []).find((x) => x.id === tid) || {}).nome || tid} → parte ${n}`).join(" · ")}</div>}
         {apl.bordadura && <div style={{ fontSize: 13, fontWeight: 800, color: "#7A5C00" }}>🎯 BORDADURA — só o contorno · {apl.bordadura.voltas || 1} volta{(apl.bordadura.voltas || 1) > 1 ? "s" : ""}{num(apl.bordadura.barraM) > 0 ? ` · barra de ${fmtN(apl.bordadura.barraM)} m` : ""}</div>}
         <div style={{ fontSize: 13, color: C.cinza, marginBottom: 10 }}>
           {fazenda.nome} · recomendada para {fmtD(apl.dataRecomendada)}
@@ -25349,6 +25527,7 @@ function RelatorioOperacional({ fazenda, apls, mod, capacidade, onVoltar, kml })
                       </span>
                     </div>
 
+                    {a.partesAlvo && a.partesAlvo[t.id] && <div style={{ fontSize: 12.5, color: C.navy, fontWeight: 800, marginTop: 4 }}>🧩 Só a parte {a.partesAlvo[t.id]} do talhão</div>}
                     {a.bordadura && <div style={{ fontSize: 12.5, color: "#7A5C00", fontWeight: 800, marginTop: 4 }}>🎯 Bordadura · {a.bordadura.voltas || 1} volta{(a.bordadura.voltas || 1) > 1 ? "s" : ""}{num(a.bordadura.barraM) > 0 ? ` · barra ${fmtN(a.bordadura.barraM)} m` : ""}{a.bordadura.perimetros && a.bordadura.perimetros[t.id] ? ` · ${fmtN(a.bordadura.perimetros[t.id])} m de contorno` : ""}</div>}
                     {(a.vazao || a.bico) && (
                       <div style={{ fontSize: 14, marginTop: 6 }}>
@@ -28156,6 +28335,7 @@ function ModalRecomendacao({ talhoes, estoque, mod, inicial, usuario, lavoura, e
   const [dataRec, setDataRec] = useState(ini.dataRecomendada || hojeISO());
   const [plantioAte, setPlantioAte] = useState(ini.plantioAte || "");   // semeadura: até quando o plantio deve ir
   const [vazao, setVazao] = useState(ini.vazao || "");
+  const [partesAlvo, setPartesAlvo] = useState(ini.partesAlvo || {});   // talhão plantado em partes (A/B): qual parte esta receita cobre
   const [fecharPorTalhao, setFecharPorTalhao] = useState(!!ini.fecharPorTalhao);   // tanque parcial em cada talhão (padrão: só no fim da área)
   // hectares por tanque: tanque ÷ vazão — dá para digitar os hectares e o app devolve a vazão (número redondo)
   const [haTanqueTxt, setHaTanqueTxt] = useState(() => (num(ini.capacidadeTanque) > 0 && num(ini.vazao) > 0 ? String(Math.round((num(ini.capacidadeTanque) / num(ini.vazao)) * 100) / 100) : ""));
@@ -28801,6 +28981,17 @@ function ModalRecomendacao({ talhoes, estoque, mod, inicial, usuario, lavoura, e
                   </button>
                 </div>
               )}
+              {(() => { const pl = partesDaLavoura(lavouraDe(t.id), t); if (pl.length < 2 || travado) return null; return (
+                <div style={{ display: "flex", gap: 6, marginTop: 4, flexWrap: "wrap", alignItems: "center" }}>
+                  <span style={{ fontSize: 11.5, fontWeight: 800, color: C.cinza }}>Plantio em partes:</span>
+                  {pl.map((p) => { const ativo = partesAlvo[t.id] === p.nome; return (
+                    <button key={p.id} onClick={() => { setPartesAlvo({ ...partesAlvo, [t.id]: p.nome }); setAreasParciais({ ...areasParciais, [t.id]: String(p.areaHa) }); }}
+                      style={{ background: ativo ? C.navy : C.verdeBg, color: ativo ? "#fff" : C.verdeEscuro, border: "none", borderRadius: 8, padding: "5px 10px", fontSize: 12, fontWeight: 800 }}>
+                      só parte {p.nome} · {fmtN(p.areaHa)} ha{p.dae != null ? ` · ${p.dae} DAE` : ""}
+                    </button>); })}
+                  <button onClick={() => { const c = { ...areasParciais }; delete c[t.id]; setAreasParciais(c); const pa = { ...partesAlvo }; delete pa[t.id]; setPartesAlvo(pa); }}
+                    style={{ background: "#fff", color: C.cinza, border: `1px solid ${C.borda}`, borderRadius: 8, padding: "5px 10px", fontSize: 12, fontWeight: 700 }}>talhão inteiro</button>
+                </div>); })()}
               {/* talhão dividido no cadastro: um toque escolhe a parte certa */}
               {t.partes && t.partes.length === 2 && !travado && (
                 <div style={{ display: "flex", gap: 6, marginTop: 4, flexWrap: "wrap" }}>
@@ -29018,6 +29209,7 @@ function ModalRecomendacao({ talhoes, estoque, mod, inicial, usuario, lavoura, e
           // guarda só o que foge do talhão cheio: se a área do talhão mudar
           // depois, quem não dividiu continua acompanhando o cadastro
           bordadura: bordadura && mod.usaCalda && !mod.usaSemeadura ? { voltas: Math.max(1, Math.round(num(voltas)) || 1), barraM: num(barraM) > 0 ? num(barraM) : null, perimetros: talhoesSel.reduce((acc, tid) => { const p = perimetroDe(tid); if (p > 0) acc[tid] = Math.round(p); return acc; }, {}) } : null,
+          partesAlvo: Object.fromEntries(Object.entries(partesAlvo).filter(([tid]) => sel[tid])),
           areasParciais: talhoesObj.reduce((acc, t) => {
             if (Math.abs(t.areaHa - (t.areaCheia || 0)) > 1e-9) acc[t.id] = t.areaHa;
             return acc;
