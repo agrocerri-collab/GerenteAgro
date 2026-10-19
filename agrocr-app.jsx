@@ -541,6 +541,19 @@ function sequenciaFungicida(apls, talhaoId) {
     .forEach((a, i) => { mapa[a.id] = i + 1; });
   return mapa;
 }
+// Contorno do talhão pelo KML, em metros: soma dos lados do anel externo de cada
+// polígono ligado ao talhão (pivô é um círculo denso de pontos — funciona igual).
+function perimetroDoTalhao(kml, talhaoId) {
+  let m = 0;
+  for (const pg of (kml && kml.poligonos) || []) {
+    if (pg.talhaoId !== talhaoId || !pg.aneis || !pg.aneis[0] || pg.aneis[0].length < 2) continue;
+    const anel = fecharAnel(pg.aneis[0]);
+    for (let i = 1; i < anel.length; i++) m += distanciaMetros(anel[i - 1], anel[i]);
+  }
+  return m;
+}
+// Bordadura (só o contorno): área = contorno × largura da barra × voltas, em ha
+const areaBordadura = (perimetroM, barraM, voltas) => Math.round((num(perimetroM) * num(barraM) * Math.max(1, Math.round(num(voltas)) || 1)) / 10000 * 100) / 100;
 // Nem toda receita cobre o talhão inteiro: dá para ter duas variedades no
 // mesmo pivô, ou aplicar só na faixa com praga. Quando a área não é informada,
 // vale o talhão cheio — quem não divide não sente diferença nenhuma.
@@ -13305,7 +13318,7 @@ function GerirMaquinas({ maquinas, registrar, onSalvar, abertoInicial, grupoIrma
                     </span>
                   ) : (
                     <span style={{ display: "flex", gap: 8, flex: "none" }}>
-                      <button onClick={() => { setLidasIA(null); setTirando(null); setForm({ editandoId: m.id, valor: num(m.valor) > 0 ? String(m.valor) : "", financiado: !!m.financiado, banco: m.banco || "", parcelasRestantes: m.parcelasRestantes ? String(m.parcelasRestantes) : "", valorParcela: m.valorParcela ? String(m.valorParcela) : "", proximoVencimento: m.proximoVencimento || "", tipo: m.tipo || TIPOS_MAQUINA[0], nome: String(m.nome || ""), marca: String(m.marca || ""), ano: m.ano != null ? String(m.ano) : "", obs: String(m.obs || ""), terceirizada: !!m.terceirizada, capacidadeL: num(m.capacidadeL) > 0 ? String(m.capacidadeL) : "", bicos: (m.bicos || []).join(", ") }); }}
+                      <button onClick={() => { setLidasIA(null); setTirando(null); setForm({ editandoId: m.id, valor: num(m.valor) > 0 ? String(m.valor) : "", financiado: !!m.financiado, banco: m.banco || "", parcelasRestantes: m.parcelasRestantes ? String(m.parcelasRestantes) : "", valorParcela: m.valorParcela ? String(m.valorParcela) : "", proximoVencimento: m.proximoVencimento || "", tipo: m.tipo || TIPOS_MAQUINA[0], nome: String(m.nome || ""), marca: String(m.marca || ""), ano: m.ano != null ? String(m.ano) : "", obs: String(m.obs || ""), terceirizada: !!m.terceirizada, capacidadeL: num(m.capacidadeL) > 0 ? String(m.capacidadeL) : "", barraM: num(m.barraM) > 0 ? String(m.barraM) : "", bicos: (m.bicos || []).join(", ") }); }}
                         style={{ background: "transparent", border: "none", color: C.navy, fontSize: 12, fontWeight: 700 }}>editar</button>
                       <button onClick={() => setTirando(m.id)} style={{ background: "transparent", border: "none", color: C.vermelho, fontSize: 12 }}>tirar</button>
                     </span>
@@ -13446,6 +13459,8 @@ function GerirMaquinas({ maquinas, registrar, onSalvar, abertoInicial, grupoIrma
                   <label style={{ marginTop: 4 }}>Capacidade do tanque (litros)</label>
                   <input type="number" inputMode="decimal" value={form.capacidadeL || ""} onChange={(e) => setForm({ ...form, capacidadeL: e.target.value })} placeholder={ehPulverizadorSulco(form) ? "Ex.: 600" : "Ex.: 2500"} />
                   {ehPulverizador(form) && (<>
+                    <label style={{ marginTop: 6 }}>Largura da barra (metros) <span style={{ fontWeight: 500, color: C.cinza }}>— para a bordadura</span></label>
+                    <input type="number" inputMode="decimal" value={form.barraM || ""} onChange={(e) => setForm({ ...form, barraM: e.target.value })} placeholder="Ex.: 24" />
                     <label style={{ marginTop: 6 }}>Bicos que esta máquina tem (separe por vírgula)</label>
                     <input value={form.bicos || ""} onChange={(e) => setForm({ ...form, bicos: e.target.value })} placeholder="Ex.: AD-IA 110.02, TT 110.03, AXI 110.015" />
                     <div style={{ fontSize: 11, color: C.cinza, marginTop: 2 }}>Na recomendação, escolhendo este pulverizador, o tanque já vem preenchido e o bico é escolhido desta lista (opcional).</div>
@@ -13495,6 +13510,7 @@ function GerirMaquinas({ maquinas, registrar, onSalvar, abertoInicial, grupoIrma
                     capacidadeL: (ehPulverizador(form) || ehPulverizadorSulco(form)) && num(form.capacidadeL) > 0 ? num(form.capacidadeL) : null,
                     capacidadeKg: ehDistribuidor(form) && num(form.capacidadeKg) > 0 ? num(form.capacidadeKg) : null,
                     bicos: ehPulverizador(form) ? listaBicos(form.bicos) : [],
+                    barraM: ehPulverizador(form) && num(form.barraM) > 0 ? num(form.barraM) : null,
                     valor: num(form.valor) > 0 ? num(form.valor) : null, financiado: !!form.financiado, banco: form.financiado ? txt(form.banco) : "",
                     parcelasRestantes: form.financiado && num(form.parcelasRestantes) > 0 ? Math.round(num(form.parcelasRestantes)) : null, valorParcela: form.financiado && num(form.valorParcela) > 0 ? num(form.valorParcela) : null, proximoVencimento: form.financiado ? (form.proximoVencimento || null) : null };
                   if (form.editandoId) {
@@ -24754,6 +24770,7 @@ function OrdemDeCampo({ fazenda, apl, talhoes, capacidade, onTrocarTanque, onVol
         </div>
 
         <div style={{ fontSize: 16, fontWeight: 900, color: C.navy }}>{apl.tipo}{apl.alvo ? ` — ${apl.alvo}` : ""}</div>
+        {apl.bordadura && <div style={{ fontSize: 13, fontWeight: 800, color: "#7A5C00" }}>🎯 BORDADURA — só o contorno · {apl.bordadura.voltas || 1} volta{(apl.bordadura.voltas || 1) > 1 ? "s" : ""}{num(apl.bordadura.barraM) > 0 ? ` · barra de ${fmtN(apl.bordadura.barraM)} m` : ""}</div>}
         <div style={{ fontSize: 13, color: C.cinza, marginBottom: 10 }}>
           {fazenda.nome} · recomendada para {fmtD(apl.dataRecomendada)}
           {apl.recomendadoPor ? ` · por ${apl.recomendadoPor}` : ""}
@@ -25105,6 +25122,7 @@ function RelatorioOperacional({ fazenda, apls, mod, capacidade, onVoltar, kml })
                       </span>
                     </div>
 
+                    {a.bordadura && <div style={{ fontSize: 12.5, color: "#7A5C00", fontWeight: 800, marginTop: 4 }}>🎯 Bordadura · {a.bordadura.voltas || 1} volta{(a.bordadura.voltas || 1) > 1 ? "s" : ""}{num(a.bordadura.barraM) > 0 ? ` · barra ${fmtN(a.bordadura.barraM)} m` : ""}{a.bordadura.perimetros && a.bordadura.perimetros[t.id] ? ` · ${fmtN(a.bordadura.perimetros[t.id])} m de contorno` : ""}</div>}
                     {(a.vazao || a.bico) && (
                       <div style={{ fontSize: 14, marginTop: 6 }}>
                         {a.vazao ? <>Vazão <b>{fmtN(num(a.vazao))} L/ha</b></> : null}
@@ -26530,7 +26548,7 @@ function SecaoAplicacoes({ maquinas, podeApagar, fazenda, apls, modulo, estoque,
       })}
 
       {modal && (
-        <ModalRecomendacao maquinas={maquinas} talhoes={talhoes} estoque={estoque} mod={mod} usuario={usuario} lavoura={lavoura} equipe={equipe} apls={apls}
+        <ModalRecomendacao kml={kml} maquinas={maquinas} talhoes={talhoes} estoque={estoque} mod={mod} usuario={usuario} lavoura={lavoura} equipe={equipe} apls={apls}
           passosPrograma={(() => {
             // passos do programa prévio desta operação, de todas as culturas da fazenda (guardados no aparelho)
             const culturas = [...new Set(talhoes.flatMap((t) => [t.cultura, t.culturaSafrinha]).filter(Boolean))];
@@ -27868,7 +27886,7 @@ function ModalVisita({ onFechar, onSalvar }) {
   );
 }
 
-function ModalRecomendacao({ talhoes, estoque, mod, inicial, usuario, lavoura, equipe, onFechar, onSalvar, passosPrograma, apls, maquinas }) {
+function ModalRecomendacao({ talhoes, estoque, mod, inicial, usuario, lavoura, equipe, onFechar, onSalvar, passosPrograma, apls, maquinas, kml }) {
   // pulverizadores cadastrados em Máquinas: escolher um preenche o tanque e oferece os bicos dele (opcional)
   const pulverizadores = (maquinas || []).filter(ehPulverizador);
   const distribuidores = (maquinas || []).filter(ehDistribuidor);
@@ -27924,6 +27942,10 @@ function ModalRecomendacao({ talhoes, estoque, mod, inicial, usuario, lavoura, e
   const distEscolhido = distribuidores.find((m) => m.id === distribuidorId) || null;
   const [pulverizadorSulcoId, setPulverizadorSulcoId] = useState((ini.sulco && ini.sulco.pulverizadorId) || "");
   const pulvEscolhido = pulverizadores.find((m) => m.id === pulverizadorId) || null;
+  // 🎯 bordadura: só o contorno do talhão — a área vira contorno (KML) × largura da barra × voltas
+  const [bordadura, setBordadura] = useState(!!ini.bordadura);
+  const [voltas, setVoltas] = useState(String((ini.bordadura && ini.bordadura.voltas) || 1));
+  const [barraM, setBarraM] = useState(ini.bordadura && num(ini.bordadura.barraM) > 0 ? String(ini.bordadura.barraM) : (pulvEscolhido && num(pulvEscolhido.barraM) > 0 ? String(pulvEscolhido.barraM) : ""));
   const bicosDoPulv = pulvEscolhido ? (pulvEscolhido.bicos || []) : [];
   const [observacao, setObservacao] = useState(ini.observacao || "");
   const [produtos, setProdutos] = useState(
@@ -28040,6 +28062,25 @@ function ModalRecomendacao({ talhoes, estoque, mod, inicial, usuario, lavoura, e
     .map((t) => ({ ...t, areaHa: areaDigitada(t), areaCheia: t.areaHa }));
   const areaSel = talhoesObj.reduce((s, t) => s + num(t.areaHa), 0);
   const areaMaiorQueTalhao = talhoesObj.some((t) => t.areaHa > (t.areaCheia || 0) + 1e-9);
+  const perimetroDe = (tid) => perimetroDoTalhao(kml, tid);
+  // bordadura ligada: a área parcial de cada talhão com contorno no KML segue a conta
+  useEffect(() => {
+    if (!bordadura) return;
+    setAreasParciais((prev) => {
+      const c = { ...prev }; let mudou = false;
+      for (const tid of Object.keys(sel)) {
+        if (!sel[tid]) continue;
+        const p = perimetroDe(tid); if (!(p > 0) || !(num(barraM) > 0)) continue;
+        const ha = String(areaBordadura(p, barraM, voltas));
+        if (c[tid] !== ha) { c[tid] = ha; mudou = true; }
+      }
+      return mudou ? c : prev;
+    });
+  }, [bordadura, voltas, barraM, Object.keys(sel).filter((k) => sel[k]).join(",")]);
+  const desligarBordadura = () => {
+    setBordadura(false);
+    setAreasParciais((prev) => { const c = { ...prev }; for (const tid of Object.keys(c)) if (perimetroDe(tid) > 0) delete c[tid]; return c; });
+  };
   // Semeadura em duas variedades: o que já foi semeado neste talhão (outras
   // recomendações executadas) e o que falta para fechar o pivô.
   const semeadoAntes = (tid) => {
@@ -28418,11 +28459,40 @@ function ModalRecomendacao({ talhoes, estoque, mod, inicial, usuario, lavoura, e
       {mod.usaCalda && pulverizadores.length > 0 && (
         <>
           <label>Pulverizador <span style={{ fontWeight: 500, color: C.cinza }}>(opcional — preenche o tanque e os bicos)</span></label>
-          <select value={pulverizadorId} onChange={(e) => { const id = e.target.value; setPulverizadorId(id); const m = pulverizadores.find((x) => x.id === id); if (m && num(m.capacidadeL) > 0) { setCapacidadeTanque(String(m.capacidadeL)); setHaTanqueTxt(haDeVazao(m.capacidadeL, vazao)); } if (m && (m.bicos || []).length === 1) setBico(m.bicos[0]); }}>
+          <select value={pulverizadorId} onChange={(e) => { const id = e.target.value; setPulverizadorId(id); const m = pulverizadores.find((x) => x.id === id); if (m && num(m.capacidadeL) > 0) { setCapacidadeTanque(String(m.capacidadeL)); setHaTanqueTxt(haDeVazao(m.capacidadeL, vazao)); } if (m && (m.bicos || []).length === 1) setBico(m.bicos[0]); if (m && num(m.barraM) > 0) setBarraM(String(m.barraM)); }}>
             <option value="">— sem escolher —</option>
             {pulverizadores.map((m) => <option key={m.id} value={m.id}>{m.nome}{num(m.capacidadeL) > 0 ? ` · ${fmtN(m.capacidadeL)} L` : ""}{(m.bicos || []).length ? ` · ${m.bicos.length} bico${m.bicos.length === 1 ? "" : "s"}` : ""}</option>)}
           </select>
         </>
+      )}
+      {mod.usaCalda && !mod.usaSemeadura && (
+        <div style={{ background: bordadura ? "#FFF8E6" : C.fundo, border: `1.5px solid ${bordadura ? C.amarelo : C.borda}`, borderRadius: 12, padding: "10px 12px", marginTop: 10 }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, margin: 0, cursor: "pointer" }}>
+            <input type="checkbox" checked={bordadura} disabled={travado} onChange={(e) => (e.target.checked ? setBordadura(true) : desligarBordadura())} style={{ width: 22, height: 22, margin: 0 }} />
+            <span><b>🎯 Bordadura</b> — só o contorno do talhão. A área vira contorno (do KML) × largura da barra × voltas.</span>
+          </label>
+          {bordadura && (
+            <>
+              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                <div style={{ flex: 1 }}><label style={{ marginTop: 0 }}>Largura da barra (m)</label><input type="number" inputMode="decimal" value={barraM} disabled={travado} onChange={(e) => setBarraM(e.target.value)} placeholder="Ex.: 24" /></div>
+                <div style={{ flex: 1 }}><label style={{ marginTop: 0 }}>Voltas no contorno</label><input type="number" inputMode="numeric" value={voltas} disabled={travado} onChange={(e) => setVoltas(e.target.value)} placeholder="1" /></div>
+              </div>
+              {pulvEscolhido && !(num(pulvEscolhido.barraM) > 0) && <div style={{ fontSize: 11.5, color: C.cinza, marginTop: 4 }}>Dica: cadastre a largura da barra no pulverizador (Máquinas) e ela já vem preenchida.</div>}
+              <div style={{ marginTop: 8, fontSize: 13 }}>
+                {talhoesSel.length === 0 && <div style={{ color: C.cinza }}>Marque os talhões acima.</div>}
+                {talhoesSel.map((tid) => {
+                  const t = talhoes.find((x) => x.id === tid); const p = perimetroDe(tid); if (!t) return null;
+                  return (
+                    <div key={tid} style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "4px 0", borderTop: `1px dashed ${C.borda}` }}>
+                      <span><b>{t.nome}</b>{p > 0 ? ` · ${fmtN(Math.round(p))} m de contorno` : " · sem contorno no KML — digite a área abaixo"}</span>
+                      <b style={{ whiteSpace: "nowrap" }}>{p > 0 && num(barraM) > 0 ? `${fmtN(areaBordadura(p, barraM, voltas))} ha` : "—"}</b>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </div>
       )}
       {mod.usaCalda && (
         <div style={{ display: "flex", gap: 8 }}>
@@ -28720,6 +28790,7 @@ function ModalRecomendacao({ talhoes, estoque, mod, inicial, usuario, lavoura, e
             ...(mod.usaSemeadura ? produtosSulco.filter((p) => p.nome && num(p.dose) > 0).map((p) => ({ ...p, uso: "sulco", ...(p.unidade === "dose" ? { mlPorDose: num(p.mlPorDose) > 0 ? num(p.mlPorDose) : (num((acharProduto(p.nome) || {}).mlPorDose) > 0 ? num(acharProduto(p.nome).mlPorDose) : null) } : {}) })) : [])], talhaoIds: talhoesSel,
           // guarda só o que foge do talhão cheio: se a área do talhão mudar
           // depois, quem não dividiu continua acompanhando o cadastro
+          bordadura: bordadura && mod.usaCalda && !mod.usaSemeadura ? { voltas: Math.max(1, Math.round(num(voltas)) || 1), barraM: num(barraM) > 0 ? num(barraM) : null, perimetros: talhoesSel.reduce((acc, tid) => { const p = perimetroDe(tid); if (p > 0) acc[tid] = Math.round(p); return acc; }, {}) } : null,
           areasParciais: talhoesObj.reduce((acc, t) => {
             if (Math.abs(t.areaHa - (t.areaCheia || 0)) > 1e-9) acc[t.id] = t.areaHa;
             return acc;
