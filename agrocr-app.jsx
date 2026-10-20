@@ -31466,6 +31466,57 @@ async function buscarChuvaBrasil(pontos, aoProgresso) {
   return { em: Date.now(), dia0: hojeISO(), porPonto, faltou: resultados.filter((r) => !r).length, lotes: lotes.length };
 }
 const PERIODOS_BRASIL = [["hoje", "Hoje", 0, 1], ["amanha", "Amanhã", 1, 2], ["7", "7 dias", 0, 7], ["prox", "Próx. semana", 7, 14], ["15", "15 dias", 0, 16]];
+// Desenho suavizado: cada pixel recebe a média ponderada (inverso da distância) dos pontos da grade
+// mais próximos, pintado numa imagem pequena e esticada com suavização, recortada pelo contorno do país.
+function valorInterpolado(valores, lat, lng) {
+  let s = 0, w = 0, maisPerto = null, dMin = Infinity;
+  for (const p of valores) {
+    const dy = p.lat - lat, dx = (p.lng - lng) * 0.98;
+    const d2 = dx * dx + dy * dy;
+    if (d2 < dMin) { dMin = d2; maisPerto = p; }
+    if (d2 > 25) continue;   // só quem está a menos de ~5°
+    const pw = 1 / (d2 + 0.15);
+    s += p.v * pw; w += pw;
+  }
+  return w > 0 ? s / w : (maisPerto ? maisPerto.v : 0);
+}
+function CanvasChuvaBrasil({ valores, max, fz, nomeFazenda, onToque, marcado }) {
+  const ref = useRef(null);
+  const W = 800, H = 780, X = (lng) => (lng + 74) * 20, Y = (lat) => (5 - lat) * 20;
+  useEffect(() => {
+    const cv = ref.current; if (!cv) return;
+    const g = cv.getContext("2d");
+    g.clearRect(0, 0, W, H);
+    g.fillStyle = "#EAF2FA"; g.fillRect(0, 0, W, H);
+    const caminho = new Path2D(); BRASIL_CONTORNO.forEach((p, i) => (i ? caminho.lineTo(X(p[0]), Y(p[1])) : caminho.moveTo(X(p[0]), Y(p[1])))); caminho.closePath();
+    if (valores.length) {
+      // imagem pequena (um ponto a cada ~0,2°) → esticada com suavização do próprio canvas
+      const pw = 200, ph = 195, img = document.createElement("canvas"); img.width = pw; img.height = ph;
+      const gi = img.getContext("2d"), dados = gi.createImageData(pw, ph);
+      const lut = []; for (let i = 0; i <= 64; i++) { const m = /rgb\((\d+),(\d+),(\d+)\)/.exec(corChuva((i / 64) * max, 0, max)); lut.push(m ? [+m[1], +m[2], +m[3]] : [0, 0, 0]); }
+      for (let py = 0; py < ph; py++) for (let px = 0; px < pw; px++) {
+        const lng = -74 + (px + 0.5) / pw * 40, lat = 5 - (py + 0.5) / ph * 39;
+        const v = valorInterpolado(valores, lat, lng);
+        const c = lut[Math.max(0, Math.min(64, Math.round((v / max) * 64)))];
+        const k = (py * pw + px) * 4; dados.data[k] = c[0]; dados.data[k + 1] = c[1]; dados.data[k + 2] = c[2]; dados.data[k + 3] = 235;
+      }
+      gi.putImageData(dados, 0, 0);
+      g.save(); g.clip(caminho); g.imageSmoothingEnabled = true; g.imageSmoothingQuality = "high"; g.drawImage(img, 0, 0, W, H); g.restore();
+    }
+    g.lineWidth = 3; g.strokeStyle = "#17335F"; g.stroke(caminho);
+    const rotulo = (x, y, txt, cor) => { g.font = "900 22px Archivo, 'Instrument Sans', system-ui, sans-serif"; g.textAlign = "center"; g.lineWidth = 5; g.strokeStyle = "#fff"; g.strokeText(txt, x, y); g.fillStyle = cor; g.fillText(txt, x, y); };
+    if (marcado) { g.beginPath(); g.arc(X(marcado.lng), Y(marcado.lat), 7, 0, Math.PI * 2); g.fillStyle = "#000"; g.fill(); rotulo(X(marcado.lng), Y(marcado.lat) - 14, `${fmtN(marcado.v)} mm`, "#000"); }
+    if (fz) { g.beginPath(); g.arc(X(fz.lng), Y(fz.lat), 9, 0, Math.PI * 2); g.fillStyle = "#FFD600"; g.fill(); g.lineWidth = 2; g.strokeStyle = "#000"; g.stroke(); rotulo(X(fz.lng), Y(fz.lat) - 16, `${nomeFazenda || "fazenda"}${fz.v != null ? ` · ${fmtN(fz.v)} mm` : ""}`, "#17335F"); }
+  }, [valores, max, fz && fz.lat, fz && fz.lng, fz && fz.v, marcado && marcado.lat, marcado && marcado.lng, nomeFazenda]);
+  const tocar = (e) => {
+    const cv = ref.current; if (!cv || !onToque) return;
+    const r = cv.getBoundingClientRect(); const x = (e.clientX - r.left) / r.width * W, y = (e.clientY - r.top) / r.height * H;
+    const lng = x / 20 - 74, lat = 5 - y / 20;
+    if (!pontoNoAnel(lng, lat, BRASIL_CONTORNO)) { onToque(null); return; }
+    onToque({ lat, lng, v: Math.round(valorInterpolado(valores, lat, lng)) });
+  };
+  return <canvas ref={ref} width={W} height={H} onClick={tocar} style={{ width: "100%", maxWidth: 520, display: "block", margin: "0 auto", borderRadius: 10, cursor: "crosshair" }} />;
+}
 function MapaChuvaBrasil({ fazenda, kml }) {
   const K_BR = "agrocr:prevbrasil";
   const [dados, setDados] = useState(() => { try { return JSON.parse(localStorage.getItem(K_BR) || "null"); } catch (e) { return null; } });
@@ -31506,21 +31557,14 @@ function MapaChuvaBrasil({ fazenda, kml }) {
       {!dados && <div style={{ fontSize: 13, color: estado === "erro" ? C.vermelho : C.cinza, padding: 10 }}>{estado === "buscando" ? "Buscando a previsão para o país inteiro (uns segundos)…" : estado === "erro" ? "Sem internet ou serviço fora do ar — o mapa do Brasil precisa baixar uma vez com sinal." : "Toque em atualizar para baixar a previsão."}</div>}
       {dados && (
         <>
-          <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", maxWidth: 520, display: "block", margin: "0 auto", background: "#EAF2FA", borderRadius: 10 }}>
-            {valores.map((p, i) => (
-              <rect key={i} x={X(p.lng - passo / 2)} y={Y(p.lat + passo / 2)} width={passo * k} height={passo * k} fill={corChuva(p.v, 0, max)} opacity={0.9} stroke={sel === i ? "#000" : "none"} strokeWidth={2} onClick={() => setSel(sel === i ? null : i)} style={{ cursor: "pointer" }} />
-            ))}
-            <path d={BRASIL_CONTORNO.map((p, i) => `${i ? "L" : "M"}${X(p[0]).toFixed(1)},${Y(p[1]).toFixed(1)}`).join(" ") + " Z"} fill="none" stroke="#17335F" strokeWidth={2.5} />
-            {fz && <g><circle cx={X(fz.lng)} cy={Y(fz.lat)} r={9} fill="#FFD600" stroke="#000" strokeWidth={2} /><text x={X(fz.lng)} y={Y(fz.lat) - 14} textAnchor="middle" fontSize={22} fontWeight="900" fill="#17335F" stroke="#fff" strokeWidth={4} paintOrder="stroke">{(fazenda && fazenda.nome) || "fazenda"}{daFazenda ? ` · ${fmtN(daFazenda.v)} mm` : ""}</text></g>}
-            {sel != null && valores[sel] && <text x={X(valores[sel].lng)} y={Y(valores[sel].lat) - 16} textAnchor="middle" fontSize={22} fontWeight="900" fill="#000" stroke="#fff" strokeWidth={4} paintOrder="stroke">{fmtN(valores[sel].v)} mm</text>}
-          </svg>
+          <CanvasChuvaBrasil valores={valores} max={max} fz={fz ? { ...fz, v: daFazenda ? daFazenda.v : null } : null} nomeFazenda={fazenda && fazenda.nome} marcado={sel} onToque={setSel} />
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
             <span style={{ fontSize: 11, color: C.cinza }}>0 mm</span>
             <div style={{ flex: 1, height: 10, borderRadius: 5, background: `linear-gradient(90deg, ${[0, 0.25, 0.5, 0.75, 1].map((f) => corChuva(f * max, 0, max)).join(", ")})` }} />
             <span style={{ fontSize: 11, color: C.cinza }}>{fmtN(max)} mm</span>
           </div>
           <div style={{ fontSize: 11, color: C.cinza, marginTop: 4 }}>
-            {per[1]}{per[2] > 0 || per[3] > 1 ? ` · ${fmtD(somarDias(hojeISO(), per[2]))} a ${fmtD(somarDias(hojeISO(), per[3] - 1))}` : ""} · acumulado previsto por célula de ~200 km · toque numa célula para ver os mm
+            {per[1]}{per[2] > 0 || per[3] > 1 ? ` · ${fmtD(somarDias(hojeISO(), per[2]))} a ${fmtD(somarDias(hojeISO(), per[3] - 1))}` : ""} · acumulado previsto, suavizado entre pontos a cada ~200 km · toque no mapa para ver os mm
             {atualizadoEm ? ` · baixado ${atualizadoEm.toLocaleDateString("pt-BR")} ${atualizadoEm.toLocaleTimeString("pt-BR").slice(0, 5)}` : ""}{velho ? " (desatualizado)" : ""}{dados.faltou ? ` · ${dados.faltou} de ${dados.lotes} lotes não vieram — toque em atualizar` : ""} · Fonte: Open-Meteo (modelos globais). É estimativa — o pluviômetro é o que vale.
           </div>
         </>
@@ -31530,6 +31574,7 @@ function MapaChuvaBrasil({ fazenda, kml }) {
 }
 function SecaoPrevisao({ fazenda, kml, onIrChuva }) {
   const [camadaMapa, setCamadaMapa] = useState("radar");
+  const [mapaCheio, setMapaCheio] = useState(false);   // ⛶ mapa ao vivo ocupando a tela inteira
   const medidores = (fazenda && fazenda.pluviometros) || [];
   return (
     <div>
@@ -31545,7 +31590,7 @@ function SecaoPrevisao({ fazenda, kml, onIrChuva }) {
         const centro = m ? [m.lat, m.lng] : p0 ? [p0[1], p0[0]] : null;
         return (
           <div className="nao-imprimir">
-            <div style={{ background: "#fff", border: `1.5px solid ${C.borda}`, borderRadius: 14, padding: 10, marginBottom: 14 }}>
+            <div style={mapaCheio ? { position: "fixed", inset: 0, zIndex: 80, background: "#fff", padding: 10, display: "flex", flexDirection: "column" } : { background: "#fff", border: `1.5px solid ${C.borda}`, borderRadius: 14, padding: 10, marginBottom: 14 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8, flexWrap: "wrap" }}>
                 <div className="titulo" style={{ fontWeight: 800, color: C.navy, fontSize: 14, flex: "1 1 150px", whiteSpace: "nowrap" }}>Mapa do tempo ao vivo</div>
                 {[["radar", "🌦️ Radar"], ["satellite", "🛰️ Satélite"], ["rain", "🌧️ Chuva prevista"]].map(([id, rot]) => (
@@ -31554,12 +31599,13 @@ function SecaoPrevisao({ fazenda, kml, onIrChuva }) {
                     border: `1.5px solid ${camadaMapa === id ? C.navy : C.borda}`, borderRadius: 8, padding: "5px 8px", fontWeight: 800, fontSize: 11, flex: "none",
                   }}>{rot}</button>
                 ))}
+                <button onClick={() => setMapaCheio(!mapaCheio)} title={mapaCheio ? "voltar ao tamanho normal" : "ver o mapa na tela inteira"} style={{ background: mapaCheio ? C.vermelho : C.navy, color: "#fff", border: "none", borderRadius: 8, padding: "5px 10px", fontWeight: 800, fontSize: 11, flex: "none" }}>{mapaCheio ? "✕ Fechar" : "⛶ Tela cheia"}</button>
               </div>
               <iframe title="mapa do tempo"
                 src={`https://embed.windy.com/embed2.html?lat=${(centro ? centro[0] : -10.2).toFixed(3)}&lon=${(centro ? centro[1] : -48.3).toFixed(3)}` +
                   `&detailLat=${(centro ? centro[0] : -10.2).toFixed(3)}&detailLon=${(centro ? centro[1] : -48.3).toFixed(3)}` +
                   `&zoom=${centro ? 8 : 5}&level=surface&overlay=${camadaMapa}&menu=&message=&marker=true&calendar=now&type=map&location=coordinates&metricWind=km%2Fh&metricTemp=%C2%B0C`}
-                style={{ width: "100%", height: 320, border: "none", borderRadius: 10, display: "block" }} loading="lazy" />
+                style={{ width: "100%", height: mapaCheio ? "auto" : 320, flex: mapaCheio ? 1 : "none", minHeight: mapaCheio ? 0 : undefined, border: "none", borderRadius: 10, display: "block" }} loading="lazy" />
               <div style={{ fontSize: 10, color: C.cinza, marginTop: 4 }}>
                 Toque no ▶ do mapa para rodar a animação · precisa de internet ·{" "}
                 <a href="https://satelite.inmet.gov.br/BR" target="_blank" rel="noreferrer" style={{ color: C.navy }}>satélite oficial INMET</a>
