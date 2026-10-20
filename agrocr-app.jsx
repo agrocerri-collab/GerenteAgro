@@ -5993,13 +5993,18 @@ function TelaFazenda({ fazenda, fazendas, grupos, papel, usuario, naNuvem, equip
             // blocos visuais do menu (pedido do Daniel): campo em cima, dinheiro
             // no meio, acompanhamento embaixo — cada bloco com um traço verde
             const GRUPOS = [
-              ["Fazenda e lavoura", ["dados", "lavoura", "solo", "apl", "fungicidas", "estoque", "mapa", "chuva", "previsao", "colheita", "visitas"]],
-              ["Dinheiro e máquinas", ["cotacoes", "fin", "diesel"]],
-              ["Acompanhamento e ajuda", ["rel", "guia", "comunidade", "suporte"]],
+              ["Fazenda e lavoura", ["dados", "lavoura", "colheita"]],
+              ["Operações e insumos", ["apl", "estoque", "diesel"]],
+              ["Técnico", ["visitas", "fungicidas", "mapa", "solo", "guia"]],
+              ["Clima", ["chuva", "previsao"]],
+              ["Dinheiro", ["cotacoes", "fin"]],
+              ["Acompanhamento e ajuda", ["rel", "comunidade", "suporte"]],
             ];
             const grupoDe = (id) => GRUPOS.findIndex(([, ids]) => ids.includes(id));
             let ultimo = -1;
-            return ICONES.map(([id, ico, titulo, sub]) => {
+            // os cartões saem na ordem dos blocos (quem não tem bloco — panorama, geral — fica no alto)
+            const posicao = (id) => { const g = grupoDe(id); return g < 0 ? -1 : g * 100 + GRUPOS[g][1].indexOf(id); };
+            return [...ICONES].sort((x, y) => posicao(x[0]) - posicao(y[0])).map(([id, ico, titulo, sub]) => {
             const g = grupoDe(id);
             const destaque = id === "panorama" || id === "geral";
             const largo = id === "panorama" && !ICONES.some((x) => x[0] === "geral");   // sozinho, ocupa as duas colunas
@@ -23384,19 +23389,31 @@ function ModalGuiaItem({ item, usuario, fazenda, naNuvem, consultor, onFechar })
     </Modal>
   );
 }
+// Guia de campo em telas: ícones grandes do TIPO (Fenologia, Daninhas, Pragas…) → CULTURA → lista → verbete.
+// A busca no alto atravessa tudo (quem já sabe o nome não precisa passar pelas telas).
+const GUIA_TIPO_INFO = {
+  daninha: ["🌿", "Daninhas", "Plantas daninhas: como reconhecer e com o que confunde"],
+  praga: ["🐛", "Pragas", "Insetos e ácaros: adulto, ovo, lagarta e dano"],
+  inimigo: ["🐞", "Inimigos naturais", "Os que ajudam: joaninha, parasitoides, fungos"],
+  doenca: ["🦠", "Doenças", "Sintomas na folha, haste, vagem e maçã"],
+  deficiencia: ["🧪", "Deficiências", "Falta de nutriente: folha velha ou nova, desenho do sintoma"],
+  estadio: ["🌱", "Fenologia", "Estádios da cultura: o que acontece e o que olhar em cada fase"],
+};
+const GUIA_CULTURA_INFO = { Soja: "🫘", Milho: "🌽", Algodão: "☁️" };
 function SecaoGuia({ usuario, fazenda, naNuvem, consultor }) {
-  const [tipo, setTipo] = useState("");
-  const [cultura, setCultura] = useState(((fazenda && fazenda.talhoes) || []).map((t) => t.cultura).find((c) => GUIA_CULTURAS.includes(c)) || "");
+  const culturaDaFazenda = ((fazenda && fazenda.talhoes) || []).map((t) => t.cultura).find((c) => GUIA_CULTURAS.includes(c)) || "";
+  const [tipo, setTipo] = useState("");        // "" = tela dos ícones
+  const [cultura, setCultura] = useState(null);   // null = ainda não escolheu · "" = todas
   const [busca, setBusca] = useState("");
   const [aberto, setAberto] = useState(null);
   const [identificando, setIdentificando] = useState(false);
   const [fotos, setFotos] = useFotosGuia(naNuvem);
-  const [baixa, setBaixa] = useState(null);   // {feitas, total} enquanto baixa; null parado
+  const [baixa, setBaixa] = useState(null);
   const [noAparelho, setNoAparelho] = useState(null);
   useEffect(() => { let vivo = true; fotosGuiaNoAparelho(fotos).then((n) => { if (vivo) setNoAparelho(n); }); return () => { vivo = false; }; }, [fotos.length, baixa]);
-  const lista = buscarNoGuia(GUIA_CAMPO, busca, tipo, cultura);
   const item = aberto ? GUIA_CAMPO.find((g) => g.id === aberto) : null;
   const nFotos = (id) => fotos.filter((f) => f.item === id).length;
+  const buscando = busca.trim().length > 0;
   async function baixarTudo() {
     if (!navigator.onLine) { alert("Precisa de internet para baixar as fotos. Depois disso, tudo abre sem sinal."); return; }
     const faltam = []; for (const f of fotos) { if (FOTOS_MEM.has("guia-" + f.id)) continue; try { if (await idbGet("foto:guia-" + f.id)) continue; } catch (e) {} faltam.push(f); }
@@ -23404,13 +23421,30 @@ function SecaoGuia({ usuario, fazenda, naNuvem, consultor }) {
     for (let i = 0; i < faltam.length; i++) { try { await dadosDaFotoGuia(faltam[i].id); } catch (e) {} setBaixa({ feitas: i + 1, total: faltam.length }); }
     setTimeout(() => setBaixa(null), 1500);
   }
-  const chip = (ativo) => ({ padding: "7px 10px", borderRadius: 10, fontWeight: 800, fontSize: 12.5, border: "none", background: ativo ? C.navy : "#fff", color: ativo ? "#fff" : C.navy, boxShadow: ativo ? "none" : `inset 0 0 0 1.5px ${C.borda}`, flex: "none" });
+  const abrirTipo = (id) => { setTipo(id); setCultura(null); setBusca(""); };
+  const escolherCultura = (c) => {
+    setCultura(c);
+    if (tipo === "estadio") { const e = GUIA_CAMPO.find((g) => g.tipo === "estadio" && (g.culturas || []).includes(c)); if (e) setAberto(e.id); }
+  };
+  const voltar = () => { if (aberto) { setAberto(null); if (tipo === "estadio") setCultura(null); return; } if (buscando) { setBusca(""); return; } if (cultura !== null) { setCultura(null); return; } setTipo(""); };
+  const tituloTela = buscando ? `Busca: "${busca.trim()}"` : tipo ? `${GUIA_TIPO_INFO[tipo][0]} ${GUIA_TIPO_INFO[tipo][1]}${cultura ? ` · ${cultura}` : cultura === "" ? " · todas as culturas" : ""}` : "📖 Guia de campo";
+  const lista = buscando ? buscarNoGuia(GUIA_CAMPO, busca, "", "") : (tipo && cultura !== null ? buscarNoGuia(GUIA_CAMPO, "", tipo, cultura) : []);
+  const tile = (onClick, emoji, titulo, sub, cor) => (
+    <button key={titulo} onClick={onClick} style={{ background: cor || "#fff", border: `1.5px solid ${C.borda}`, borderRadius: 16, padding: "18px 12px", textAlign: "left", minHeight: 112 }}>
+      <div style={{ fontSize: 30, lineHeight: 1 }}>{emoji}</div>
+      <div className="titulo" style={{ fontWeight: 800, fontSize: 15.5, color: C.navy, marginTop: 8, lineHeight: 1.15 }}>{titulo}</div>
+      {sub && <div style={{ fontSize: 12, color: C.cinza, marginTop: 3 }}>{sub}</div>}
+    </button>
+  );
+  const cabecalho = (
+    <div className="nao-imprimir" style={{ display: "flex", gap: 8, marginBottom: 10, alignItems: "center" }}>
+      {(tipo || buscando || aberto) && <button onClick={voltar} style={{ padding: "9px 14px", background: "#fff", border: `1.5px solid ${C.borda}`, borderRadius: 10, fontWeight: 800, color: C.navy, flex: "none" }}>← Voltar</button>}
+      <div style={{ flex: 1, fontWeight: 900, fontSize: 16, color: C.navy, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item ? item.nome : tituloTela}</div>
+    </div>
+  );
   if (item) return (
     <div>
-      <div className="nao-imprimir" style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-        <button onClick={() => setAberto(null)} style={{ padding: "9px 14px", background: "#fff", border: `1.5px solid ${C.borda}`, borderRadius: 10, fontWeight: 800, color: C.navy }}>← Guia</button>
-        <div style={{ flex: 1, fontWeight: 900, fontSize: 16, color: C.navy, alignSelf: "center" }}>{item.nome}</div>
-      </div>
+      {cabecalho}
       <div style={{ background: "#fff", border: `1.5px solid ${C.borda}`, borderRadius: 12, padding: 14 }}>
         <GuiaItem item={item} fotos={fotos} usuario={usuario} fazenda={fazenda} naNuvem={naNuvem} consultor={consultor} onFotos={setFotos} />
       </div>
@@ -23418,39 +23452,54 @@ function SecaoGuia({ usuario, fazenda, naNuvem, consultor }) {
   );
   return (
     <div>
-      <div style={{ fontSize: 12.5, color: C.cinza, marginBottom: 8 }}>Daninhas, pragas, inimigos naturais, doenças, deficiências e estádios de soja, milho e algodão. Os textos funcionam sem internet; as fotos são da própria equipe — mande as suas de dentro de cada item.</div>
-      <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
-        <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="🔎 Buscar: buva, percevejo, ferrugem, boro, R3…" style={{ flex: 1, marginTop: 0 }} />
+      {cabecalho}
+      <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+        <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="🔎 Buscar pelo nome: buva, percevejo, ferrugem, boro, R3…" style={{ flex: 1, marginTop: 0 }} />
         <button onClick={() => setIdentificando(true)} title="a IA compara a foto com o guia" style={{ flex: "none", padding: "9px 12px", background: C.verde, color: "#fff", border: "none", borderRadius: 10, fontWeight: 800, fontSize: 13 }}>🔍 Pela foto</button>
       </div>
-      <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 4, marginBottom: 4 }}>
-        <button onClick={() => setTipo("")} style={chip(!tipo)}>Tudo</button>
-        {GUIA_TIPOS.map(([id, e, r]) => <button key={id} onClick={() => setTipo(tipo === id ? "" : id)} style={chip(tipo === id)}>{e} {r}</button>)}
-      </div>
-      <div style={{ display: "flex", gap: 6, marginBottom: 10, alignItems: "center", flexWrap: "wrap" }}>
-        <button onClick={() => setCultura("")} style={chip(!cultura)}>Todas as culturas</button>
-        {GUIA_CULTURAS.map((c) => <button key={c} onClick={() => setCultura(cultura === c ? "" : c)} style={chip(cultura === c)}>{c}</button>)}
-        {naNuvem && fotos.length > 0 && (
-          <button onClick={baixarTudo} disabled={!!baixa} style={{ marginLeft: "auto", padding: "7px 10px", background: C.verdeBg, color: C.verdeEscuro, border: "none", borderRadius: 10, fontWeight: 800, fontSize: 12 }}>
-            {baixa ? `📥 ${baixa.feitas} de ${baixa.total}…` : noAparelho != null && noAparelho >= fotos.length ? `✓ ${fotos.length} fotos no aparelho` : `📥 Baixar fotos p/ usar sem internet${noAparelho != null ? ` (${fotos.length - noAparelho})` : ""}`}
-          </button>
-        )}
-      </div>
-      {lista.length === 0 && <Vazio icone="visita" titulo="Nada com esse nome" texto="Tente outra palavra, ou tire a busca por tipo e cultura." />}
-      {lista.map((g) => {
-        const t = GUIA_TIPOS.find((x) => x[0] === g.tipo) || ["", "", ""]; const n = nFotos(g.id);
-        return (
-          <button key={g.id} onClick={() => setAberto(g.id)} style={{ width: "100%", textAlign: "left", background: "#fff", border: `1.5px solid ${C.borda}`, borderRadius: 12, padding: "10px 12px", marginBottom: 6, display: "flex", gap: 10, alignItems: "center" }}>
-            <span style={{ fontSize: 22, flex: "none" }}>{t[1]}</span>
-            <span style={{ flex: 1, minWidth: 0 }}>
-              <span style={{ fontWeight: 900, color: C.navy, fontSize: 14.5, display: "block" }}>{g.nome}</span>
-              <span style={{ fontSize: 12, color: C.cinza, display: "block" }}>{g.cientifico ? <i>{g.cientifico} · </i> : null}{t[2]} · {(g.culturas || []).join(", ")}</span>
-            </span>
-            <span style={{ flex: "none", fontSize: 11.5, fontWeight: 800, color: n ? C.verdeEscuro : C.cinza, background: n ? C.verdeBg : C.fundo, borderRadius: 8, padding: "4px 8px" }}>{n ? `📷 ${n}` : "sem foto"}</span>
-          </button>
-        );
-      })}
-      {identificando && <IdentificarPelaFoto cultura={cultura} onFechar={() => setIdentificando(false)} onEscolher={(it) => { setIdentificando(false); setAberto(it.id); }} />}
+      {!buscando && !tipo && (
+        <>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            {["estadio", "daninha", "praga", "doenca", "deficiencia", "inimigo"].map((id) => tile(() => abrirTipo(id), GUIA_TIPO_INFO[id][0], GUIA_TIPO_INFO[id][1], GUIA_TIPO_INFO[id][2]))}
+          </div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 12, flexWrap: "wrap" }}>
+            <div style={{ flex: "1 1 200px", fontSize: 12, color: C.cinza }}>Os textos funcionam sem internet. As fotos são da equipe: mande as suas de dentro de cada item{naNuvem && fotos.length ? ` — ${fotos.length} foto${fotos.length === 1 ? "" : "s"} no guia` : ""}.</div>
+            {naNuvem && fotos.length > 0 && (
+              <button onClick={baixarTudo} disabled={!!baixa} style={{ flex: "none", padding: "8px 10px", background: C.verdeBg, color: C.verdeEscuro, border: "none", borderRadius: 10, fontWeight: 800, fontSize: 12 }}>
+                {baixa ? `📥 ${baixa.feitas} de ${baixa.total}…` : noAparelho != null && noAparelho >= fotos.length ? `✓ ${fotos.length} fotos no aparelho` : `📥 Baixar fotos p/ usar sem internet${noAparelho != null ? ` (${fotos.length - noAparelho})` : ""}`}
+              </button>
+            )}
+          </div>
+        </>
+      )}
+      {!buscando && tipo && cultura === null && (
+        <>
+          <div style={{ fontSize: 13, color: C.cinza, marginBottom: 8 }}>{tipo === "estadio" ? "Qual cultura?" : "De qual cultura? (ou todas)"}</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            {GUIA_CULTURAS.map((c) => tile(() => escolherCultura(c), GUIA_CULTURA_INFO[c] || "🌾", c, `${GUIA_CAMPO.filter((g) => g.tipo === tipo && (g.culturas || []).includes(c)).length} itens`, c === culturaDaFazenda ? C.verdeBg : undefined))}
+            {tipo !== "estadio" && tile(() => escolherCultura(""), "🌐", "Todas as culturas", `${GUIA_CAMPO.filter((g) => g.tipo === tipo).length} itens`)}
+          </div>
+        </>
+      )}
+      {(buscando || (tipo && cultura !== null)) && (
+        <>
+          {lista.length === 0 && <Vazio icone="visita" titulo="Nada com esse nome" texto="Tente outra palavra, ou volte e escolha pelos ícones." />}
+          {lista.map((g) => {
+            const t = GUIA_TIPO_INFO[g.tipo] || ["", "", ""]; const n = nFotos(g.id);
+            return (
+              <button key={g.id} onClick={() => setAberto(g.id)} style={{ width: "100%", textAlign: "left", background: "#fff", border: `1.5px solid ${C.borda}`, borderRadius: 12, padding: "10px 12px", marginBottom: 6, display: "flex", gap: 10, alignItems: "center" }}>
+                <span style={{ fontSize: 22, flex: "none" }}>{t[0]}</span>
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ fontWeight: 900, color: C.navy, fontSize: 14.5, display: "block" }}>{g.nome}</span>
+                  <span style={{ fontSize: 12, color: C.cinza, display: "block" }}>{g.cientifico ? <i>{g.cientifico} · </i> : null}{buscando ? `${t[1]} · ` : ""}{(g.culturas || []).join(", ")}</span>
+                </span>
+                <span style={{ flex: "none", fontSize: 11.5, fontWeight: 800, color: n ? C.verdeEscuro : C.cinza, background: n ? C.verdeBg : C.fundo, borderRadius: 8, padding: "4px 8px" }}>{n ? `📷 ${n}` : "sem foto"}</span>
+              </button>
+            );
+          })}
+        </>
+      )}
+      {identificando && <IdentificarPelaFoto cultura={cultura || culturaDaFazenda} onFechar={() => setIdentificando(false)} onEscolher={(it) => { setIdentificando(false); setAberto(it.id); }} />}
     </div>
   );
 }
