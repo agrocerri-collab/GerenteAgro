@@ -31418,16 +31418,110 @@ function PrevisaoChuvaMapa({ fazenda, kml }) {
 
 // Tela "Previsão do tempo": tudo que é PREVISÃO mora aqui (pedido do Daniel, 19/10/2026) —
 // a Pluviometria fica só com o que CHOVEU (lançamentos, acumulados, chuva por satélite do passado).
+// ---------- Chuva prevista no Brasil inteiro ----------
+// Grade de pontos (1,5°) dentro do contorno do país, previsão diária da Open-Meteo (16 dias)
+// em lotes, desenhada em células coloridas sobre o contorno do Brasil, com a fazenda marcada.
+// Guardado 6 h no aparelho (agrocr:prevbrasil). Sem internet mostra o último baixado.
+const BRASIL_CONTORNO = [[-51.6, 4.4], [-51.1, 3.5], [-50.6, 2.0], [-50.0, 0.9], [-49.9, 0.0], [-49.5, -0.6], [-48.5, -1.2], [-47.4, -0.7], [-46.0, -1.0], [-44.3, -2.4], [-43.0, -2.4], [-41.8, -2.9], [-40.5, -2.8], [-38.5, -3.7], [-37.2, -4.9], [-35.2, -5.8], [-34.8, -7.1], [-34.9, -8.1], [-35.7, -9.7], [-37.0, -11.0], [-37.5, -12.0], [-38.4, -13.0], [-38.9, -14.0], [-39.0, -15.5], [-39.1, -16.5], [-39.2, -17.8], [-39.6, -18.5], [-40.2, -19.8], [-40.6, -20.8], [-41.0, -21.6], [-42.0, -22.9], [-43.3, -23.0], [-44.6, -23.3], [-45.5, -23.9], [-46.4, -24.0], [-47.3, -24.8], [-48.4, -25.5], [-48.6, -26.5], [-48.6, -27.6], [-48.8, -28.6], [-49.8, -29.4], [-50.6, -30.5], [-51.3, -31.3], [-52.1, -32.1], [-52.8, -33.0], [-53.4, -33.7], [-53.5, -33.0], [-53.8, -32.0], [-55.5, -31.0], [-56.0, -30.9], [-57.1, -30.2], [-57.6, -30.1], [-57.0, -29.5], [-56.3, -28.9], [-55.7, -28.1], [-55.0, -27.6], [-54.2, -27.2], [-54.3, -26.5], [-54.6, -25.6], [-54.3, -24.4], [-54.6, -23.8], [-55.4, -23.9], [-55.7, -22.5], [-56.5, -22.2], [-57.8, -22.1], [-57.9, -21.0], [-57.8, -20.2], [-58.1, -19.5], [-57.7, -18.2], [-57.6, -17.5], [-58.3, -16.3], [-60.1, -16.3], [-60.5, -15.1], [-60.3, -13.5], [-61.0, -13.5], [-62.6, -13.0], [-63.6, -12.5], [-64.5, -12.3], [-65.3, -11.5], [-65.4, -10.5], [-66.5, -9.9], [-67.8, -10.6], [-69.5, -10.9], [-70.6, -11.0], [-70.6, -9.5], [-72.2, -9.9], [-73.2, -9.4], [-72.9, -8.5], [-73.8, -7.4], [-72.7, -6.6], [-72.4, -5.2], [-71.8, -4.5], [-70.9, -4.4], [-69.9, -4.2], [-69.4, -2.6], [-69.6, -1.3], [-69.9, -0.5], [-69.4, 0.6], [-69.9, 1.1], [-68.2, 1.8], [-66.9, 1.2], [-66.3, 0.8], [-65.6, 1.0], [-64.9, 1.5], [-64.1, 2.4], [-63.4, 2.4], [-63.3, 3.3], [-62.2, 4.1], [-61.0, 4.5], [-60.3, 5.2], [-60.0, 4.5], [-59.8, 3.5], [-59.5, 2.3], [-59.8, 1.4], [-58.9, 1.3], [-57.5, 1.9], [-56.4, 2.0], [-55.9, 2.5], [-54.9, 2.4], [-54.2, 2.3], [-53.8, 2.3], [-52.8, 2.4], [-52.3, 3.2], [-51.8, 3.9], [-51.6, 4.4]];
+function pontosGradeBrasil(passo) {
+  const p = passo || 2, out = [];
+  for (let lat = -33.5; lat <= 5.5; lat += p) for (let lng = -73.5; lng <= -34.5; lng += p) if (pontoNoAnel(lng, lat, BRASIL_CONTORNO)) out.push({ lat: Math.round(lat * 100) / 100, lng: Math.round(lng * 100) / 100 });
+  return out;
+}
+// lotes pequenos, todos ao mesmo tempo, cada um com prazo: a Open-Meteo demora com muitos pontos
+// numa chamada só. O que falhar fica de fora (o mapa mostra o que veio e avisa quantos faltaram).
+async function buscarChuvaBrasil(pontos, aoProgresso) {
+  const lote = 30, lotes = [];
+  for (let i = 0; i < pontos.length; i += lote) lotes.push(pontos.slice(i, i + lote));
+  let feitos = 0;
+  const umLote = async (fatia) => {
+    const lats = fatia.map((p) => p.lat.toFixed(2)).join(","), lngs = fatia.map((p) => p.lng.toFixed(2)).join(",");
+    const ac = new AbortController(); const prazo = setTimeout(() => ac.abort(), 60000);
+    try {
+      const j = await (await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lats}&longitude=${lngs}&daily=precipitation_sum&forecast_days=16&timezone=America%2FSao_Paulo`, { signal: ac.signal })).json();
+      const lista = Array.isArray(j) ? j : [j];
+      if (!lista[0] || !lista[0].daily) throw new Error("sem previsão");
+      return lista.map((r, k) => ({ lat: fatia[k].lat, lng: fatia[k].lng, mm: (r.daily.precipitation_sum || []).map((v) => Math.round(num(v) * 10) / 10) }));
+    } catch (e) { return null; }
+    finally { clearTimeout(prazo); feitos++; aoProgresso && aoProgresso(feitos, lotes.length); }
+  };
+  const resultados = await Promise.all(lotes.map(umLote));
+  const porPonto = resultados.filter(Boolean).flat();
+  if (!porPonto.length) throw new Error("a previsão não respondeu");
+  return { em: Date.now(), dia0: hojeISO(), porPonto, faltou: resultados.filter((r) => !r).length, lotes: lotes.length };
+}
+const PERIODOS_BRASIL = [["hoje", "Hoje", 0, 1], ["amanha", "Amanhã", 1, 2], ["7", "7 dias", 0, 7], ["prox", "Próx. semana", 7, 14], ["15", "15 dias", 0, 16]];
+function MapaChuvaBrasil({ fazenda, kml }) {
+  const K_BR = "agrocr:prevbrasil";
+  const [dados, setDados] = useState(() => { try { return JSON.parse(localStorage.getItem(K_BR) || "null"); } catch (e) { return null; } });
+  const [periodo, setPeriodo] = useState("7");
+  const [estado, setEstado] = useState("");   // "" · buscando · erro
+  const [progresso, setProgresso] = useState(null);   // {feitos, total}
+  const [sel, setSel] = useState(null);
+  const velho = !dados || Date.now() - num(dados.em) > 6 * 3600 * 1000;
+  useEffect(() => { if (velho && navigator.onLine) atualizar(); }, []);
+  async function atualizar() {
+    if (!navigator.onLine) { setEstado("erro"); return; }
+    setEstado("buscando"); setProgresso(null);
+    try { const d = await buscarChuvaBrasil(pontosGradeBrasil(2), (f, n) => setProgresso({ feitos: f, total: n })); setDados(d); try { localStorage.setItem(K_BR, JSON.stringify(d)); } catch (e) {} setEstado(""); }
+    catch (e) { setEstado("erro"); }
+    setProgresso(null);
+  }
+  const per = PERIODOS_BRASIL.find((p) => p[0] === periodo) || PERIODOS_BRASIL[2];
+  const soma = (p) => { let s = 0; for (let d = per[2]; d < per[3] && d < p.mm.length; d++) s += num(p.mm[d]); return Math.round(s); };
+  const valores = dados ? dados.porPonto.map((p) => ({ ...p, v: soma(p) })) : [];
+  const max = Math.max(10, ...valores.map((p) => p.v));
+  // fazenda: pluviômetro com posição, senão o 1º ponto do KML
+  const m = ((fazenda && fazenda.pluviometros) || []).find((x) => coordOk(x.lat) && coordOk(x.lng));
+  const p0 = !m && kml && kml.poligonos && kml.poligonos[0] ? kml.poligonos[0].aneis[0][0] : null;
+  const fz = m ? { lat: m.lat, lng: m.lng } : p0 ? { lat: p0[1], lng: p0[0] } : null;
+  const k = 20, W = 40 * k, H = 39 * k, passo = 2;
+  const X = (lng) => (lng + 74) * k, Y = (lat) => (5 - lat) * k;
+  const daFazenda = fz && valores.length ? valores.reduce((a, p) => (Math.hypot(p.lat - fz.lat, p.lng - fz.lng) < Math.hypot(a.lat - fz.lat, a.lng - fz.lng) ? p : a)) : null;
+  const atualizadoEm = dados ? new Date(dados.em) : null;
+  return (
+    <div style={{ background: "#fff", border: `1.5px solid ${C.borda}`, borderRadius: 14, padding: 12, marginBottom: 14 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 6 }}>
+        <div style={{ fontWeight: 900, color: C.navy, fontSize: 14, flex: "1 1 160px" }}>🇧🇷 Chuva prevista no Brasil</div>
+        <button className="nao-imprimir" onClick={atualizar} disabled={estado === "buscando"} style={{ flex: "none", padding: "6px 10px", background: C.fundo, color: C.navy, border: "none", borderRadius: 8, fontWeight: 800, fontSize: 12 }}>{estado === "buscando" ? (progresso ? `⏳ ${progresso.feitos} de ${progresso.total}…` : "⏳ buscando…") : "↻ atualizar"}</button>
+      </div>
+      <div className="nao-imprimir" style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
+        {PERIODOS_BRASIL.map(([id, rot]) => <button key={id} onClick={() => setPeriodo(id)} style={{ flex: "1 1 60px", padding: "8px 6px", borderRadius: 10, fontWeight: 800, fontSize: 12.5, border: "none", background: periodo === id ? C.navy : C.fundo, color: periodo === id ? "#fff" : C.navyEscuro }}>{rot}</button>)}
+      </div>
+      {!dados && <div style={{ fontSize: 13, color: estado === "erro" ? C.vermelho : C.cinza, padding: 10 }}>{estado === "buscando" ? "Buscando a previsão para o país inteiro (uns segundos)…" : estado === "erro" ? "Sem internet ou serviço fora do ar — o mapa do Brasil precisa baixar uma vez com sinal." : "Toque em atualizar para baixar a previsão."}</div>}
+      {dados && (
+        <>
+          <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", maxWidth: 520, display: "block", margin: "0 auto", background: "#EAF2FA", borderRadius: 10 }}>
+            {valores.map((p, i) => (
+              <rect key={i} x={X(p.lng - passo / 2)} y={Y(p.lat + passo / 2)} width={passo * k} height={passo * k} fill={corChuva(p.v, 0, max)} opacity={0.9} stroke={sel === i ? "#000" : "none"} strokeWidth={2} onClick={() => setSel(sel === i ? null : i)} style={{ cursor: "pointer" }} />
+            ))}
+            <path d={BRASIL_CONTORNO.map((p, i) => `${i ? "L" : "M"}${X(p[0]).toFixed(1)},${Y(p[1]).toFixed(1)}`).join(" ") + " Z"} fill="none" stroke="#17335F" strokeWidth={2.5} />
+            {fz && <g><circle cx={X(fz.lng)} cy={Y(fz.lat)} r={9} fill="#FFD600" stroke="#000" strokeWidth={2} /><text x={X(fz.lng)} y={Y(fz.lat) - 14} textAnchor="middle" fontSize={22} fontWeight="900" fill="#17335F" stroke="#fff" strokeWidth={4} paintOrder="stroke">{(fazenda && fazenda.nome) || "fazenda"}{daFazenda ? ` · ${fmtN(daFazenda.v)} mm` : ""}</text></g>}
+            {sel != null && valores[sel] && <text x={X(valores[sel].lng)} y={Y(valores[sel].lat) - 16} textAnchor="middle" fontSize={22} fontWeight="900" fill="#000" stroke="#fff" strokeWidth={4} paintOrder="stroke">{fmtN(valores[sel].v)} mm</text>}
+          </svg>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
+            <span style={{ fontSize: 11, color: C.cinza }}>0 mm</span>
+            <div style={{ flex: 1, height: 10, borderRadius: 5, background: `linear-gradient(90deg, ${[0, 0.25, 0.5, 0.75, 1].map((f) => corChuva(f * max, 0, max)).join(", ")})` }} />
+            <span style={{ fontSize: 11, color: C.cinza }}>{fmtN(max)} mm</span>
+          </div>
+          <div style={{ fontSize: 11, color: C.cinza, marginTop: 4 }}>
+            {per[1]}{per[2] > 0 || per[3] > 1 ? ` · ${fmtD(somarDias(hojeISO(), per[2]))} a ${fmtD(somarDias(hojeISO(), per[3] - 1))}` : ""} · acumulado previsto por célula de ~200 km · toque numa célula para ver os mm
+            {atualizadoEm ? ` · baixado ${atualizadoEm.toLocaleDateString("pt-BR")} ${atualizadoEm.toLocaleTimeString("pt-BR").slice(0, 5)}` : ""}{velho ? " (desatualizado)" : ""}{dados.faltou ? ` · ${dados.faltou} de ${dados.lotes} lotes não vieram — toque em atualizar` : ""} · Fonte: Open-Meteo (modelos globais). É estimativa — o pluviômetro é o que vale.
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 function SecaoPrevisao({ fazenda, kml, onIrChuva }) {
   const [camadaMapa, setCamadaMapa] = useState("radar");
   const medidores = (fazenda && fazenda.pluviometros) || [];
   return (
     <div>
       <div className="nao-imprimir" style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
-        <div style={{ flex: "1 1 200px", fontSize: 12.5, color: C.cinza }}>Chuva prevista por talhão, previsão de 7 dias e mapa ao vivo. O que já choveu fica na Pluviometria.</div>
+        <div style={{ flex: "1 1 200px", fontSize: 12.5, color: C.cinza }}>Mapa do tempo ao vivo, previsão da fazenda, chuva prevista no Brasil e por talhão. O que já choveu fica na Pluviometria.</div>
         {onIrChuva && <button onClick={onIrChuva} style={{ flex: "none", padding: "8px 12px", background: "#fff", color: C.navy, border: `1.5px solid ${C.borda}`, borderRadius: 10, fontWeight: 800, fontSize: 12.5 }}>🌧️ Lançar chuva</button>}
       </div>
-      <PrevisaoChuvaMapa fazenda={fazenda} kml={kml} />
       {/* Clima DENTRO do app: previsão de 7 dias no ponto da fazenda e o mapa
           animado embutido (chuva/satélite), centrado no pluviômetro ou no KML. */}
       {(() => {
@@ -31436,14 +31530,6 @@ function SecaoPrevisao({ fazenda, kml, onIrChuva }) {
         const centro = m ? [m.lat, m.lng] : p0 ? [p0[1], p0[0]] : null;
         return (
           <div className="nao-imprimir">
-            <div style={{ background: "#fff", border: `1.5px solid ${C.borda}`, borderRadius: 14, padding: 14, marginBottom: 14 }}>
-              <div style={{ fontWeight: 900, color: C.navy, fontSize: 14, marginBottom: 6 }}>
-                Previsão — {(fazenda && fazenda.municipio) || (fazenda && fazenda.nome) || "fazenda"}
-              </div>
-              {centro
-                ? <PrevisaoTempo lat={centro[0]} lng={centro[1]} />
-                : <div style={{ fontSize: 12, color: C.cinza }}>Cadastre um pluviômetro com posição (ou o KML) e a previsão do ponto exato da fazenda aparece aqui.</div>}
-            </div>
             <div style={{ background: "#fff", border: `1.5px solid ${C.borda}`, borderRadius: 14, padding: 10, marginBottom: 14 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8, flexWrap: "wrap" }}>
                 <div className="titulo" style={{ fontWeight: 800, color: C.navy, fontSize: 14, flex: "1 1 150px", whiteSpace: "nowrap" }}>Mapa do tempo ao vivo</div>
@@ -31464,9 +31550,19 @@ function SecaoPrevisao({ fazenda, kml, onIrChuva }) {
                 <a href="https://satelite.inmet.gov.br/BR" target="_blank" rel="noreferrer" style={{ color: C.navy }}>satélite oficial INMET</a>
               </div>
             </div>
+            <div style={{ background: "#fff", border: `1.5px solid ${C.borda}`, borderRadius: 14, padding: 14, marginBottom: 14 }}>
+              <div style={{ fontWeight: 900, color: C.navy, fontSize: 14, marginBottom: 6 }}>
+                Previsão — {(fazenda && fazenda.municipio) || (fazenda && fazenda.nome) || "fazenda"}
+              </div>
+              {centro
+                ? <PrevisaoTempo lat={centro[0]} lng={centro[1]} />
+                : <div style={{ fontSize: 12, color: C.cinza }}>Cadastre um pluviômetro com posição (ou o KML) e a previsão do ponto exato da fazenda aparece aqui.</div>}
+            </div>
           </div>
         );
       })()}
+      <MapaChuvaBrasil fazenda={fazenda} kml={kml} />
+      <PrevisaoChuvaMapa fazenda={fazenda} kml={kml} />
 
     </div>
   );
