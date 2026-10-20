@@ -630,6 +630,36 @@ const chaveProduto = (nome) => (nome || "").trim().toLowerCase();
 // Devolve [{nome, v, base, real:true|false}] — A e B em linhas separadas.
 // semente da receita de semeadura: produto marcado como semente, ou em bag, ou o primeiro
 const sementeDaReceita = (a) => (a && a.produtos || []).find((p) => p && (p.uso === "semente" || p.unidade === "bag")) || ((a && a.produtos) || [])[0] || null;
+// Plantio marcado como feito → emergência PREVISTA 4 dias depois do fim do plantio (a pessoa edita se
+// for diferente). Com etapas (plantio que parou e voltou), cada parte ganha a sua emergência.
+// Só preenche o que está vazio na lavoura; devolve null quando não há o que mudar.
+const DIAS_ATE_EMERGENCIA = 4;
+function lavouraComEmergenciaDoPlantio(lavoura, t, apl, ex, novoId) {
+  if (!t || !apl || !ex || moduloDe(apl) !== "semeadura") return null;
+  const dia = (iso) => String(iso || "").slice(0, 10);
+  const etapas = Array.isArray(ex.etapas) && ex.etapas.length ? ex.etapas : (dia(ex.data) ? [{ inicio: dia(ex.data), fim: dia(ex.dataFim) || dia(ex.data), areaHa: num(ex.areaExecutada) || num(t.areaHa) }] : []);
+  if (!etapas.length) return null;
+  const sem = sementeDaReceita(apl);
+  const variedadeRec = sem && sem.nome ? String(sem.nome) : "";
+  const existe = (lavoura || []).some((l) => l.talhaoId === t.id);
+  const atual = (lavoura || []).find((l) => l.talhaoId === t.id) || { id: novoId, talhaoId: t.id };
+  const fimDe = (e) => dia(e.fim) || dia(e.inicio);
+  const inicio = etapas.map((e) => dia(e.inicio)).filter(Boolean).sort()[0] || "";
+  const fim = etapas.map(fimDe).filter(Boolean).sort().pop() || inicio;
+  const nova = { ...atual, cultura: atual.cultura || apl.cultura || t.cultura || "", variedade: atual.variedade || variedadeRec, dataPlantio: atual.dataPlantio || inicio, dataPlantioFim: fim || atual.dataPlantioFim || "" };
+  if (!atual.dataEmergencia && fimDe(etapas[0])) { nova.dataEmergencia = somarDias(fimDe(etapas[0]), DIAS_ATE_EMERGENCIA); nova.emergenciaAuto = true; }
+  if (etapas.length >= 2) {
+    const antes = Array.isArray(atual.partes) ? atual.partes : [];
+    nova.partes = etapas.map((e, k) => {
+      const p = antes[k] || {}; const f = fimDe(e);
+      return { ...p, id: p.id || `p${k}`, variedade: p.variedade || e.variedade || variedadeRec, areaHa: num(e.areaHa) || num(p.areaHa), dataPlantio: p.dataPlantio || dia(e.inicio), dataPlantioFim: f || p.dataPlantioFim || "",
+        dataEmergencia: p.dataEmergencia || (f ? somarDias(f, DIAS_ATE_EMERGENCIA) : ""), emergenciaAuto: p.dataEmergencia ? !!p.emergenciaAuto : !!f };
+    });
+  }
+  if (JSON.stringify(nova) === JSON.stringify(atual)) return null;
+  const lista = existe ? (lavoura || []).map((l) => (l.talhaoId === t.id ? nova : l)) : [...(lavoura || []), nova];
+  return { lista, registro: nova, emergencia: nova.dataEmergencia || "", partes: (nova.partes || []).length };
+}
 const ehSementeDaReceita = (p, produtos) => !!p && (p.uso === "semente" || p.unidade === "bag" || p === sementeDaReceita({ produtos }));
 function consumoDaExecucao(produtos, ex, ha) {
   const saida = [];
@@ -6369,7 +6399,7 @@ function TelaFazenda({ fazenda, fazendas, grupos, papel, usuario, naNuvem, equip
       {secao === "apl" && modulo && modulo !== "programa" && (
         <SecaoAplicacoes maquinas={maquinas} podeApagar={podeApagar} kml={kml} destacar={destacarRec} programas={programas} fazenda={fazenda} apls={apls} modulo={modulo} estoque={calcularEstoque()}
           consultor={podeRec} usuario={usuario} historico={historico} registrar={registrar}
-          lavoura={lavoura} equipe={equipe} onSalvar={(v) => gravar(kApl(fazenda.id, safra), v, setApls, apls)} />
+          lavoura={lavoura} equipe={equipe} onSalvar={(v) => gravar(kApl(fazenda.id, safra), v, setApls, apls)} onAtualizarLavoura={(v) => gravar(kLavoura(fazenda.id, safra), v, setLavoura, lavoura)} />
       )}
       {secao === "rel" && (
         <SecaoRelatorios fazenda={fazenda} prog={prog} apls={apls} ajustes={ajustes} consultor={consultor} maquinas={maquinas} programas={programas}
@@ -19877,7 +19907,7 @@ function SecaoLavoura({ fazenda, lavoura, apls, prog, consultor, registrar, onSa
   function salvar(tid, dados) {
     const existe = (lavoura || []).some((l) => l.talhaoId === tid);
     const nova = existe
-      ? lavoura.map((l) => (l.talhaoId === tid ? { ...l, ...dados } : l))
+      ? lavoura.map((l) => (l.talhaoId === tid ? { ...l, ...dados, emergenciaAuto: !!l.emergenciaAuto && dados.dataEmergencia === l.dataEmergencia } : l))
       : [...(lavoura || []), { id: idNovo(), talhaoId: tid, ...dados }];   // com id: sem id, todo talhão novo caía no mesmo documento e um apagava o outro
     onSalvar(nova);
     const t = talhoes.find((x) => x.id === tid);
@@ -19948,7 +19978,7 @@ function SecaoLavoura({ fazenda, lavoura, apls, prog, consultor, registrar, onSa
                     {l.culturaAnterior ? <div style={{ color: C.navyEscuro }}>antes: {l.culturaAnterior}{l.variedadeAnterior ? ` ${l.variedadeAnterior}` : ""}{l.tecnologiaAnterior ? ` · ${l.tecnologiaAnterior}` : ""}</div> : null}
                     <div>
                       Plantio {fmtD(l.dataPlantio)}{l.dataPlantioFim && l.dataPlantioFim !== l.dataPlantio ? ` a ${fmtD(l.dataPlantioFim)}` : ""}{dap != null ? ` (${dap} DAP)` : ""}
-                      {l.dataEmergencia ? ` · emergência ${fmtD(l.dataEmergencia)}` : " · emergência não informada"}
+                      {l.dataEmergencia ? ` · emergência ${fmtD(l.dataEmergencia)}${l.emergenciaAuto ? " (prevista: 4 dias após o plantio — confira)" : ""}` : " · emergência não informada"}
                     </div>
                     {(l.espacamento || l.populacaoSemeada) && (
                       <div>
@@ -23373,8 +23403,8 @@ const pragasAcima = (fazenda, mon) => {
   return quadroPragas(mon).map((q) => {
     const nivel = nivelDe(fazenda, mon.cultura, q.chave) || nivelDe(fazenda, mon.cultura, q.nome || "");
     if (!nivel) return null;
-    const valor = pano ? q.media : q.pct;
-    return valor >= nivel ? { nome: q.nome || q.grupo || q.chave, valor, nivel, unidade: pano ? "/m" : "%" } : null;
+    const valor = pano && q.tipo !== "toggle" ? q.media : q.pct;
+    return valor >= nivel ? { nome: q.nome || q.grupo || q.chave, valor, nivel, unidade: pano && q.tipo !== "toggle" ? "/m" : "%" } : null;
   }).filter(Boolean);
 };
 const pragasDe = (cultura) => PRAGAS_PADRAO[cultura] || ["Lagarta", "Percevejo", "Pulgão", "Mosca-branca", "Ácaro"];
@@ -23410,12 +23440,28 @@ const ESCADA_ESTAGIOS = ["Pequena (neonata)", "Pequena", "Média", "Grande", "In
 // Guardado junto dos programas: agrocr:partes:{fid}:{cultura}:{talhaoId} = [{id, nome, areaHa}].
 const chavePartes = (fid, cultura, tid) => `agrocr:partes:${fid}:${cultura}:${tid}`;
 const partesDe = (programas, fid, cultura, tid) => { const l = (programas || {})[chavePartes(fid, cultura, tid)]; return Array.isArray(l) ? l.filter((p) => p && p.id) : []; };
+// Doenças por cultura: entram no monitoramento como presença/ausência no ponto
+// (no pano de batida a praga é contada; a doença é "tem ou não tem"). Daniel edita depois.
+const DOENCAS_PADRAO = {
+  Soja: ["Ferrugem-asiática", "Mancha-alvo", "Antracnose", "Mofo-branco", "Oídio", "Cercosporiose (crestamento foliar)", "Mancha-parda (septoriose)", "Mancha-olho-de-rã", "Míldio", "Mela (Rhizoctonia)", "Podridão radicular (Phytophthora)", "Cancro da haste", "Fusariose / tombamento", "Nematoides (reboleira)"],
+  Milho: ["Cercosporiose", "Mancha-branca", "Helmintosporiose (Turcicum)", "Ferrugem-polissora", "Ferrugem-comum", "Enfezamento (molicutes)", "Podridão de colmo", "Podridão de espiga (Diplodia / Fusarium)", "Mancha-de-phaeosphaeria"],
+  Algodão: ["Ramulária", "Mancha-de-alternária", "Mancha-angular (bacteriose)", "Mirotécio", "Mofo-branco", "Fusariose (murcha)", "Doença azul (vírus)", "Podridão de maçãs", "Tombamento (damping-off)"],
+  Feijão: ["Antracnose", "Mancha-angular", "Ferrugem", "Mofo-branco", "Oídio", "Crestamento bacteriano", "Mosaico-dourado (vírus)", "Mela", "Podridão radicular"],
+  Sorgo: ["Antracnose", "Helmintosporiose", "Ferrugem", "Ergot (doença açucarada)", "Cercosporiose", "Podridão de colmo"],
+  Gergelim: ["Mancha-de-alternária", "Cercosporiose", "Murcha (Macrophomina)", "Oídio", "Mancha-angular"],
+};
+const doencasDe = (cultura) => DOENCAS_PADRAO[cultura] || ["Ferrugem", "Mancha foliar", "Mofo-branco", "Oídio", "Antracnose"];
+const itensDoenca = (cultura, jaTem) => {
+  const chave = (s) => semAcento(String(s || "")).toLowerCase().replace(/\s*\(.*\)$/, "");
+  return doencasDe(cultura).filter((d) => !(jaTem || []).some((g) => chave(g) === chave(d) || chave(d).startsWith(chave(g))))
+    .map((d) => ({ chave: `Doença · ${d}`, grupo: "Doenças", nome: d, tipo: "toggle", doenca: true }));
+};
 // itens a marcar em cada ponto: {chave, grupo, nome, tipo} — tipo: toggle (presente/ausente),
-// numero (contagem), posicao (onde na planta), no (nó da planta)
+// numero (contagem), posicao (onde na planta), no (nó da planta). Doenças sempre no fim, por presença.
 const fichaDe = (cultura, metodo) => {
   const f = metodo === "presenca" ? FICHAS[cultura] : null;
-  if (f) return f.flatMap(([grupo, itens]) => itens.map(([nome, tipo]) => ({ chave: itens.length === 1 && nome === "Presença" ? grupo : `${grupo} · ${nome}`, grupo, nome: itens.length === 1 && nome === "Presença" ? "" : nome, tipo: tipo || "toggle" })));
-  return pragasDe(cultura).map((n) => ({ chave: n, grupo: null, nome: n, tipo: metodo === "pano" ? "numero" : "toggle" }));
+  if (f) return [...f.flatMap(([grupo, itens]) => itens.map(([nome, tipo]) => ({ chave: itens.length === 1 && nome === "Presença" ? grupo : `${grupo} · ${nome}`, grupo, nome: itens.length === 1 && nome === "Presença" ? "" : nome, tipo: tipo || "toggle" }))), ...itensDoenca(cultura, f.map(([g]) => g))];
+  return [...pragasDe(cultura).map((n) => ({ chave: n, grupo: null, nome: n, tipo: metodo === "pano" ? "numero" : "toggle" })), ...itensDoenca(cultura, [])];
 };
 // valor marcado conta como "achou": presente, número > 0, posição/nó preenchido
 const achouValor = (v) => v === true || (typeof v === "number" && v > 0) || (typeof v === "string" && v.trim() !== "" && (isNaN(Number(v)) || Number(v) > 0));
@@ -23799,7 +23845,7 @@ function MonitoramentoPragas({ fazenda, lavoura, kml, usuario, onFechar, onSalva
                 <thead><tr><th style={{ textAlign: "left", padding: "3px 4px", borderBottom: `1px solid ${C.borda}` }}>Praga</th><th style={{ textAlign: "right", padding: "3px 4px", borderBottom: `1px solid ${C.borda}` }}>{metodo === "pano" ? "média/m" : "% pontos"}</th><th style={{ textAlign: "right", padding: "3px 4px", borderBottom: `1px solid ${C.borda}` }}>{metodo === "pano" ? "máx." : "pontos"}</th></tr></thead>
                 <tbody>{quadro.filter((q) => q.com > 0).map((q) => (
                   <tr key={q.chave}><td style={{ padding: "3px 4px" }}>{rotuloItem(q)}{q.detalhe ? <div style={{ fontSize: 11, color: C.cinza }}>{q.detalhe}</div> : null}</td>
-                    <td style={{ textAlign: "right", padding: "3px 4px", fontWeight: 800, color: C.navyEscuro }}>{metodo === "pano" ? fmtN(q.media) : `${fmtN(q.pct)}%`}</td>
+                    <td style={{ textAlign: "right", padding: "3px 4px", fontWeight: 800, color: C.navyEscuro }}>{metodo === "pano" && q.tipo !== "toggle" ? fmtN(q.media) : `${fmtN(q.pct)}%`}</td>
                     <td style={{ textAlign: "right", padding: "3px 4px", color: C.cinza }}>{metodo === "pano" ? fmtN(q.max) : `${q.com}/${pontos.length}`}</td></tr>
                 ))}</tbody>
               </table>
@@ -23831,7 +23877,7 @@ function evolucaoPragasDe(monitoramentos, apls, talhaoId, fazenda) {
     for (const q of quadroPragas(m)) {
       const k = q.chave || q.nome;
       if (!pragas[k]) pragas[k] = { chave: k, nome: rotuloItem(q), unidade, valores: [], nivel: null };
-      pragas[k].valores.push({ data: m.data, valor: m.metodo === "pano" ? q.media : q.pct, pontos: (m.pontos || []).length });
+      pragas[k].valores.push({ data: m.data, valor: m.metodo === "pano" && q.tipo !== "toggle" ? q.media : q.pct, pontos: (m.pontos || []).length });
     }
   }
   const cultura = mons.length ? mons[mons.length - 1].cultura : "";
@@ -23979,7 +24025,7 @@ function RelatorioMonitoramento({ fazenda, mon, kml, onVoltar, soResumo }) {
           <tbody>{quadro.flatMap((q, i) => [
             ...(q.grupo && (i === 0 || quadro[i - 1].grupo !== q.grupo) ? [<tr key={"g" + q.grupo}><td colSpan={3} style={{ padding: "6px 6px 2px", fontWeight: 900, color: C.navy, fontSize: 12, textTransform: "uppercase", borderBottom: `1px solid ${C.borda}` }}>{q.grupo}</td></tr>] : []),
             <tr key={q.chave} style={{ background: q.com > 0 ? "#FFF6F0" : "transparent" }}><td style={{ padding: "4px 6px", paddingLeft: q.grupo ? 16 : 6, borderBottom: `1px solid ${C.fundo}` }}>{q.nome || q.grupo}{q.detalhe ? <span style={{ color: C.cinza, fontSize: 11.5 }}> — {q.detalhe}</span> : null}</td>
-              <td style={{ textAlign: "right", padding: "4px 6px", borderBottom: `1px solid ${C.fundo}`, fontWeight: q.com > 0 ? 800 : 400 }}>{mon.metodo === "pano" ? fmtN(q.media) : `${fmtN(q.pct)}%`}</td>
+              <td style={{ textAlign: "right", padding: "4px 6px", borderBottom: `1px solid ${C.fundo}`, fontWeight: q.com > 0 ? 800 : 400 }}>{mon.metodo === "pano" && q.tipo !== "toggle" ? fmtN(q.media) : `${fmtN(q.pct)}%`}</td>
               <td style={{ textAlign: "right", padding: "4px 6px", borderBottom: `1px solid ${C.fundo}`, color: C.cinza }}>{mon.metodo === "pano" ? fmtN(q.max) : `${q.com}/${(mon.pontos || []).length}`}</td></tr>,
           ])}</tbody>
         </table>
@@ -24408,7 +24454,7 @@ function SecaoVisitas({ podeApagar, fazenda, lavoura, kml, visitas, consultor, u
               }}>
                 <div style={{ fontWeight: 800, color: C.navy }}>🐛 {m.talhaoNome}{m.parteNome ? ` · parte ${m.parteNome}` : ""} · {m.cultura}{m.dae != null ? ` · ${m.dae} DAE` : ""} — {fmtD(m.data)}</div>
                 {acima.length > 0 && <div style={{ fontSize: 12.5, color: C.vermelho, fontWeight: 800 }}>⚠ Acima do nível de controle: {acima.map((a) => `${a.nome} ${fmtN(a.valor)}${a.unidade} (nível ${fmtN(a.nivel)}${a.unidade})`).join(" · ")} → recomendar</div>}
-                <div style={{ fontSize: 13, color: C.cinza }}>{(m.pontos || []).length} pontos · {m.quem}{q.length ? ` · ${q.slice(0, 3).map((x) => (m.metodo === "pano" ? `${rotuloItem(x)} ${fmtN(x.media)}/m` : `${rotuloItem(x)} ${fmtN(x.pct)}%`)).join(" · ")}` : " · nada encontrado"}</div>
+                <div style={{ fontSize: 13, color: C.cinza }}>{(m.pontos || []).length} pontos · {m.quem}{q.length ? ` · ${q.slice(0, 3).map((x) => (m.metodo === "pano" && x.tipo !== "toggle" ? `${rotuloItem(x)} ${fmtN(x.media)}/m` : `${rotuloItem(x)} ${fmtN(x.pct)}%`)).join(" · ")}` : " · nada encontrado"}</div>
               </button>
             );
           })}
@@ -26605,7 +26651,7 @@ function PlanoPrevio({ modo = "operacional", fazenda, apls, estoque, lavoura, sa
   );
 }
 
-function SecaoAplicacoes({ maquinas, podeApagar, fazenda, apls, modulo, estoque, consultor, usuario, historico, registrar, lavoura, equipe, onSalvar, programas, destacar, kml }) {
+function SecaoAplicacoes({ maquinas, podeApagar, fazenda, apls, modulo, estoque, consultor, usuario, historico, registrar, lavoura, equipe, onSalvar, programas, destacar, kml, onAtualizarLavoura }) {
   // grava a execução de um talhão (pela janela de confirmação)
   const gravarExecucao = (apl, tid, dadosEx) => {
     const t = (fazenda.talhoes || []).find((x) => x.id === tid);
@@ -26619,12 +26665,15 @@ function SecaoAplicacoes({ maquinas, podeApagar, fazenda, apls, modulo, estoque,
       const ex = { ...(atual || {}), data: (atual && atual.data) || new Date(dadosEx.etapa.inicio + "T12:00:00").toISOString(), dataFim: dadosEx.etapa.fim, operador: dadosEx.operador, obs: [atual && atual.obs, dadosEx.obs].filter(Boolean).join(" · "),
         fotos: [...((atual && atual.fotos) || []), ...(dadosEx.fotos || [])].slice(0, 6), etapas, areaExecutada: soma, aberto, produtosReais: null };
       onSalvar(apls.map((x) => (x.id === apl.id ? { ...x, execucoes: { ...(x.execucoes || {}), [tid]: ex } } : x)));
+      const emerg = onAtualizarLavoura ? lavouraComEmergenciaDoPlantio(lavoura, t, apl, ex, idNovo()) : null;
+      if (emerg) { onAtualizarLavoura(emerg.lista); registrar && registrar("Emergência prevista", `${t ? t.nome : ""} · ${emerg.partes >= 2 ? `${emerg.partes} partes, cada uma` : fmtD(emerg.emergencia)} ${DIAS_ATE_EMERGENCIA} dias após o fim do plantio — confira em Dados da lavoura`); }
       registrar && registrar(aberto ? "Plantio em andamento" : "Plantio concluído", `${t ? t.nome : ""} · ${etapas.length}ª etapa ${fmtD(dadosEx.etapa.inicio)}${dadosEx.etapa.fim !== dadosEx.etapa.inicio ? " a " + fmtD(dadosEx.etapa.fim) : ""} · ${fmtN(dadosEx.etapa.areaHa)} ha${dadosEx.etapa.variedade ? " · " + dadosEx.etapa.variedade : ""} · ${fmtN(soma)} de ${fmtN(areaTal)} ha${aberto ? " · em aberto" : ""}`);
       return;
     }
-    onSalvar(apls.map((x) => x.id === apl.id
-      ? { ...x, execucoes: { ...(x.execucoes || {}), [tid]: { data: new Date().toISOString(), ...dadosEx } } }
-      : x));
+    const exNovo = { data: new Date().toISOString(), ...dadosEx };
+    onSalvar(apls.map((x) => (x.id === apl.id ? { ...x, execucoes: { ...(x.execucoes || {}), [tid]: exNovo } } : x)));
+    const emergS = onAtualizarLavoura ? lavouraComEmergenciaDoPlantio(lavoura, t, apl, exNovo, idNovo()) : null;
+    if (emergS) { onAtualizarLavoura(emergS.lista); registrar && registrar("Emergência prevista", `${t ? t.nome : ""} · ${fmtD(emergS.emergencia)} (${DIAS_ATE_EMERGENCIA} dias após o plantio) — confira em Dados da lavoura`); }
     registrar && registrar(`${(MODULOS[moduloDe(apl)] || MODULOS.pulverizacao).nome} executada`,
       `${t ? t.nome : ""} · ${apl.tipo} · aplicado por ${dadosEx.operador}` +
       ((dadosEx.produtosReais || []).length ? ` · gasto real informado` : ""));
