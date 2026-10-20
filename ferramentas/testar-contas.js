@@ -909,8 +909,8 @@ teste("teste de calda: produtos da recomendação viram linhas com dose/ha, unid
 teste("monitoramento: doenças da cultura entram na ficha por presença (pano e presença), sem repetir as do algodão; no pano a doença sai em %", () => {
   const soja = C.fichaDe("Soja", "pano"), alg = C.fichaDe("Algodão", "presenca"), milho = C.fichaDe("Milho", "presenca");
   const d = soja.filter((i) => i.doenca);
-  const mon = { metodo: "pano", cultura: "Soja", itens: soja, pontos: [{ pragas: { "Lagarta-da-soja": 3, "Doença · Ferrugem-asiática": true } }, { pragas: { "Lagarta-da-soja": 1 } }] };
-  const q = C.quadroPragas(mon); const fer = q.find((x) => x.chave === "Doença · Ferrugem-asiática"), lag = q.find((x) => x.chave === "Lagarta-da-soja");
+  const mon = { metodo: "pano", cultura: "Soja", itens: soja, pontos: [{ pragas: { "Lagarta-da-soja · grande": 3, "Doença · Ferrugem-asiática": true } }, { pragas: { "Lagarta-da-soja · grande": 1 } }] };
+  const q = C.quadroPragas(mon); const fer = q.find((x) => x.chave === "Doença · Ferrugem-asiática"), lag = q.find((x) => x.chave === "Lagarta-da-soja · grande");
   const acima = C.pragasAcima({ niveis: { Soja: { "Doença · Ferrugem-asiática": 30 } } }, mon);
   return d.length === C.DOENCAS_PADRAO.Soja.length && d.every((i) => i.tipo === "toggle" && i.grupo === "Doenças") && soja[0].tipo === "numero"
     && alg.filter((i) => i.doenca).length === C.DOENCAS_PADRAO.Algodão.length - 3 && !alg.some((i) => i.doenca && /Ramul|Mirot|Mofo/.test(i.nome)) && alg.some((i) => i.grupo === "Ramulária")
@@ -955,6 +955,20 @@ teste("mapa do Brasil: contorno fechado, grade de pontos dentro do país (Palmas
     && dentro(-48.3, -10.2) && dentro(-55.7, -12.5) && dentro(-51.2, -30.0) && dentro(-60.0, -3.1) && dentro(-38.6, -3.9) && dentro(-35.2, -8.05)
     && !dentro(-30, -10) && !dentro(-70, -30) && !dentro(-60, -20) && !dentro(-45, 5)
     && g.length > 140 && g.length < 300 && g.every((p) => dentro(p.lng, p.lat)) && C.PERIODOS_BRASIL.length === 5;
+});
+
+teste("pano de batida: lagarta em pequena (até 1 cm) e grande, somas separadas, nível de controle pela soma das duas", () => {
+  const f = C.fichaDe("Soja", "pano");
+  const peq = f.find((i) => i.chave === "Lagarta-da-soja · pequena"), gra = f.find((i) => i.chave === "Lagarta-da-soja · grande"), perc = f.find((i) => i.chave === "Percevejo-marrom (adulto)");
+  const mon = { metodo: "pano", cultura: "Soja", itens: f, pontos: [{ pragas: { "Lagarta-da-soja · pequena": 12, "Lagarta-da-soja · grande": 10 } }, { pragas: { "Lagarta-da-soja · pequena": 12, "Lagarta-da-soja · grande": 10 } }] };
+  const q = C.quadroPragas(mon);
+  const acima = C.pragasAcima({ niveis: { Soja: { "Lagarta-da-soja": 20 } } }, mon);
+  const pouco = C.pragasAcima({ niveis: { Soja: { "Lagarta-da-soja": 20 } } }, { ...mon, pontos: [{ pragas: { "Lagarta-da-soja · pequena": 8, "Lagarta-da-soja · grande": 5 } }] });
+  return peq && gra && peq.grupo === "Lagarta-da-soja" && peq.tipo === "numero" && gra.nome === "grande (acima de 1 cm)" && perc && perc.grupo === null
+    && f.some((i) => i.chave === "Falsa-medideira · grande") && f.some((i) => i.chave === "Helicoverpa · pequena") && !f.some((i) => i.chave === "Lagarta-da-soja")
+    && q.find((x) => x.chave === "Lagarta-da-soja · pequena").media === 12 && q.find((x) => x.chave === "Lagarta-da-soja · grande").media === 10
+    && acima.length === 1 && acima[0].valor === 22 && /pequenas \+ grandes/.test(acima[0].nome) && pouco.length === 0
+    && C.fichaDe("Soja", "presenca").some((i) => i.chave === "Lagarta-da-soja");
 });
 
 teste("visita: 'mais opções' tem daninhas do cerrado e entra no dicionário da transcrição", () => {

@@ -24465,12 +24465,21 @@ const nivelDe = (fazenda, cultura, praga) => {
 const pragasAcima = (fazenda, mon) => {
   if (!mon) return [];
   const pano = mon.metodo === "pano";
-  return quadroPragas(mon).map((q) => {
+  const out = []; const juntos = {};
+  for (const q of quadroPragas(mon)) {
+    // lagarta em duas linhas (pequena/grande): o nível vale para a SOMA das duas
+    const m = /^(.+) · (pequena|grande)$/.exec(String(q.chave || ""));
+    if (pano && m) { const g = juntos[m[1]] = juntos[m[1]] || { nome: m[1], valor: 0 }; g.valor += num(q.media); continue; }
     const nivel = nivelDe(fazenda, mon.cultura, q.chave) || nivelDe(fazenda, mon.cultura, q.nome || "");
-    if (!nivel) return null;
+    if (!nivel) continue;
     const valor = pano && q.tipo !== "toggle" ? q.media : q.pct;
-    return valor >= nivel ? { nome: q.nome || q.grupo || q.chave, valor, nivel, unidade: pano && q.tipo !== "toggle" ? "/m" : "%" } : null;
-  }).filter(Boolean);
+    if (valor >= nivel) out.push({ nome: q.nome || q.grupo || q.chave, valor, nivel, unidade: pano && q.tipo !== "toggle" ? "/m" : "%" });
+  }
+  for (const g of Object.values(juntos)) {
+    const nivel = nivelDe(fazenda, mon.cultura, g.nome);
+    if (nivel && g.valor >= nivel) out.push({ nome: `${g.nome} (pequenas + grandes)`, valor: Math.round(g.valor * 10) / 10, nivel, unidade: "/m" });
+  }
+  return out;
 };
 const pragasDe = (cultura) => PRAGAS_PADRAO[cultura] || ["Lagarta", "Percevejo", "Pulgão", "Mosca-branca", "Ácaro"];
 // Ficha do algodoeiro (planilha da consultoria): cada praga aberta em itens —
@@ -24515,6 +24524,7 @@ const DOENCAS_PADRAO = {
   Sorgo: ["Antracnose", "Helmintosporiose", "Ferrugem", "Ergot (doença açucarada)", "Cercosporiose", "Podridão de colmo"],
   Gergelim: ["Mancha-de-alternária", "Cercosporiose", "Murcha (Macrophomina)", "Oídio", "Mancha-angular"],
 };
+const ehLagartaMonitor = (n) => /lagarta|medideira|helicoverpa|spodoptera|curuquer/i.test(String(n || ""));
 const doencasDe = (cultura) => DOENCAS_PADRAO[cultura] || ["Ferrugem", "Mancha foliar", "Mofo-branco", "Oídio", "Antracnose"];
 const itensDoenca = (cultura, jaTem) => {
   const chave = (s) => semAcento(String(s || "")).toLowerCase().replace(/\s*\(.*\)$/, "");
@@ -24526,7 +24536,10 @@ const itensDoenca = (cultura, jaTem) => {
 const fichaDe = (cultura, metodo) => {
   const f = metodo === "presenca" ? FICHAS[cultura] : null;
   if (f) return [...f.flatMap(([grupo, itens]) => itens.map(([nome, tipo]) => ({ chave: itens.length === 1 && nome === "Presença" ? grupo : `${grupo} · ${nome}`, grupo, nome: itens.length === 1 && nome === "Presença" ? "" : nome, tipo: tipo || "toggle" }))), ...itensDoenca(cultura, f.map(([g]) => g))];
-  return [...pragasDe(cultura).map((n) => ({ chave: n, grupo: null, nome: n, tipo: metodo === "pano" ? "numero" : "toggle" })), ...itensDoenca(cultura, [])];
+  // pano de batida: cada lagarta é contada em PEQUENA (até 1 cm) e GRANDE (acima) — somas separadas;
+  // o nível de controle compara a soma das duas (pragasAcima)
+  const duasLinhas = (n) => [{ chave: `${n} · pequena`, grupo: n, nome: "pequena (até 1 cm)", tipo: "numero", tamanho: "pequena" }, { chave: `${n} · grande`, grupo: n, nome: "grande (acima de 1 cm)", tipo: "numero", tamanho: "grande" }];
+  return [...pragasDe(cultura).flatMap((n) => (metodo === "pano" && ehLagartaMonitor(n) ? duasLinhas(n) : [{ chave: n, grupo: null, nome: n, tipo: metodo === "pano" ? "numero" : "toggle" }])), ...itensDoenca(cultura, [])];
 };
 // valor marcado conta como "achou": presente, número > 0, posição/nó preenchido
 const achouValor = (v) => v === true || (typeof v === "number" && v > 0) || (typeof v === "string" && v.trim() !== "" && (isNaN(Number(v)) || Number(v) > 0));
@@ -24789,7 +24802,9 @@ function MonitoramentoPragas({ fazenda, lavoura, kml, usuario, onFechar, onSalva
             <button onClick={() => trocarMetodo("presenca")} style={{ ...chip(metodo === "presenca"), flex: 1 }}>Presença / ausência · %</button>
           </div>
           {temFicha ? (
-            <div style={{ fontSize: 12, color: C.cinza, marginBottom: 4 }}>Ficha do algodoeiro: {[...new Set(itens.map((x) => x.grupo))].join(", ")}. Em cada ponto marque o que está presente; "posição" diz onde na planta e "nó" o nó da doença. <b>Vale sempre a praga maior</b>: marcando "Grande", a "Pequena" da mesma praga sai sozinha.</div>
+            metodo === "pano"
+              ? <div style={{ fontSize: 12, color: C.cinza, marginBottom: 4 }}>Lagartas contadas em duas linhas por metro: <b>pequena (até 1 cm)</b> e <b>grande (acima de 1 cm)</b>. As somas saem separadas; o nível de controle compara a soma das duas.</div>
+              : <div style={{ fontSize: 12, color: C.cinza, marginBottom: 4 }}>Ficha do algodoeiro: {[...new Set(itens.map((x) => x.grupo).filter(Boolean))].join(", ")}. Em cada ponto marque o que está presente; "posição" diz onde na planta e "nó" o nó da doença. <b>Vale sempre a praga maior</b>: marcando "Grande", a "Pequena" da mesma praga sai sozinha.</div>
           ) : (
             <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 4 }}>
               {itens.map((it) => <span key={it.chave} style={{ fontSize: 11.5, background: C.fundo, borderRadius: 8, padding: "4px 8px" }}>{it.nome} <button onClick={() => tirarItem(it.chave)} style={{ background: "transparent", border: "none", color: C.vermelho, padding: 0, fontSize: 12 }}>✕</button></span>)}
