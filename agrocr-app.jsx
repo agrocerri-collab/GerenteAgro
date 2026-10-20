@@ -19778,7 +19778,11 @@ function MapaVariedades({ fazenda, safra, kml, lavoura, apls, prog, custos, onVo
 // e as áreas de cada lado aparecem na hora para a pessoa acertar a linha pelos hectares plantados.
 function ModalDivisaoTalhao({ talhao, poligono, partes, divisaoInicial, onFechar, onSalvar }) {
   const anel = poligono && poligono.aneis && poligono.aneis[0] ? fecharAnel(poligono.aneis[0]) : [];
-  const [pts, setPts] = useState(() => { const d = anelDeObjetos(Array.isArray(divisaoInicial) && divisaoInicial.length === 2 ? [...divisaoInicial, ...divisaoInicial] : null); return d ? d.slice(0, 2) : []; });
+  const [pts, setPts] = useState(() => { const d = anelDeObjetos(Array.isArray(divisaoInicial) && divisaoInicial.length === 2 ? [...divisaoInicial, ...divisaoInicial] : null); return d ? d.slice(0, 2) : [null, null]; });
+  const txtDe = (p) => (p ? `${p[1].toFixed(6)}, ${p[0].toFixed(6)}` : "");
+  const [coord, setCoord] = useState(() => ["", ""]);   // o que a pessoa digitou para A e B (lat, long)
+  useEffect(() => { setCoord((c) => c.map((v, i) => { const g = lerCoordenada(v); return pts[i] && (!g || Math.abs(g[0] - pts[i][0]) > 1e-6 || Math.abs(g[1] - pts[i][1]) > 1e-6) ? txtDe(pts[i]) : (pts[i] ? v : ""); })); }, [pts[0] && pts[0].join(","), pts[1] && pts[1].join(",")]);
+  const porEm = (i, g) => setPts((p) => { const n = [p[0] || null, p[1] || null]; n[i] = g; return n; });
   const [invertido, setInvertido] = useState(null);   // null = automático: o lado que mais parece com a área cadastrada vira A
   const [usarAreas, setUsarAreas] = useState(true);
   const [msg, setMsg] = useState("");
@@ -19795,7 +19799,7 @@ function ModalDivisaoTalhao({ talhao, poligono, partes, divisaoInicial, onFechar
   const geo = (x, y) => deMundo(x + vbX, y + vbY, zoom);
   const tiles = [];
   for (let tx = Math.floor(vbX / TAM_TILE); tx <= Math.floor((vbX + W) / TAM_TILE); tx++) for (let ty = Math.floor(vbY / TAM_TILE); ty <= Math.floor((vbY + H) / TAM_TILE); ty++) tiles.push([tx, ty]);
-  const lados = pts.length === 2 ? dividirAnelPorLinha(anel, pts[0], pts[1]) : null;
+  const lados = pts[0] && pts[1] ? dividirAnelPorLinha(anel, pts[0], pts[1]) : null;
   const areaE = lados && lados[0] ? areaPoligonoHa([lados[0]]) : 0, areaD = lados && lados[1] ? areaPoligonoHa([lados[1]]) : 0;
   const cadA = partes[0] ? num(partes[0].areaHa) : 0, cadB = partes[1] ? num(partes[1].areaHa) : 0;
   const autoInv = cadA > 0 ? Math.abs(areaD - cadA) < Math.abs(areaE - cadA) : false;
@@ -19809,12 +19813,14 @@ function ModalDivisaoTalhao({ talhao, poligono, partes, divisaoInicial, onFechar
     const m = svg.getScreenCTM(); if (!m) return null;
     const q = pt.matrixTransform(m.inverse()); return geo(q.x, q.y);
   };
-  const porPonto = (g) => { if (pts.length < 2) setPts([...pts, g]); else { const a = xy(pts[0]), b = xy(pts[1]), c = xy(g); setPts(Math.hypot(a[0] - c[0], a[1] - c[1]) <= Math.hypot(b[0] - c[0], b[1] - c[1]) ? [g, pts[1]] : [pts[0], g]); } };
+  // toque no mapa: preenche o lugar vazio (A, depois B); com os dois marcados, move o mais perto
+  const porPonto = (g) => { if (!pts[0]) return porEm(0, g); if (!pts[1]) return porEm(1, g); const a = xy(pts[0]), b = xy(pts[1]), c = xy(g); porEm(Math.hypot(a[0] - c[0], a[1] - c[1]) <= Math.hypot(b[0] - c[0], b[1] - c[1]) ? 0 : 1, g); };
+  const digitar = (i, v) => { setCoord((c) => c.map((x, j) => (j === i ? v : x))); const g = lerCoordenada(v); if (g) porEm(i, g); };
   const tocar = (e) => { const g = pontoDoEvento(e); if (!g) return; setMsg(""); porPonto(g); };
-  const gps = () => {
-    if (!navigator.geolocation) { setMsg("Sem GPS neste aparelho — toque no mapa."); return; }
-    setMsg("Pegando o GPS…");
-    navigator.geolocation.getCurrentPosition((p) => { setMsg(`GPS ±${Math.round(p.coords.accuracy)} m`); porPonto([p.coords.longitude, p.coords.latitude]); },
+  const gps = (i) => {
+    if (!navigator.geolocation) { setMsg("Sem GPS neste aparelho — toque no mapa ou digite a coordenada."); return; }
+    setMsg(`Pegando o GPS para o ponto ${i === 0 ? "A" : "B"}…`);
+    navigator.geolocation.getCurrentPosition((p) => { setMsg(`Ponto ${i === 0 ? "A" : "B"} pelo GPS ±${Math.round(p.coords.accuracy)} m${p.coords.accuracy > 15 ? " — espere o sinal melhorar e marque de novo se precisar" : ""}`); porEm(i, [p.coords.longitude, p.coords.latitude]); },
       () => setMsg("Não consegui o GPS — toque no mapa."), { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
   };
   const d = (an) => an.map((p, i) => { const q = xy(p); return `${i ? "L" : "M"}${q[0].toFixed(1)},${q[1].toFixed(1)}`; }).join(" ") + " Z";
@@ -19833,7 +19839,7 @@ function ModalDivisaoTalhao({ talhao, poligono, partes, divisaoInicial, onFechar
   const botao = (rot, onClick, cor) => <button onClick={onClick} style={{ flex: 1, padding: "9px 8px", background: cor || "#fff", color: cor ? "#fff" : C.navy, border: `1.5px solid ${cor || C.borda}`, borderRadius: 10, fontWeight: 800, fontSize: 12.5 }}>{rot}</button>;
   return (
     <Modal titulo={`🗺️ Onde é a divisão do ${talhao.nome}`} onFechar={onFechar}>
-      <div style={{ fontSize: 12.5, color: C.cinza }}>Toque no mapa nas duas beiradas do talhão por onde passa a divisão (onde o plantio parou). Ou fique em cima da divisa e use o GPS, numa beirada e depois na outra. Acerte a linha até a área de cada lado bater com o que foi plantado.</div>
+      <div style={{ fontSize: 12.5, color: C.cinza }}>Marque o ponto A e o ponto B, um em cada beirada do talhão, por onde passa a divisão (onde o plantio parou). A linha entre eles corta o talhão; acerte até a área de cada lado bater com o que foi plantado.</div>
       {anel.length < 4 ? <div style={{ marginTop: 10, color: C.vermelho, fontWeight: 700 }}>Este talhão não tem contorno no mapa (KML).</div> : (
         <svg ref={svgRef} viewBox={`0 0 ${W.toFixed(1)} ${H.toFixed(1)}`} onPointerDown={tocar} style={{ width: "100%", marginTop: 10, touchAction: "none", borderRadius: 10, background: "#2B3A2A", display: "block", cursor: "crosshair" }}>
           {navigator.onLine && tiles.map(([tx, ty]) => <image key={`${tx}_${ty}`} href={`https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${zoom}/${ty}/${tx}`} x={tx * TAM_TILE - vbX} y={ty * TAM_TILE - vbY} width={TAM_TILE + 0.5} height={TAM_TILE + 0.5} />)}
@@ -19842,18 +19848,25 @@ function ModalDivisaoTalhao({ talhao, poligono, partes, divisaoInicial, onFechar
           {anelB && <path d={d(anelB)} fill="rgba(43,123,228,.45)" stroke="#8BB9FF" strokeWidth={tr} />}
           {anelA && (() => { const [x, y] = centro(anelA); return <text x={x} y={y} textAnchor="middle" fontSize={fonte} fontWeight="900" fill="#fff" stroke="rgba(0,0,0,.6)" strokeWidth={fonte / 8} paintOrder="stroke">{nomeA}</text>; })()}
           {anelB && (() => { const [x, y] = centro(anelB); return <text x={x} y={y} textAnchor="middle" fontSize={fonte} fontWeight="900" fill="#fff" stroke="rgba(0,0,0,.6)" strokeWidth={fonte / 8} paintOrder="stroke">{nomeB}</text>; })()}
-          {pts.length === 2 && (() => { const a = xy(pts[0]), b = xy(pts[1]); return <line x1={a[0]} y1={a[1]} x2={b[0]} y2={b[1]} stroke="#FFD600" strokeWidth={tr * 1.6} strokeDasharray={`${tr * 4} ${tr * 3}`} />; })()}
-          {pts.map((p, i) => { const q = xy(p); return <circle key={i} cx={q[0]} cy={q[1]} r={tr * 3.2} fill="#FFD600" stroke="#000" strokeWidth={tr * 0.5} />; })}
+          {pts[0] && pts[1] && (() => { const a = xy(pts[0]), b = xy(pts[1]); return <line x1={a[0]} y1={a[1]} x2={b[0]} y2={b[1]} stroke="#FFD600" strokeWidth={tr * 1.6} strokeDasharray={`${tr * 4} ${tr * 3}`} />; })()}
+          {pts.map((p, i) => { if (!p) return null; const q = xy(p); return <g key={i}><circle cx={q[0]} cy={q[1]} r={tr * 3.2} fill="#FFD600" stroke="#000" strokeWidth={tr * 0.5} /><text x={q[0]} y={q[1] - tr * 4} textAnchor="middle" fontSize={tr * 5} fontWeight="900" fill="#FFD600" stroke="rgba(0,0,0,.7)" strokeWidth={tr * 0.8} paintOrder="stroke">{i === 0 ? "A" : "B"}</text></g>; })}
         </svg>
       )}
+      {[0, 1].map((i) => (
+        <div key={i} style={{ display: "flex", gap: 6, alignItems: "center", marginTop: i === 0 ? 10 : 6 }}>
+          <span style={{ flex: "none", width: 26, height: 26, borderRadius: 13, background: pts[i] ? "#FFD600" : C.fundo, color: pts[i] ? "#000" : C.cinza, fontWeight: 900, fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center" }}>{i === 0 ? "A" : "B"}</span>
+          <input value={coord[i]} onChange={(e) => digitar(i, e.target.value)} placeholder={i === 0 ? "lat, long — ex.: -10.123456, -48.654321" : "lat, long do outro lado"} inputMode="text" style={{ flex: 1, marginTop: 0, fontSize: 13, borderColor: coord[i] && !lerCoordenada(coord[i]) ? C.vermelho : undefined }} />
+          <button onClick={() => gps(i)} title={`GPS do celular no ponto ${i === 0 ? "A" : "B"}`} style={{ flex: "none", padding: "9px 10px", background: C.navy, color: "#fff", border: "none", borderRadius: 10, fontWeight: 800, fontSize: 12.5 }}>📍 GPS</button>
+        </div>
+      ))}
+      <div style={{ fontSize: 11.5, color: C.cinza, marginTop: 4 }}>Três jeitos: tocar no mapa, digitar a coordenada (latitude, longitude — do GPS do trator, do Google Maps…) ou ficar na beirada e tocar em 📍 GPS, primeiro no A, depois no B. A linha fecha sozinha.</div>
       <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
-        {botao("📍 Marcar com o GPS", gps)}
         {botao("⇄ Trocar A e B", () => setInvertido(!inv))}
-        {botao("limpar", () => { setPts([]); setInvertido(null); })}
+        {botao("limpar", () => { setPts([null, null]); setCoord(["", ""]); setInvertido(null); })}
       </div>
       {msg && <div style={{ fontSize: 12, color: C.cinza, marginTop: 4 }}>{msg}</div>}
       <div style={{ marginTop: 10, fontSize: 13 }}>
-        {pts.length < 2 && <div style={{ color: C.cinza }}>{pts.length === 0 ? "Marque o 1º ponto da divisão." : "Agora o 2º ponto, na outra beirada."}</div>}
+        {!(pts[0] && pts[1]) && <div style={{ color: C.cinza }}>{!pts[0] ? "Falta o ponto A: toque no mapa numa beirada, digite a coordenada ou use o GPS." : "Agora o ponto B, na outra beirada."}</div>}
         {ok && (<>
           <div style={{ display: "flex", justifyContent: "space-between", padding: "5px 8px", background: "rgba(140,224,90,.25)", borderRadius: 8 }}><span><b>{nomeA}</b>{partes[0] && partes[0].variedade ? ` · ${partes[0].variedade}` : ""}{partes[0] && partes[0].dataEmergencia ? ` · emergência ${fmtD(partes[0].dataEmergencia)}` : ""}</span><b>{fmtN(Math.round(areaA * 100) / 100)} ha{dif(areaA, cadA)}</b></div>
           <div style={{ display: "flex", justifyContent: "space-between", padding: "5px 8px", background: "rgba(43,123,228,.2)", borderRadius: 8, marginTop: 4 }}><span><b>{nomeB}</b>{partes[1] && partes[1].variedade ? ` · ${partes[1].variedade}` : ""}{partes[1] && partes[1].dataEmergencia ? ` · emergência ${fmtD(partes[1].dataEmergencia)}` : ""}</span><b>{fmtN(Math.round(areaB * 100) / 100)} ha{dif(areaB, cadB)}</b></div>
@@ -23552,6 +23565,21 @@ function partesDaLavoura(l, t, hoje) {
   if (lista.length < 2) return [];
   const h = hoje || hojeISO();
   return lista.map((p, k) => ({ ...p, id: p.id || `p${k}`, nome: p.nome || NOMES_PARTES[k] || String(k + 1), areaHa: num(p.areaHa), dae: p.dataEmergencia ? diasEntreISO(p.dataEmergencia, h) : null, anel: anelDeObjetos(p.anel) }));
+}
+// coordenada digitada: "-10.123456, -48.654321" (lat, long), aceita vírgula decimal e graus com ° ' "; devolve [lng, lat] ou null
+function lerCoordenada(txt) {
+  const s = String(txt || "").trim(); if (!s) return null;
+  const dms = (m) => (Number(m[1]) + Number(m[2] || 0) / 60 + Number(m[3] || 0) / 3600) * (/[SWO]/i.test(m[4] || "") || m[0].trim().startsWith("-") ? -1 : 1);
+  const reDms = /(-?\d{1,3})°\s*(\d{1,2}(?:[.,]\d+)?)?'?\s*(\d{1,2}(?:[.,]\d+)?)?"?\s*([NSEWOLnsewol])?/g;
+  let nums = [];
+  if (s.includes("°")) { let m; while ((m = reDms.exec(s))) nums.push(dms([m[0], m[1], (m[2] || "").replace(",", "."), (m[3] || "").replace(",", "."), m[4]])); }
+  else nums = (s.match(/-?\d+(?:[.,]\d+)?/g) || []).map((x) => Number(x.replace(",", ".")));
+  if (nums.length < 2 || nums.some((n) => isNaN(n))) return null;
+  let [a, b] = nums;
+  // veio long, lat (no Brasil a latitude fica entre -34 e +6; longitude entre -74 e -34)
+  if ((Math.abs(a) > 90 && Math.abs(b) <= 90) || (Math.abs(a) > 35 && Math.abs(b) <= 35)) [a, b] = [b, a];
+  if (Math.abs(a) > 90 || Math.abs(b) > 180) return null;
+  return [b, a];
 }
 const parteDoPonto = (partes, lon, lat) => (partes || []).find((p) => p.anel && pontoNoAnel(lon, lat, p.anel)) || null;
 // Corta o contorno do talhão por uma reta (dois pontos [lng, lat]) → [lado esquerdo, lado direito]
