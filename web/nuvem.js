@@ -987,8 +987,26 @@ window.Nuvem = (function () {
     return db.collection("usuarios").doc(u.uid).onSnapshot((d) => cb(d.exists ? d.data() : null), () => {});
   }
 
+  // ---- guia de campo: fotos da equipe. "guia" = lista leve (item, quem, data); "guiaFotos" = a imagem ----
+  async function guiaFotosListar() {
+    if (!iniciar()) return [];
+    let q = firebase.firestore().collection("guia");
+    if (multiConta()) { const c = await minhaConta(); if (!c) return []; q = q.where("conta", "==", c); }
+    const s = await q.get();
+    return s.docs.map((d) => ({ id: d.id, ...d.data() })).filter((f) => f.item).sort((a, b) => String(a.data || "").localeCompare(String(b.data || "")));
+  }
+  async function guiaFotoLer(id) { if (!iniciar()) return null; const s = await firebase.firestore().collection("guiaFotos").doc(id).get(); return s.exists ? (s.data().dados || null) : null; }
+  async function guiaFotoGravar(f) {
+    if (!iniciar()) throw new Error("nuvem indisponível");
+    const u = firebase.auth().currentUser; if (!u) throw new Error("entre na sua conta");
+    const conta = (multiConta() ? await minhaConta() : null) || "agrocr";
+    const meta = { item: f.item, quem: f.quem || "", fazendaNome: f.fazendaNome || "", data: f.data || new Date().toISOString().slice(0, 10), uid: u.uid, conta, criadaEm: new Date().toISOString() };
+    await executarOps([{ caminho: "guiaFotos/" + f.id, dados: { dados: f.dados, uid: u.uid, conta, item: f.item } }, { caminho: "guia/" + f.id, dados: meta }], "foto do guia");
+  }
+  async function guiaFotoApagar(id) { if (!iniciar()) throw new Error("nuvem indisponível"); await executarOps([{ caminho: "guia/" + id, dados: null }, { caminho: "guiaFotos/" + id, dados: null }], "foto do guia"); }
+
   return {
-    disponivel, entrar, sair, usuarioAtual, aoMudarUsuario, redefinirSenha, trocarSenha, meuPerfil,
+    disponivel, entrar, sair, usuarioAtual, guiaFotosListar, guiaFotoLer, guiaFotoGravar, guiaFotoApagar, aoMudarUsuario, redefinirSenha, trocarSenha, meuPerfil,
     avisosDisponiveis, ativarAvisos, ouvirAvisosEmPrimeiroPlano, estadoAvisos, pedirTesteAviso,
     criarUsuario, criarConvite, criarContaPropria, observarUsuarios, observarEquipeConsultoria, gravarUsuario, apagarUsuario, observarTodosUsuarios, observarUsuariosDaConta,
     observarFazendas, observarFazendasDaLista, listarTodasFazendas, gravarFazendas, observarConfig, gravarConfig, aoMudarPendencia,

@@ -125,6 +125,7 @@ const ITENS_ACESSO = [
   ["documentos", "📁 Documentos", "Acompanhamento"],
   ["comunidade", "💬 Comunidade", "Acompanhamento"],
   ["suporte", "🆘 Suporte técnico", "Acompanhamento"],
+  ["guia", "📖 Guia de campo (daninhas, pragas, doenças, deficiências)", "Acompanhamento"],
   ["recomendar", "✍️ Recomendar e editar operações", "O que pode alterar", true],
   ["cadastrar", "➕ Cadastrar fazendas, talhões e compras", "O que pode alterar", true],
   ["excluir", "🗑️ Excluir compras e recomendações · corrigir entregas recebidas", "O que pode alterar", true],
@@ -145,14 +146,14 @@ const funcaoMonitor = (f) => /monitor/i.test(String(f || ""));
 const padraoAreaFazenda = (funcao, chave) => chave === "apagar" ? /produtor|gerente/i.test(String(funcao || "")) : LANCAR_FAZENDA.includes(chave) ? false : !(["financeiro", "cotacoes", "programa"].includes(chave) && funcaoDeCampo(funcao));
 // O que cada função pode, por padrão, nos acessos da EQUIPE (GerenteAgro): o titular escolhe a função e
 // ajusta se quiser. Chave ausente = pode (para as funções de confiança) — a lista diz o que NÃO pode.
-const CAMPO_VER = ["panorama", "dadosfazenda", "lavoura", "solo", "operacoes", "fungicidas", "estoque", "ndvi", "pluviometria", "previsao", "colheita", "visitas", "comunidade", "suporte"];
+const CAMPO_VER = ["panorama", "dadosfazenda", "lavoura", "solo", "operacoes", "fungicidas", "estoque", "ndvi", "pluviometria", "previsao", "colheita", "visitas", "comunidade", "suporte", "guia"];
 const PADRAO_FUNCAO_EQUIPE = {
   "Produtor": { tudo: true },
   "Gerente": { tudo: true, nao: ["acessos"] },
   "Engenheiro agrônomo": { tudo: true, nao: ["custos", "simulacoes", "excluir", "acessos"] },
   "Escritório": { so: ["panorama", "estoque", "programa", "diesel", "almoxarifado", "financeiro", "custos", "cotacoes", "simulacoes", "relatorios", "documentos", "comunidade", "suporte", "cadastrar"] },
   "Monitor de campo": { so: CAMPO_VER },
-  "Operador de máquinas": { so: ["panorama", "operacoes", "fungicidas", "estoque", "pluviometria", "previsao", "colheita", "diesel", "almoxarifado", "comunidade", "suporte"] },
+  "Operador de máquinas": { so: ["panorama", "operacoes", "fungicidas", "estoque", "pluviometria", "previsao", "colheita", "diesel", "almoxarifado", "comunidade", "suporte", "guia"] },
 };
 // valores antigos de função ("Monitor", "Operador", "Agrônomo") → nome atual da lista FUNCOES
 const normalizarFuncao = (f) => {
@@ -394,6 +395,7 @@ const ICONES_SVG = {
   diesel: ["M5.8 4h6.4A1.8 1.8 0 0 1 14 5.8v15.2H4V5.8A1.8 1.8 0 0 1 5.8 4z", "M6.5 8h5v4h-5z", "M14 10h2.5a2 2 0 0 1 2 2v4.5a1.5 1.5 0 0 0 3 0V9l-3-3"],
   relatorio: ["M4 20h16", "M7 17v-6M12 17V7M17 17v-3"],
   suporte: ["M12 3.5a8.5 8.5 0 1 0 0 17 8.5 8.5 0 1 0 0-17z", "M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 1 0 0-7z", "M5.5 6.5l4 4M14.5 14.5l4 4M18.5 6.5l-4 4M9.5 14.5l-4 4"],
+  guia: ["M4 5.5A2.5 2.5 0 0 1 6.5 3H12v16H6.5A2.5 2.5 0 0 0 4 21z", "M20 5.5A2.5 2.5 0 0 0 17.5 3H12v16h5.5a2.5 2.5 0 0 1 2.5 2z", "M7.5 8h2M7.5 11h2M14.5 8h2M14.5 11h2"],
   sat: ["M3 8l9-4 9 4-9 4z", "M3 12l9 4 9-4", "M3 16l9 4 9-4"],
   sino: ["M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z", "M10 20a2 2 0 0 0 4 0"],
   sol: ["M12 8a4 4 0 1 0 0 8 4 4 0 1 0 0-8z", "M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4L7 17M17 7l1.4-1.4"],
@@ -420,7 +422,7 @@ const ICONES_SVG = {
 // qual ícone cada cartão usa (id do cartão → nome acima); sem correspondência, fica o emoji
 const ICONE_DE = {
   panorama: "panorama", geral: "resumo", dados: "fazenda", lavoura: "lavoura", apl: "trator", fungicidas: "escudo", estoque: "caixa", mapa: "sat", chuva: "chuva", previsao: "previsao",
-  colheita: "colheita", visitas: "visita", cotacoes: "cotacoes", fin: "carteira", diesel: "diesel", rel: "relatorio", comunidade: "comunidade", suporte: "suporte",
+  colheita: "colheita", visitas: "visita", cotacoes: "cotacoes", fin: "carteira", diesel: "diesel", rel: "relatorio", comunidade: "comunidade", suporte: "suporte", guia: "guia",
   doc: "documentos", documentos: "documentos", safras: "safras",
   planocompras: "lista", cotacao: "cotacao", prog: "carrinho", notas: "nota", func: "pessoas", maq: "ferramenta", custos: "cifrao", caixa: "caixaFluxo", vendas: "vendas", dre: "dre", plano: "plano", relfin: "relatorio",
 };
@@ -464,7 +466,7 @@ const CLASSE_DO_CARTAO = {
   diesel: "maquinas", colheita: "maquinas", maq: "maquinas",
   estoque: "insumos", prog: "insumos", planocompras: "insumos", cotacao: "insumos",
   fin: "dinheiro", geral: "dinheiro", cotacoes: "dinheiro", custos: "dinheiro", caixa: "dinheiro", vendas: "dinheiro", dre: "dinheiro", notas: "dinheiro", plano: "dinheiro", func: "dinheiro",
-  rel: "apoio", relfin: "apoio", comunidade: "apoio", suporte: "apoio", doc: "apoio", documentos: "apoio", safras: "apoio",
+  rel: "apoio", relfin: "apoio", comunidade: "apoio", suporte: "apoio", guia: "apoio", doc: "apoio", documentos: "apoio", safras: "apoio",
 };
 // ícone do cartão: de linha quando existe, senão o emoji de sempre — sobre o fundinho da cor da classe
 function IconeCartao({ id, ico, tam = 28, cor }) {
@@ -5561,7 +5563,7 @@ function TelaFazenda({ fazenda, fazendas, grupos, papel, usuario, naNuvem, equip
   const [combustivel, setCombustivel] = useState([]);
   const [manutencoes, setManutencoes] = useState([]);
   const [almox, setAlmox] = useState([]);
-  const SECAO_PERMISSAO = { panorama: "panorama", dados: "dadosfazenda", lavoura: "lavoura", solo: "solo", apl: "operacoes", fungicidas: "fungicidas", estoque: "estoque", mapa: "ndvi", chuva: "pluviometria", previsao: "previsao", colheita: "colheita", visitas: "visitas", diesel: "diesel", rel: "relatorios", doc: "documentos", comunidade: "comunidade", suporte: "suporte", cotacoes: "cotacoes" };
+  const SECAO_PERMISSAO = { panorama: "panorama", dados: "dadosfazenda", lavoura: "lavoura", solo: "solo", apl: "operacoes", fungicidas: "fungicidas", estoque: "estoque", mapa: "ndvi", chuva: "pluviometria", previsao: "previsao", colheita: "colheita", visitas: "visitas", diesel: "diesel", rel: "relatorios", doc: "documentos", comunidade: "comunidade", suporte: "suporte", cotacoes: "cotacoes", guia: "guia" };
   const almoxPendRef = useRef("");
   const [funcionarios, setFuncionarios] = useState([]);
   const [notas, setNotas] = useState([]);
@@ -5869,6 +5871,7 @@ function TelaFazenda({ fazenda, fazendas, grupos, papel, usuario, naNuvem, equip
     // documentos ficam dentro de Dados da fazenda; histórico de safras, no seletor "SAFRA ▾" do topo
     ...(naNuvem && mostrar("comunidade") ? [["comunidade", "💬", "Comunidade", comunidadeNovas > 0 ? `${comunidadeNovas} mensage${comunidadeNovas > 1 ? "ns novas" : "m nova"} em ${ufDaFazenda(fazenda)}` : `Produtores e consultores de ${ufDaFazenda(fazenda)} · peça, contato, frete`]] : []),
     ...(mostrar("suporte") ? [["suporte", "🆘", "Suporte técnico", "Tire dúvidas · vídeos · WhatsApp da equipe"]] : []),
+    ...(mostrar("guia") ? [["guia", "📖", "Guia de campo", "Daninhas, pragas, doenças e deficiências — com fotos e identificação"]] : []),
   ];
 
   // Quadros do Financeiro — mesmo desenho do menu principal
@@ -5992,7 +5995,7 @@ function TelaFazenda({ fazenda, fazendas, grupos, papel, usuario, naNuvem, equip
             const GRUPOS = [
               ["Fazenda e lavoura", ["dados", "lavoura", "solo", "apl", "fungicidas", "estoque", "mapa", "chuva", "previsao", "colheita", "visitas"]],
               ["Dinheiro e máquinas", ["cotacoes", "fin", "diesel"]],
-              ["Acompanhamento e ajuda", ["rel", "comunidade", "suporte"]],
+              ["Acompanhamento e ajuda", ["rel", "guia", "comunidade", "suporte"]],
             ];
             const grupoDe = (id) => GRUPOS.findIndex(([, ids]) => ids.includes(id));
             let ultimo = -1;
@@ -6450,6 +6453,7 @@ function TelaFazenda({ fazenda, fazendas, grupos, papel, usuario, naNuvem, equip
       {secao === "comunidade" && <SecaoComunidade fazenda={fazenda} usuario={usuario} naNuvem={naNuvem} />}
 
       {secao === "suporte" && <SecaoSuporte usuario={usuario} naNuvem={naNuvem} />}
+      {secao === "guia" && <SecaoGuia usuario={usuario} fazenda={fazenda} naNuvem={naNuvem} consultor={consultor} />}
 
       {secao === "inicio" && window.AGROCR_VERSAO && (
         <div className="nao-imprimir" style={{ textAlign: "center", fontSize: 11, color: C.cinza, marginTop: 16 }}>
@@ -22478,6 +22482,979 @@ function RelatorioRegulagem({ fazenda, reg, onVoltar }) {
   );
 }
 
+// =========================== GUIA DE CAMPO ===========================
+// Banco de identificação do campo: daninhas, pragas, inimigos naturais, doenças,
+// deficiências nutricionais e estádios de soja, milho e algodão. Os textos ficam
+// embutidos (funcionam sem internet); as fotos vêm da própria equipe pelo app
+// (coleção "guia" + "guiaFotos" na nuvem, guardadas no aparelho depois de baixadas).
+// Chaves do texto: reconhecer · confunde · dano · quando · manejo · sintoma · soja · milho · algodao
+const GUIA_TIPOS = [["daninha", "🌿", "Daninhas"], ["praga", "🐛", "Pragas"], ["inimigo", "🐞", "Inimigos naturais"], ["doenca", "🦠", "Doenças"], ["deficiencia", "🧪", "Deficiências"], ["estadio", "🌱", "Estádios"]];
+const GUIA_CULTURAS = ["Soja", "Milho", "Algodão"];
+const GUIA_CAMPO = [
+  // ---------- DANINHAS ----------
+  { id: "d-amargoso", tipo: "daninha", nome: "Capim-amargoso", cientifico: "Digitaria insularis", familia: "Poaceae (gramínea)", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    reconhecer: "Touceira perene, folhas longas e finas de cor verde-azulada, lígula membranosa. Inflorescência em cacho com 6 a 20 racemos de sementes prateadas, cobertas de pelos. Planta adulta tem rizoma curto e grosso; arrancada, solta o rizoma com cheiro amargo.",
+    confunde: "Na plântula parece capim-colchão. Diferença: amargoso tem a base da folha com pelos longos e esbranquiçados e cresce em touceira; o colchão é rasteiro e anual.",
+    dano: "A mais difícil do cerrado: biótipos resistentes a glifosato (e alguns a ACCase). Touceira perene abriga percevejo e atrapalha a colheita.",
+    quando: "Plântula na dessecação e nos primeiros 20 dias da lavoura; touceira adulta na entressafra e nas beiradas.",
+    manejo: "Controlar em plântula (até 4 folhas); touceira exige graminicida sequencial e, muitas vezes, mistura. Na dessecação, duas aplicações (glifosato + clethodim ou haloxifope). Não deixar semear na beirada." } },
+  { id: "d-buva", tipo: "daninha", nome: "Buva", cientifico: "Conyza bonariensis / C. canadensis / C. sumatrensis", familia: "Asteraceae", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    reconhecer: "Roseta de folhas estreitas e pilosas rente ao solo; depois haste ereta até 1,5 m, muito ramificada no alto, capítulos pequenos com sementes de paraquedas. Folhas com cheiro quando amassadas.",
+    confunde: "Roseta jovem confunde com picão e com alface-brava. Buva tem folhas mais estreitas, pilosas, sem o recorte do picão.",
+    dano: "Resistente a glifosato e, em muitos biótipos, a ALS. Planta alta compete por luz e água; sementes voam quilômetros.",
+    quando: "Nasce da entressafra até a semeadura; a pior é a que passa pela dessecação já alta.",
+    manejo: "Controlar na roseta (até 10 cm): 2,4-D, diclosulam, clorimurom, saflufenacil. Alta, só com sequencial (glufosinato, paraquat onde permitido) ou mistura. Manter cobertura de palha." } },
+  { id: "d-corda", tipo: "daninha", nome: "Corda-de-viola", cientifico: "Ipomoea spp. (I. grandifolia, I. nil, I. triloba)", familia: "Convolvulaceae", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    reconhecer: "Trepadeira anual, caule volúvel que se enrola na planta. Folhas em coração ou com três lobos; flores em funil roxas, rosas ou brancas, abrem de manhã. Cotilédones em formato de borboleta.",
+    confunde: "Com jitirana (Merremia) e com o feijão-de-rola. A corda-de-viola tem o caule lento e fino que enrola; a flor é em funil.",
+    dano: "Enrola na planta e na colhedora, embucha a plataforma; sementes grandes e duras ficam anos no solo.",
+    quando: "Emerge em fluxos durante toda a safra, inclusive depois do fechamento da lavoura.",
+    manejo: "Pré-emergente (flumioxazina, sulfentrazona) e pós inicial (2,4-D antes da soja; fomesafem, imazetapir). Dessecação pré-colheita em infestação alta." } },
+  { id: "d-trapoeraba", tipo: "daninha", nome: "Trapoeraba", cientifico: "Commelina benghalensis", familia: "Commelinaceae", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    reconhecer: "Planta suculenta, caule carnoso que enraíza nos nós, folhas ovais com bainha pilosa, flor azul com duas pétalas. Faz sementes também debaixo da terra (flores subterrâneas).",
+    confunde: "Com a trapoeraba-de-flor-roxa (C. erecta) e com o capim-marmelada na plântula. A bainha pilosa e o caule suculento identificam.",
+    dano: "Tolerante a glifosato; rebrota de pedaços de caule depois da gradagem. Mantém o solo úmido e dificulta a colheita.",
+    quando: "Da dessecação ao fechamento; em áreas úmidas e de baixada o ano todo.",
+    manejo: "Pré-emergente (sulfentrazona, diclosulam) e pós com flumioxazina, clorimurom, 2,4-D (antes da soja). Não gradear para espalhar; controlar pequena." } },
+  { id: "d-caruru", tipo: "daninha", nome: "Caruru", cientifico: "Amaranthus spp. (A. hybridus, A. viridis, A. palmeri)", familia: "Amaranthaceae", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    reconhecer: "Planta ereta, caule às vezes avermelhado, folhas em losango com ponta e nervuras bem marcadas, inflorescência em espigas verdes densas no topo. Cresce rápido, até 2 m.",
+    confunde: "Entre as espécies de caruru. ATENÇÃO ao caruru-palmeri (A. palmeri): pecíolo mais longo que a folha, planta dióica, espiga longa e áspera; resistente a glifosato e ALS — suspeita vai para análise.",
+    dano: "Altíssima produção de sementes (centenas de milhares), competição forte; o palmeri é quarentenário.",
+    quando: "Fluxos ao longo de toda a safra; plântula com 2–4 folhas é a hora.",
+    manejo: "Pré-emergente (S-metolacloro, flumioxazina, diclosulam) e pós cedo (fomesafem, lactofem, glufosinato). Palmeri: arrancar, ensacar, avisar a consultoria." } },
+  { id: "d-leiteiro", tipo: "daninha", nome: "Leiteiro (amendoim-bravo)", cientifico: "Euphorbia heterophylla", familia: "Euphorbiaceae", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    reconhecer: "Caule ereto que solta látex branco quando quebrado; folhas de formato variável (as de cima mais estreitas e às vezes com base esbranquiçada); flores pequenas em cimeiras no topo, fruto em cápsula de três lóbulos.",
+    confunde: "Com a erva-de-santa-luzia e com o caruru na plântula. O látex branco resolve a dúvida.",
+    dano: "Biótipos resistentes a ALS e a inibidores de PROTOX; cápsula explode e espalha sementes; látex suja a colheita.",
+    quando: "Emerge junto com a soja e em fluxos até o fechamento.",
+    manejo: "Pré-emergente (sulfentrazona, flumioxazina) e pós cedo (fomesafem, lactofem; glufosinato em cultivares tolerantes). Rotação de mecanismos." } },
+  { id: "d-vassourinha", tipo: "daninha", nome: "Vassourinha-de-botão", cientifico: "Spermacoce latifolia (Borreria)", familia: "Rubiaceae", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    reconhecer: "Planta prostrada a ereta, caule quadrangular, folhas opostas ovais com estípulas em franja (cerdas) na junção, flores brancas pequenas em glomérulos nas axilas. Toque: folha áspera.",
+    confunde: "Com a erva-quente (S. verticillata), que tem folhas estreitas e caule mais fino, e com o mentrasto.",
+    dano: "Tolerante a glifosato; produz muita semente; cobre o solo e compete no início.",
+    quando: "Solos arenosos e ácidos, emerge o ano todo; piora no algodão e na safrinha.",
+    manejo: "Pré-emergente (diclosulam, sulfentrazona, flumioxazina) e pós cedo (clorimurom, 2,4-D antes da soja, flumioxazina). Corrigir acidez ajuda." } },
+  { id: "d-pedegalinha", tipo: "daninha", nome: "Capim-pé-de-galinha", cientifico: "Eleusine indica", familia: "Poaceae", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    reconhecer: "Touceira baixa e achatada, bainhas branco-prateadas na base, folhas dobradas; inflorescência com 3 a 7 espigas digitadas como os dedos de um pé de galinha.",
+    confunde: "Com capim-colchão (que tem racemos mais finos e pelos) e com o capim-marmelada. A base prateada e achatada identifica.",
+    dano: "Biótipos resistentes a glifosato e a ACCase; raiz forte dificulta arrancar; hospeda nematoides.",
+    quando: "Emerge com a chuva, de outubro a março, em fluxos.",
+    manejo: "Pré-emergente (S-metolacloro, trifluralina, clomazona) e pós com graminicida (clethodim, haloxifope) em plântula com até 3 perfilhos." } },
+  { id: "d-colchao", tipo: "daninha", nome: "Capim-colchão (milhã)", cientifico: "Digitaria horizontalis / D. ciliaris", familia: "Poaceae", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    reconhecer: "Anual, rasteiro, caules decumbentes que enraízam nos nós, folhas curtas e largas com pelos, lígula membranosa; racemos finos em dedos, sementes pequenas.",
+    confunde: "Com capim-amargoso na plântula (amargoso é perene, touceira, verde-azulado). Com o pé-de-galinha (bainha prateada).",
+    dano: "Tapete que compete no início da soja; alta produção de semente; hospeda pragas de solo.",
+    quando: "Primeiras chuvas, emerge rápido depois da semeadura.",
+    manejo: "Pré-emergente e graminicida em pós; palha de milho ou braquiária reduz muito." } },
+  { id: "d-marmelada", tipo: "daninha", nome: "Capim-marmelada (papuã)", cientifico: "Urochloa plantaginea (Brachiaria)", familia: "Poaceae", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    reconhecer: "Anual, vigoroso, folhas largas, lisas e brilhantes (parece folha de milho pequena), colmo achatado; racemos alternos com sementes grandes e ovais.",
+    confunde: "Com a braquiária voluntária e com o milho tiguera na plântula. Marmelada tem folha larga e lisa, sem pelos.",
+    dano: "Compete muito na fase inicial e produz muita biomassa; sementes grandes germinam fundo.",
+    quando: "Emerge logo após a semeadura, em fluxos com a chuva.",
+    manejo: "Pré-emergente (S-metolacloro, trifluralina) e pós com graminicida cedo (até 3 perfilhos)." } },
+  { id: "d-braquiaria", tipo: "daninha", nome: "Capim-braquiária (voluntária)", cientifico: "Urochloa decumbens / U. brizantha / U. ruziziensis", familia: "Poaceae", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    reconhecer: "Perene, touceira ou rasteira, folhas lanceoladas pilosas (decumbens) ou largas (brizantha), racemos em cacho. Vem de semente de pastagem antiga ou da cobertura.",
+    confunde: "Com marmelada (anual, folha lisa). A braquiária tem pelos e rizoma.",
+    dano: "Rebrota depois da dessecação, hospeda percevejo e cigarrinha; compete forte.",
+    quando: "Áreas que foram pasto ou com braquiária de cobertura mal dessecada.",
+    manejo: "Dessecação antecipada (glifosato em dose cheia, 20–30 dias antes); graminicida em pós na soja; no milho, atrazina + nicosulfurom." } },
+  { id: "d-carrapicho", tipo: "daninha", nome: "Capim-carrapicho", cientifico: "Cenchrus echinatus", familia: "Poaceae", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    reconhecer: "Anual, colmos decumbentes, folhas glabras; a espiga carrega carrapichos com espinhos duros que grudam na roupa e no pelo. Base avermelhada.",
+    confunde: "Antes da espiga, com marmelada e colchão. Os carrapichos identificam.",
+    dano: "Espinhos ferem pessoas e animais, contaminam a pluma do algodão; competição no início.",
+    quando: "Solos arenosos, emerge em fluxos na safra.",
+    manejo: "Pré-emergente (S-metolacloro, trifluralina, clomazona) e graminicida cedo; evitar deixar semear." } },
+  { id: "d-andropogon", tipo: "daninha", nome: "Capim-andropogon", cientifico: "Andropogon gayanus / A. bicornis", familia: "Poaceae", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    reconhecer: "Touceira alta (até 3 m), folhas longas e ásperas com nervura central branca, colmos grossos; panícula com sementes pilosas; base da touceira avermelhada.",
+    confunde: "Com capim-amargoso (menor, verde-azulado) e com o capim-custódio.",
+    dano: "Perene e de difícil controle; vem de pastagem e beiradas; sementes voam.",
+    quando: "Beiradas, carreadores e áreas abertas de pasto.",
+    manejo: "Controlar na beirada antes de semear; glifosato em dose alta na dessecação + graminicida; roçar antes do florescimento." } },
+  { id: "d-picao", tipo: "daninha", nome: "Picão-preto", cientifico: "Bidens pilosa / B. subalternans", familia: "Asteraceae", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    reconhecer: "Planta ereta, caule quadrangular, folhas opostas recortadas (3 a 5 folíolos serrilhados), flores pequenas amarelas com pétalas brancas; sementes pretas com dois arpões que grudam.",
+    confunde: "Na plântula com a buva (buva é pilosa e sem recorte) e com o mentrasto.",
+    dano: "Biótipos resistentes a ALS; ciclo curto, várias gerações na safra; hospeda nematoides e viroses.",
+    quando: "Emerge logo após a chuva, em fluxos durante toda a safra.",
+    manejo: "Pré-emergente (flumioxazina, sulfentrazona, diclosulam) e pós cedo (fomesafem, lactofem, 2,4-D antes da soja)." } },
+  { id: "d-guanxuma", tipo: "daninha", nome: "Guanxuma", cientifico: "Sida rhombifolia / S. cordifolia / S. glaziovii", familia: "Malvaceae", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    reconhecer: "Subarbusto ereto, caule fibroso e duro, folhas em losango serrilhadas, flores amarelas pequenas nas axilas; raiz pivotante profunda.",
+    confunde: "Com o malvastro e com a malva-branca; guanxuma tem folha em losango e caule muito fibroso.",
+    dano: "Tolerante a glifosato; perene, caule enrola na plataforma; hospeda ácaro e percevejo.",
+    quando: "Emerge na safra e sobrevive na entressafra.",
+    manejo: "Controlar pequena (até 4 folhas) com 2,4-D (antes da soja), clorimurom, flumioxazina. Adulta: 2,4-D + glifosato na entressafra." } },
+  { id: "d-fedegoso", tipo: "daninha", nome: "Fedegoso", cientifico: "Senna obtusifolia / S. occidentalis", familia: "Fabaceae", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    reconhecer: "Planta ereta, folhas compostas com 3 pares de folíolos ovais, cheiro forte quando amassada; flores amarelas; vagem longa e curva. Cotilédones arredondados grandes.",
+    confunde: "Com a soja na plântula (fedegoso tem folíolos em pares e cheiro) e com a crotalária.",
+    dano: "Sementes duras duram anos; planta alta e ramificada; tolerante a vários herbicidas de soja.",
+    quando: "Emerge com a chuva e em fluxos até o fechamento.",
+    manejo: "Pré-emergente (diclosulam, sulfentrazona, S-metolacloro), pós com clorimurom, imazetapir; no milho, atrazina." } },
+  { id: "d-ervaquente", tipo: "daninha", nome: "Erva-quente", cientifico: "Spermacoce verticillata", familia: "Rubiaceae", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    reconhecer: "Subarbusto com caule fino e quadrangular, folhas estreitas opostas em verticilos, flores brancas minúsculas em cabeças nas axilas. Toque áspero.",
+    confunde: "Com a vassourinha-de-botão (folha mais larga).",
+    dano: "Tolerante a glifosato; perene, forma touceira baixa.",
+    quando: "Solos arenosos; emerge em fluxos.",
+    manejo: "Igual à vassourinha: pré-emergente e pós cedo com 2,4-D (antes da soja), clorimurom, flumioxazina." } },
+  { id: "d-ervadetouro", tipo: "daninha", nome: "Erva-de-touro", cientifico: "Tridax procumbens", familia: "Asteraceae", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    reconhecer: "Prostrada, pilosa, folhas opostas lanceoladas com dentes grandes, flor solitária em haste longa, amarela no centro com pétalas brancas de três dentes.",
+    confunde: "Com o picão (ereto, folha recortada). A flor em haste longa identifica.",
+    dano: "Tolerante a glifosato, perene; cobre carreadores e beiradas e invade a lavoura.",
+    quando: "Ano todo em beiradas; na lavoura, logo após a dessecação.",
+    manejo: "2,4-D + glifosato na dessecação; pós cedo com flumioxazina, clorimurom." } },
+  { id: "d-apagafogo", tipo: "daninha", nome: "Apaga-fogo", cientifico: "Alternanthera tenella", familia: "Amaranthaceae", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    reconhecer: "Rasteira, caules que enraízam nos nós, folhas opostas ovais, cabeças brancas pequenas e brilhantes nas axilas (parecem palha).",
+    confunde: "Com a beldroega (suculenta) e com a trapoeraba (bainha pilosa).",
+    dano: "Tolerante a glifosato; tapete que compete no início e rebrota.",
+    quando: "Solos úmidos, emerge em fluxos.",
+    manejo: "Pré-emergente (diclosulam, sulfentrazona) e pós cedo (2,4-D antes da soja, flumioxazina, clorimurom)." } },
+  { id: "d-carrapichocarneiro", tipo: "daninha", nome: "Carrapicho-de-carneiro", cientifico: "Acanthospermum hispidum", familia: "Asteraceae", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    reconhecer: "Ereto, ramificado em forquilhas, pilosa, folhas opostas em losango; frutos pequenos triangulares com espinhos que grudam.",
+    confunde: "Com o mentrasto na plântula; a ramificação em Y identifica.",
+    dano: "Compete no início; espinhos contaminam a pluma do algodão.",
+    quando: "Fluxos na safra, em solos arenosos.",
+    manejo: "Pré-emergente (diclosulam, flumioxazina) e pós cedo (clorimurom, 2,4-D antes da soja, fomesafem)." } },
+  { id: "d-beldroega", tipo: "daninha", nome: "Beldroega", cientifico: "Portulaca oleracea", familia: "Portulacaceae", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    reconhecer: "Suculenta, prostrada, caule avermelhado e carnoso, folhas carnudas em espátula, flores amarelas pequenas que abrem de manhã.",
+    confunde: "Com o apaga-fogo (não é suculento).",
+    dano: "Rebrota de pedaços; muita semente; compete pouco depois do fechamento.",
+    quando: "Calor e solo exposto; emerge rápido.",
+    manejo: "Pré-emergente (S-metolacloro, sulfentrazona) e pós cedo; glifosato controla bem." } },
+  { id: "d-mentrasto", tipo: "daninha", nome: "Mentrasto", cientifico: "Ageratum conyzoides", familia: "Asteraceae", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    reconhecer: "Ereto, piloso, folhas opostas ovais com dentes, cheiro forte; capítulos azul-arroxeados ou brancos em cachos no topo.",
+    confunde: "Com o picão e o carrapicho-de-carneiro na plântula; o cheiro e a flor azulada identificam.",
+    dano: "Ciclo curto, várias gerações; compete no início.",
+    quando: "Solos úmidos e sombreados, emerge o ano todo.",
+    manejo: "Glifosato e 2,4-D na dessecação; pré-emergente; pós cedo com clorimurom." } },
+  { id: "d-tiririca", tipo: "daninha", nome: "Tiririca", cientifico: "Cyperus rotundus", familia: "Cyperaceae", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    reconhecer: "Caule triangular, folhas brilhantes em três fileiras, inflorescência marrom-avermelhada em umbela; tubérculos em cadeia no solo (cheiro de amêndoa).",
+    confunde: "Com junquinho e capins na plântula; o caule triangular e o tubérculo identificam.",
+    dano: "Perene por tubérculos: gradagem espalha; tolerante à maioria dos herbicidas.",
+    quando: "Manchas em áreas úmidas e compactadas.",
+    manejo: "Halosulfurom, sulfentrazona, glifosato em sequência quando os tubérculos estão fracos (planta com 4–6 folhas); sombreamento pela cultura." } },
+  { id: "d-arroz", tipo: "daninha", nome: "Capim-arroz", cientifico: "Echinochloa spp.", familia: "Poaceae", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    reconhecer: "Anual, touceira, folhas sem lígula (único capim sem lígula), base achatada muitas vezes avermelhada; panícula com racemos e aristas.",
+    confunde: "Com marmelada e colchão; a ausência de lígula resolve.",
+    dano: "Compete em baixadas e áreas encharcadas; muita semente.",
+    quando: "Baixadas, solo encharcado após chuva forte.",
+    manejo: "Pré-emergente (S-metolacloro) e graminicida cedo." } },
+  { id: "d-sojatiguera", tipo: "daninha", nome: "Soja tiguera (voluntária)", cientifico: "Glycine max", familia: "Fabaceae", culturas: ["Milho", "Algodão"], texto: {
+    reconhecer: "Plantas de soja nascidas de grão perdido na colheita, em linha ou em reboleira, fora de época.",
+    confunde: "Com fedegoso na plântula (fedegoso tem cheiro e folíolos em pares).",
+    dano: "Ponte verde para ferrugem, percevejo e mosca-branca; compete no milho e no algodão; tolerante a glifosato (RR).",
+    quando: "Logo após a colheita e na safrinha; o vazio sanitário exige eliminação.",
+    manejo: "2,4-D, glufosinato, atrazina no milho; paraquat onde permitido; não deixar florescer." } },
+  { id: "d-milhotiguera", tipo: "daninha", nome: "Milho tiguera (voluntário)", cientifico: "Zea mays", familia: "Poaceae", culturas: ["Soja", "Algodão"], texto: {
+    reconhecer: "Plantas de milho isoladas ou em touceira (espiga inteira caída) nascendo na soja ou no algodão.",
+    confunde: "Com sorgo tiguera; o milho tem folha mais larga e colmo grosso.",
+    dano: "Sombreamento forte, compete por água; hospeda cigarrinha e lagarta; tolerante a glifosato (RR).",
+    quando: "Primeiros 30 dias da soja após milho safrinha.",
+    manejo: "Graminicida (clethodim, haloxifope) cedo, até 4 folhas; touceira exige dose maior." } },
+  { id: "d-soqueira", tipo: "daninha", nome: "Algodão soqueira / rebrote", cientifico: "Gossypium hirsutum", familia: "Malvaceae", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    reconhecer: "Brotações do toco do algodão depois da colheita, ou plantas de caroço perdido; folhas lobadas, caule lenhoso na base.",
+    confunde: "Com a guanxuma na plântula; o algodão tem glândulas de gossipol nas folhas (pontinhos escuros).",
+    dano: "Hospeda bicudo e lagarta-rosada fora de época — destruição de soqueira é obrigatória por lei.",
+    quando: "Logo após a colheita do algodão até o prazo legal de destruição.",
+    manejo: "Roçada + 2,4-D (+ glifosato) com rebrote de 10–20 cm; conferir rebrote 20 dias depois e repetir." } },
+  { id: "d-joa", tipo: "daninha", nome: "Joá-de-capote", cientifico: "Nicandra physalodes", familia: "Solanaceae", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    reconhecer: "Ereta, ramificada, folhas grandes ovais com dentes irregulares, flor azul em campânula; fruto dentro de um 'capote' (cálice inflado) parecido com lanterna.",
+    confunde: "Com o joá-bravo e o maria-pretinha; a lanterna identifica.",
+    dano: "Planta grande e rápida; compete por luz; sementes muitas.",
+    quando: "Solos férteis, emerge na safra.",
+    manejo: "Pós cedo com 2,4-D (antes da soja), clorimurom, flumioxazina; atrazina no milho." } },
+  { id: "d-losna", tipo: "daninha", nome: "Losna-branca", cientifico: "Parthenium hysterophorus", familia: "Asteraceae", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    reconhecer: "Roseta de folhas muito recortadas (parece cenoura), depois haste ereta esbranquiçada com cabeças brancas pequenas; cheiro forte.",
+    confunde: "Com a buva na roseta (buva não é recortada).",
+    dano: "Alergênica; tolerante a glifosato em biótipos; muita semente.",
+    quando: "Beiradas e entrada de talhão; emerge o ano todo.",
+    manejo: "2,4-D e saflufenacil na roseta; não deixar florescer." } },
+  { id: "d-custodio", tipo: "daninha", nome: "Capim-custódio", cientifico: "Pennisetum setosum (Cenchrus setosus)", familia: "Poaceae", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    reconhecer: "Touceira perene, folhas longas, panícula cilíndrica roxa ou rosada com cerdas macias (parece rabo-de-raposa).",
+    confunde: "Com andropogon e amargoso; a espiga cilíndrica colorida identifica.",
+    dano: "Perene e tolerante a glifosato; invade de beiradas e carreadores.",
+    quando: "Beiradas e áreas de pasto abandonado.",
+    manejo: "Roçar antes de semear; glifosato em dose alta + graminicida sequencial na touceira jovem." } },
+  // ---------- PRAGAS ----------
+  { id: "p-percevejomarrom", tipo: "praga", nome: "Percevejo-marrom", cientifico: "Euschistus heros", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    reconhecer: "Adulto marrom-escuro, 11 mm, com dois espinhos laterais no pronoto (ombros) e uma meia-lua clara no fim do escutelo. Ninfas pequenas, arredondadas, escuras com manchas; ovos amarelos em fileiras duplas.",
+    confunde: "Com o percevejo-verde-pequeno (verde com faixa clara) e com o barriga-verde (pronoto com espinhos pontudos e barriga verde).",
+    dano: "Suga as vagens: grãos chochos, enrugados ou abortados; retenção foliar (soja louca). No milho, pica a plântula e deforma.",
+    quando: "Do início do enchimento (R3) até R7; no pano de batida, contar adultos e ninfas grandes (≥ 3º ínstar).",
+    manejo: "Nível MIP: 2 percevejos/m (1/m em campo de semente). Nas bordas primeiro; inseticida de contato + sistêmico; rotação de grupos (neonicotinoide+piretroide, acefato)." } },
+  { id: "p-percevejoverde", tipo: "praga", nome: "Percevejo-verde", cientifico: "Nezara viridula", culturas: ["Soja"], texto: {
+    reconhecer: "Adulto verde uniforme, 13–15 mm, antenas com anéis; ninfas pretas com pontos brancos e vermelhos; ovos em massa hexagonal amarelo-clara.",
+    confunde: "Com o verde-pequeno (menor, com faixa clara nos ombros) e com percevejos predadores (rostro grosso).",
+    dano: "Igual ao marrom: grãos chochos, manchados, retenção foliar.",
+    quando: "R3 a R7; menos comum no cerrado, mais no sul.",
+    manejo: "Mesmo nível do marrom (2/m); mais sensível a inseticidas." } },
+  { id: "p-verdepequeno", tipo: "praga", nome: "Percevejo-verde-pequeno", cientifico: "Piezodorus guildinii", culturas: ["Soja"], texto: {
+    reconhecer: "Adulto verde-claro, 8–10 mm, faixa clara ou rosada atravessando os ombros; ninfas com faixas pretas e manchas; ovos pretos em duas fileiras.",
+    confunde: "Com o percevejo-verde (maior, sem a faixa).",
+    dano: "O mais danoso por grão: picada profunda, grãos chochos e doenças (Nematospora).",
+    quando: "R3 a R7; aparece cedo no sul e no cerrado quente.",
+    manejo: "Nível 2/m; difícil controle, exige inseticida eficaz e boa cobertura no baixeiro." } },
+  { id: "p-barrigaverde", tipo: "praga", nome: "Percevejo-barriga-verde", cientifico: "Dichelops melacanthus / D. furcatus", culturas: ["Milho", "Soja"], texto: {
+    reconhecer: "Adulto marrom-claro com a barriga verde, 10 mm, espinhos pontudos nos ombros; ninfas escuras.",
+    confunde: "Com o percevejo-marrom (barriga marrom, espinhos arredondados).",
+    dano: "No milho e trigo jovens, pica o colmo na base: folhas com furos em série, 'coração morto', perfilhamento, plantas deformadas. Na soja, grãos.",
+    quando: "Milho de VE a V6 em palhada de soja (ele fica na palha); na soja, R3 a R7.",
+    manejo: "Tratamento de semente (neonicotinoide), pulverização nos primeiros 20 dias; dessecar cedo para quebrar a ponte." } },
+  { id: "p-anticarsia", tipo: "praga", nome: "Lagarta-da-soja", cientifico: "Anticarsia gemmatalis", culturas: ["Soja"], texto: {
+    reconhecer: "Lagarta verde a escura com linhas longitudinais brancas, 4 pares de falsas pernas, anda 'medindo' só quando pequena; pula quando tocada. Mariposa marrom-acinzentada com linha diagonal nas asas.",
+    confunde: "Com a falsa-medideira (só 2 pares de falsas pernas, anda arqueando o corpo).",
+    dano: "Desfolha: come da borda para dentro, deixa só nervuras.",
+    quando: "Vegetativo e início reprodutivo; no pano, lagartas > 1,5 cm.",
+    manejo: "MIP: 20 lagartas/m ou 30% de desfolha no vegetativo (15% no reprodutivo). Baculovírus, Bt (Intacta controla), inseticidas seletivos." } },
+  { id: "p-medideira", tipo: "praga", nome: "Falsa-medideira", cientifico: "Chrysodeixis includens", culturas: ["Soja", "Algodão"], texto: {
+    reconhecer: "Lagarta verde-clara com linhas finas brancas, afina na cabeça, 2 pares de falsas pernas (anda arqueando, 'mede palmo'); mariposa escura com duas manchas prateadas na asa.",
+    confunde: "Com a lagarta-da-soja (4 pares de falsas pernas, pula).",
+    dano: "Come o meio da folha e deixa as nervuras (folha rendada); fica no baixeiro, difícil de atingir.",
+    quando: "Da fase vegetativa tardia até R5; mais em lavoura fechada e após fungicida.",
+    manejo: "Nível 20/m (> 1,5 cm); produtos de ingestão (benzoilureias, diamidas); boa cobertura no baixeiro; Bt controla parcialmente." } },
+  { id: "p-helicoverpa", tipo: "praga", nome: "Helicoverpa", cientifico: "Helicoverpa armigera / H. zea", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    reconhecer: "Lagarta de cor variável (verde, marrom, rosada) com listras laterais, pelos finos e pele granulosa (áspera ao toque); 4 pares de falsas pernas; cabeça clara. Mariposa amarelada com mancha escura em forma de rim.",
+    confunde: "Com a lagarta-das-maçãs (H. zea) e com Spodoptera (lisa, Y invertido na cabeça). Helicoverpa é áspera e tem pelos.",
+    dano: "Ataca flores, vagens, maçãs e espigas (grão por dentro); na soja ponteiro e vagem; no algodão, botão e maçã.",
+    quando: "Do florescimento ao enchimento; ovos solitários no ponteiro.",
+    manejo: "Monitorar ovos e lagartas pequenas; nível baixo em reprodutivo (2 lagartas/m na soja); Bt, diamidas, benzoilureias, baculovírus (HzNPV). Controlar pequena." } },
+  { id: "p-cartucho", tipo: "praga", nome: "Lagarta-do-cartucho", cientifico: "Spodoptera frugiperda", culturas: ["Milho", "Algodão", "Soja"], texto: {
+    reconhecer: "Lagarta lisa, cinza-esverdeada a marrom, com Y invertido claro na cabeça e quatro pontos pretos em quadrado no penúltimo segmento; mariposa cinza. Ovos em massa com escamas.",
+    confunde: "Com S. cosmioides e S. eridania (sem o Y nítido, com triângulos escuros no dorso).",
+    dano: "No milho, raspa folhas e entra no cartucho: folhas furadas em série e fezes; no algodão, maçãs; na soja, desfolha e vagens.",
+    quando: "Milho de VE a VT (pior até V8); todo o ciclo no algodão.",
+    manejo: "Milho Bt reduz; nível 20% de plantas com raspagem; produtos dirigidos ao cartucho (diamidas, espinosinas, benzoilureias); evitar piretroide sozinho." } },
+  { id: "p-spodopteras", tipo: "praga", nome: "Lagartas Spodoptera (cosmioides / eridania)", cientifico: "Spodoptera cosmioides / S. eridania", culturas: ["Soja", "Algodão", "Milho"], texto: {
+    reconhecer: "Lagartas lisas, escuras, com fileira de triângulos pretos no dorso (cosmioides maior, até 5 cm, listras laterais claras; eridania menor, cinza com triângulos). Sem o Y nítido na cabeça.",
+    confunde: "Com a lagarta-do-cartucho (Y invertido).",
+    dano: "Desfolha, vagens e maçãs; lagartas grandes resistem a vários inseticidas; comem até daninhas.",
+    quando: "Final do vegetativo ao enchimento; após dessecação de daninhas migram para a cultura.",
+    manejo: "Controlar pequenas; diamidas, benzoilureias, indoxacarbe; Bt controla parcialmente." } },
+  { id: "p-curuquere", tipo: "praga", nome: "Curuquerê-do-algodoeiro", cientifico: "Alabama argillacea", culturas: ["Algodão"], texto: {
+    reconhecer: "Lagarta verde com listras longitudinais e pontos pretos, 3 pares de falsas pernas, anda meio medindo; pulsa quando tocada; mariposa marrom-avermelhada.",
+    confunde: "Com a falsa-medideira e a lagarta-da-soja.",
+    dano: "Desfolha rápida e intensa do algodão; pode desfolhar a lavoura em dias.",
+    quando: "Do vegetativo ao início da frutificação; surtos após chuva.",
+    manejo: "Nível 2 lagartas/planta ou 25% de desfolha; Bt controla bem; baculovírus; inseticidas de ingestão." } },
+  { id: "p-rosada", tipo: "praga", nome: "Lagarta-rosada", cientifico: "Pectinophora gossypiella", culturas: ["Algodão"], texto: {
+    reconhecer: "Lagarta pequena (até 1,3 cm) rosada com faixas, dentro da maçã; flor em 'roseta' (pétalas presas) indica ovo/lagarta; mariposa pequena marrom-acinzentada.",
+    confunde: "Com a lagarta-das-maçãs pequena; a rosada é rosa e fica dentro da semente.",
+    dano: "Broqueia maçãs e sementes: podridão, pluma manchada, maçã que não abre.",
+    quando: "Do florescimento à abertura; armadilha de feromônio orienta.",
+    manejo: "Destruição de soqueira; Bt (bom controle); monitorar flores roseta e maçãs; inseticida dirigido no pico de mariposas." } },
+  { id: "p-bicudo", tipo: "praga", nome: "Bicudo-do-algodoeiro", cientifico: "Anthonomus grandis", culturas: ["Algodão"], texto: {
+    reconhecer: "Besouro cinza-amarronzado de 6 mm com bico longo e curvo; larva branca curvada dentro do botão; botão com furo de alimentação (tipo verruga) ou de oviposição (selado com cera); botão ovipositado amarela, abre as brácteas e cai.",
+    confunde: "Sem igual; o furo no botão é a assinatura.",
+    dano: "Botões e maçãs novas destruídos; perda direta de produção.",
+    quando: "Da emissão do primeiro botão (B1) até a última maçã; armadilha com feromônio na entressafra e nas bordas.",
+    manejo: "Nível 5% de botões atacados; bordadura e controle dirigido; destruição de soqueira; tubos matabicudo na entressafra; piretroide, malationa, fipronil em rotação." } },
+  { id: "p-moscabranca", tipo: "praga", nome: "Mosca-branca", cientifico: "Bemisia tabaci", culturas: ["Soja", "Algodão", "Milho"], texto: {
+    reconhecer: "Adulto minúsculo (1–2 mm) branco, voa em nuvem quando a planta é sacudida; ninfas achatadas, ovais, amareladas, na face de baixo da folha; melada e fumagina (fuligem preta).",
+    confunde: "Com cigarrinha pequena (que pula) e com tripes (alongado).",
+    dano: "Suga seiva, melada + fumagina (pluma preta no algodão), transmite vírus (mosaico-dourado no feijão, 'pé-de-galinha' na soja).",
+    quando: "Calor e seca; contar ninfas na 3ª–5ª folha do ponteiro.",
+    manejo: "Vazio sanitário, eliminar tiguera; inseticidas (piriproxifem, ciantraniliprole, espiromesifeno) em rotação; óleo; fungos entomopatogênicos (Beauveria, Cordyceps)." } },
+  { id: "p-pulgaoalgodao", tipo: "praga", nome: "Pulgão-do-algodoeiro", cientifico: "Aphis gossypii", culturas: ["Algodão"], texto: {
+    reconhecer: "Colônias de pulgões verdes, amarelos ou pretos na face de baixo das folhas e ponteiros; folhas encarquilhadas e viradas para baixo; melada e fumagina.",
+    confunde: "Com ninfas de mosca-branca (achatadas, não andam).",
+    dano: "Transmite a doença azul (CLRDV) e o vermelhão; encarquilha; fumagina na pluma.",
+    quando: "Desde a emergência (vetor da doença azul) até a abertura (pluma melada).",
+    manejo: "Tratamento de semente; nível 10–20% de plantas com colônias (menor em cultivar suscetível à doença azul); neonicotinoides, sulfoxaflor, flonicamida; preservar joaninhas." } },
+  { id: "p-pulgaomilho", tipo: "praga", nome: "Pulgão-do-milho", cientifico: "Rhopalosiphum maidis", culturas: ["Milho"], texto: {
+    reconhecer: "Colônias azul-esverdeadas no cartucho e no pendão, com melada.",
+    confunde: "Com o pulgão-da-folha (verde-claro).",
+    dano: "Suga, melada atrapalha a polinização; transmite viroses.",
+    quando: "Pré-pendoamento em estiagem.",
+    manejo: "Raramente exige controle; inimigos naturais; inseticida só em infestação com seca." } },
+  { id: "p-acarorajado", tipo: "praga", nome: "Ácaro-rajado", cientifico: "Tetranychus urticae", culturas: ["Soja", "Algodão", "Milho"], texto: {
+    reconhecer: "Ácaro minúsculo esverdeado com duas manchas escuras, na face de baixo da folha, com teia fina; folha com pontuações amareladas (bronzeamento) e depois seca; começa em reboleiras nas bordas.",
+    confunde: "Com ácaro-verde e ácaro-vermelho; bronzeamento parecido com deficiência ou fitotoxidez. Olhar com lupa a face de baixo.",
+    dano: "Bronzeamento, queda de folhas, perda de área foliar em seca.",
+    quando: "Seca e calor, após piretroide ou fungicida que mata predadores.",
+    manejo: "Nível 10% de folhas com ácaros; acaricidas específicos (abamectina, etoxazol, espiromesifeno); evitar piretroide; preservar predadores." } },
+  { id: "p-acarobranco", tipo: "praga", nome: "Ácaro-branco", cientifico: "Polyphagotarsonemus latus", culturas: ["Algodão", "Soja"], texto: {
+    reconhecer: "Invisível a olho nu; sintoma: folhas novas do ponteiro brilhantes, coriáceas, com bordas viradas para baixo e nervuras salientes (pé-de-galinha no algodão).",
+    confunde: "Com fitotoxidez de herbicida e com vírus; a lupa de 20× mostra os ácaros na face de baixo das folhas novas.",
+    dano: "Deformação do ponteiro, atraso de crescimento.",
+    quando: "Tempo úmido e quente; lavoura jovem.",
+    manejo: "Acaricida assim que aparece o sintoma no ponteiro (abamectina, espiromesifeno, enxofre)." } },
+  { id: "p-tripes", tipo: "praga", nome: "Tripes", cientifico: "Frankliniella schultzei / Caliothrips brasiliensis / Thrips tabaci", culturas: ["Soja", "Algodão", "Milho"], texto: {
+    reconhecer: "Insetos alongados de 1 mm, amarelos ou pretos, correm quando a folha é batida no papel; folhas com prateado e pontos pretos (fezes), ponteiro encarquilhado em plântulas.",
+    confunde: "Com mosca-branca (branca e voa) e ácaro (não anda rápido).",
+    dano: "Em plântula de algodão, folhas deformadas e atraso; na soja, vetor de vírus (queima-do-broto).",
+    quando: "Estiagem no início da cultura (até 30 dias).",
+    manejo: "Tratamento de semente; nível 6 tripes/planta em algodão jovem; neonicotinoides, espinosinas." } },
+  { id: "p-cigarrinhamilho", tipo: "praga", nome: "Cigarrinha-do-milho", cientifico: "Dalbulus maidis", culturas: ["Milho"], texto: {
+    reconhecer: "Cigarrinha pequena (4 mm) palha-clara com duas manchas pretas na cabeça; fica no cartucho e pula ao mexer; ninfas claras.",
+    confunde: "Com outras cigarrinhas verdes; as duas manchas na cabeça identificam.",
+    dano: "Transmite enfezamentos (fitoplasma e espiroplasma) e vírus da risca: plantas avermelhadas ou amareladas, perfilhadas, espigas múltiplas e vazias.",
+    quando: "Desde a emergência até V8 é o período crítico; migra do milho tiguera.",
+    manejo: "Eliminar milho tiguera (ponte verde), escalonar menos, tratamento de semente, inseticidas nos primeiros 30 dias (piretroide+neonicotinoide, acefato), cultivar tolerante, Cordyceps (Isaria)." } },
+  { id: "p-cigarrinhaverde", tipo: "praga", nome: "Cigarrinha-verde", cientifico: "Empoasca kraemeri", culturas: ["Soja", "Algodão"], texto: {
+    reconhecer: "Cigarrinha verde-clara de 3 mm que anda de lado e pula; folhas com bordas amareladas e enroladas para baixo (encarquilhamento).",
+    confunde: "Com a cigarrinha-do-milho; esta é verde.",
+    dano: "Encarquilhamento e amarelecimento em feijão e soja jovem; menor na soja adulta.",
+    quando: "Estiagem no vegetativo.",
+    manejo: "Nível 40 ninfas/10 folhas (feijão); neonicotinoides, piretroides." } },
+  { id: "p-vaquinha", tipo: "praga", nome: "Vaquinha (patriota)", cientifico: "Diabrotica speciosa", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    reconhecer: "Besouro verde de 6 mm com três manchas amarelas em cada élitro; larva branca no solo com cabeça marrom (larva-alfinete) nas raízes.",
+    confunde: "Com outras vaquinhas (Cerotoma, com manchas pretas).",
+    dano: "Adulto fura as folhas (furinhos redondos); larva come raízes do milho (plantas tombadas, pescoço-de-ganso).",
+    quando: "Adultos em toda a safra; larvas no milho em sucessão a soja/feijão.",
+    manejo: "Raramente exige controle na soja (desfolha); no milho, tratamento de semente e inseticida no sulco; nível 30% de desfolha." } },
+  { id: "p-coro", tipo: "praga", nome: "Coró (bicho-bolo)", cientifico: "Phyllophaga cuyabana / Liogenys", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    reconhecer: "Larva branca em C, cabeça marrom, 2–3 cm, no solo junto da raiz; plantas murchas e amareladas em reboleiras, arrancam fácil.",
+    confunde: "Com larvas de besouro benéfico (rola-bosta); ver a posição na raiz e as cerdas.",
+    dano: "Come raízes: murcha, morte de plântulas, reboleiras; pior em seca.",
+    quando: "Vistoriar o solo antes da semeadura (trincheira 30×30 cm): 1 larva/trincheira já justifica tratamento.",
+    manejo: "Tratamento de semente com fipronil/imidacloprido, Metarhizium; revolver o solo não resolve." } },
+  { id: "p-elasmo", tipo: "praga", nome: "Lagarta-elasmo", cientifico: "Elasmopalpus lignosellus", culturas: ["Milho", "Soja", "Algodão"], texto: {
+    reconhecer: "Lagarta fina, verde-azulada com anéis marrons, muito ágil, vive num casulo de seda e terra na base do colmo; perfura o colmo rente ao solo (galeria).",
+    confunde: "Com a lagarta-rosca (grossa, cinza, enrola).",
+    dano: "'Coração morto': ponteiro seco e colmo broqueado na base; plantas mortas em reboleira em solo arenoso e seco.",
+    quando: "Primeiros 20 dias após a emergência, em veranico.",
+    manejo: "Tratamento de semente (clorantraniliprole, fipronil), umidade no plantio; pulverização dirigida à base tem pouca eficiência." } },
+  { id: "p-rosca", tipo: "praga", nome: "Lagarta-rosca", cientifico: "Agrotis ipsilon", culturas: ["Milho", "Soja", "Algodão"], texto: {
+    reconhecer: "Lagarta grossa, cinza-escura e lisa, enrola em rosca quando tocada; fica no solo de dia e corta a plântula à noite rente ao chão.",
+    confunde: "Com a elasmo (fina e ágil) e com Spodoptera (listrada).",
+    dano: "Plântulas cortadas na base, falhas de estande em reboleira.",
+    quando: "Primeiros 15 dias após emergência.",
+    manejo: "Tratamento de semente; iscas; pulverização ao entardecer dirigida à base." } },
+  { id: "p-brocaaxilas", tipo: "praga", nome: "Broca-das-axilas", cientifico: "Crocidosema aporema", culturas: ["Soja"], texto: {
+    reconhecer: "Lagarta pequena esverdeada que une as folhas novas do ponteiro com seda e broqueia a axila/haste; ponteiro com folíolos grudados e galeria com fezes.",
+    confunde: "Com helicoverpa pequena no ponteiro.",
+    dano: "Mata o ponteiro, planta ramifica; mais em soja jovem e precoce.",
+    quando: "Vegetativo (V4–V8).",
+    manejo: "Nível 25–30% de plantas com ponteiro atacado; inseticidas de ingestão; Bt controla." } },
+  { id: "p-tamandua", tipo: "praga", nome: "Tamanduá-da-soja", cientifico: "Sternechus subsignatus", culturas: ["Soja"], texto: {
+    reconhecer: "Gorgulho preto de 8 mm com faixas amarelas; adulto raspa e anela a haste; larva branca dentro de galha na haste (engrossamento).",
+    confunde: "Com o bicudo (menor, cinza).",
+    dano: "Haste anelada quebra, galha interrompe seiva; prejudica em plantio direto contínuo de soja.",
+    quando: "Primeiros 40 dias da soja.",
+    manejo: "Rotação com milho/gramínea; tratamento de semente com fipronil; pulverização na emergência dos adultos." } },
+  { id: "p-castanho", tipo: "praga", nome: "Percevejo-castanho-da-raiz", cientifico: "Scaptocoris castanea", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    reconhecer: "Percevejo castanho de 7 mm que vive no solo (cheiro forte de percevejo ao cavar), pernas escavadoras; ninfas brancas.",
+    confunde: "Com coró (larva) no sintoma de reboleira.",
+    dano: "Suga raízes: reboleiras de plantas amareladas e raquíticas, pior em solo arenoso e seca.",
+    quando: "Trincheira antes do plantio e nas reboleiras; sobe com a umidade.",
+    manejo: "Difícil: tratamento de semente, Metarhizium, rotação, evitar revolvimento em seca." } },
+  { id: "p-lagartamaca", tipo: "praga", nome: "Lagarta-das-maçãs", cientifico: "Heliothis virescens / Helicoverpa zea", culturas: ["Algodão", "Soja"], texto: {
+    reconhecer: "Lagartas parecidas com Helicoverpa armigera (listradas, ásperas); H. virescens com microespinhos; furam botões e maçãs por fora.",
+    confunde: "Entre as três espécies — para o manejo, trata-se igual; mandar amostra em dúvida.",
+    dano: "Botões, flores e maçãs perfurados e podres.",
+    quando: "Floração e frutificação.",
+    manejo: "Bt, diamidas, baculovírus; nível 2 lagartas/100 estruturas." } },
+  // ---------- INIMIGOS NATURAIS ----------
+  { id: "i-joaninha", tipo: "inimigo", nome: "Joaninha", cientifico: "Coccinellidae (Cycloneda, Hippodamia, Eriopis)", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    reconhecer: "Besouro arredondado vermelho/laranja com pontos pretos; larva alongada cinza-escura com manchas laranja (parece jacarezinho); ovos amarelos em grupo.",
+    confunde: "A larva confunde com praga — não é. Ovos parecidos com os de lagarta.",
+    dano: "Benéfica: come pulgão, mosca-branca, ovos e lagartas pequenas.",
+    quando: "Presente o ano todo; preservar.",
+    manejo: "Evitar piretroides de amplo espectro quando há joaninhas; registrar no monitoramento como inimigo natural." } },
+  { id: "i-crisopideo", tipo: "inimigo", nome: "Crisopídeo (bicho-lixeiro)", cientifico: "Chrysoperla externa", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    reconhecer: "Adulto verde com asas transparentes rendadas e olhos dourados; larva com mandíbulas em pinça, às vezes coberta de detritos; ovos sobre um pedúnculo fino (fio).",
+    confunde: "Larva pode ser tomada por praga.",
+    dano: "Benéfico: larva come pulgões, mosca-branca, ácaros, ovos e lagartas pequenas.",
+    quando: "Todo o ciclo; presença indica equilíbrio.",
+    manejo: "Preservar; produtos seletivos." } },
+  { id: "i-telenomus", tipo: "inimigo", nome: "Parasitoides de ovos (Telenomus, Trichogramma)", cientifico: "Telenomus podisi / Trichogramma pretiosum", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    reconhecer: "Vespinhas de 1 mm; o sinal é o ovo parasitado: ovo de percevejo ou de lagarta fica PRETO/escuro e não eclode.",
+    confunde: "Ovo escuro de percevejo pode ser só maduro; o parasitado tem furo de saída.",
+    dano: "Benéfico: parasitismo alto de ovos reduz percevejo e lagarta.",
+    quando: "Marcar na ficha 'ovo parasitado (preto)' — se alto, segurar inseticida.",
+    manejo: "Liberação de Telenomus/Trichogramma; evitar inseticidas de amplo espectro." } },
+  { id: "i-podisus", tipo: "inimigo", nome: "Percevejo predador", cientifico: "Podisus nigrispinus / Orius", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    reconhecer: "Podisus: percevejo marrom com rostro grosso e espinhos agudos nos ombros, pica lagartas (vista com lagarta espetada). Orius: minúsculo (2 mm) preto, come tripes e ácaros.",
+    confunde: "Podisus com percevejo-marrom (praga). O predador tem rostro curto e grosso, dobrado para fora.",
+    dano: "Benéfico.",
+    quando: "Todo o ciclo.",
+    manejo: "Não contar como praga no pano; preservar." } },
+  { id: "i-tesourinha", tipo: "inimigo", nome: "Tesourinha", cientifico: "Doru luteipes", culturas: ["Milho", "Soja", "Algodão"], texto: {
+    reconhecer: "Inseto marrom alongado com pinça no fim do abdome; fica no cartucho do milho.",
+    confunde: "Sem confusão.",
+    dano: "Benéfica: come ovos e lagartas pequenas do cartucho e pulgões.",
+    quando: "Cartucho do milho; 1 tesourinha/planta já ajuda muito.",
+    manejo: "Preservar; evitar inseticida no cartucho quando presente." } },
+  { id: "i-fungos", tipo: "inimigo", nome: "Fungos entomopatogênicos (lagarta ou percevejo com fungo)", cientifico: "Metarhizium rileyi (Nomuraea), Beauveria bassiana, Cordyceps", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    reconhecer: "Lagartas mortas brancas ou esverdeadas 'mumificadas' presas na folha (Nomuraea), percevejos e mosca-branca cobertos de pó branco (Beauveria/Cordyceps).",
+    confunde: "Lagarta morta por vírus (baculovírus) fica mole, escura e pendurada de cabeça para baixo.",
+    dano: "Benéfico: epizootias controlam lagarta-da-soja e mosca-branca em tempo úmido.",
+    quando: "Chuva e umidade alta.",
+    manejo: "Quando houver muita lagarta com fungo, evitar fungicida desnecessário e segurar inseticida." } },
+  // ---------- DOENÇAS ----------
+  { id: "f-ferrugem", tipo: "doenca", nome: "Ferrugem-asiática", cientifico: "Phakopsora pachyrhizi", culturas: ["Soja"], texto: {
+    reconhecer: "Pontos pequenos castanhos na face de baixo da folha, com urédias (pústulas) que soltam pó bege ao raspar; na face de cima, lesões angulares amareladas. Lupa 20× mostra as pústulas. Começa no baixeiro.",
+    confunde: "Com mancha-parda (lesões maiores, sem pústula), crestamento e mancha-alvo (halo). O diagnóstico é a pústula na face de baixo.",
+    dano: "Desfolha rápida de baixo para cima; perda de até 80%.",
+    quando: "A partir de R1 em ano chuvoso; conferir folhas do baixeiro a cada 7 dias; o 1º foco no Tocantins costuma vir em dezembro/janeiro.",
+    manejo: "Calendário preventivo (25 DAE, depois a cada 14 dias) com triazol + estrobilurina + carboxamida e multissítio (mancozebe, clorotalonil); vazio sanitário; cultivar precoce." } },
+  { id: "f-alvo", tipo: "doenca", nome: "Mancha-alvo", cientifico: "Corynespora cassiicola", culturas: ["Soja", "Algodão"], texto: {
+    reconhecer: "Lesões circulares de 1 a 2 cm, marrons com anéis concêntricos e halo amarelo (alvo); na haste e vagem, lesões escuras. No algodão, manchas arredondadas com centro claro e anéis.",
+    confunde: "Com mancha-parda e com fitotoxidez; o anel concêntrico identifica.",
+    dano: "Desfolha, menos grãos; no algodão desfolha precoce.",
+    quando: "Do vegetativo ao reprodutivo em umidade alta; cultivares suscetíveis.",
+    manejo: "Cultivar tolerante; fungicidas com carboxamida/estrobilurina + multissítio; o controle da ferrugem costuma cobrir." } },
+  { id: "f-antracnose", tipo: "doenca", nome: "Antracnose", cientifico: "Colletotrichum truncatum", culturas: ["Soja"], texto: {
+    reconhecer: "Lesões escuras e deprimidas em vagens, hastes e pecíolos, com pontos pretos (acérvulos com setas); vagens abortadas ou com grãos chochos; nervuras das folhas escurecidas.",
+    confunde: "Com cancro da haste e com podridão de vagem por chuva.",
+    dano: "Queda de vagens e flores, semente infectada.",
+    quando: "Chuva contínua no florescimento e enchimento.",
+    manejo: "Semente tratada e sadia; fungicida no florescimento (estrobilurina, multissítio); espaçamento, manejo de palhada." } },
+  { id: "f-mofobranco", tipo: "doenca", nome: "Mofo-branco", cientifico: "Sclerotinia sclerotiorum", culturas: ["Soja", "Algodão"], texto: {
+    reconhecer: "Micélio branco e algodonoso na haste, ramos e vagens; escleródios pretos (parecem fezes de rato) dentro e fora da haste; planta murcha de cima e morre em reboleira.",
+    confunde: "Com podridões por Phytophthora (sem micélio branco).",
+    dano: "Morte de plantas, escleródios contaminam o solo por anos e a semente.",
+    quando: "Florescimento com tempo fresco e úmido (< 25 °C), lavoura fechada; áreas altas e de pivô.",
+    manejo: "Fungicida em R1 e R3 (fluazinam, procimidona, dimoxistrobina); Trichoderma na palha; rotação com gramínea; evitar irrigação no florescimento; limpar colhedora." } },
+  { id: "f-oidio", tipo: "doenca", nome: "Oídio", cientifico: "Microsphaera diffusa", culturas: ["Soja"], texto: {
+    reconhecer: "Pó branco (talco) na face de cima das folhas, haste e vagens; folhas depois ficam amareladas e secam.",
+    confunde: "Com resíduo de calda ou poeira; o pó não sai com o dedo e cresce.",
+    dano: "Redução de área foliar; grave em tempo seco e ameno.",
+    quando: "Seca e temperatura amena (18–24 °C), geralmente no reprodutivo.",
+    manejo: "Cultivar resistente; triazóis e enxofre controlam bem." } },
+  { id: "f-cercospora", tipo: "doenca", nome: "Cercosporiose / crestamento foliar", cientifico: "Cercospora kikuchii", culturas: ["Soja"], texto: {
+    reconhecer: "Bronzeamento arroxeado das folhas do ponteiro no fim do ciclo (crestamento), folhas coriáceas; sementes com mancha púrpura.",
+    confunde: "Com queima de sol e com fitotoxidez; o roxo nas folhas de cima no fim do ciclo é típico.",
+    dano: "Desfolha precoce no R6; semente manchada.",
+    quando: "R5 a R7 com chuva e calor.",
+    manejo: "Fungicidas do programa (carboxamida/estrobilurina + multissítio); semente sadia." } },
+  { id: "f-parda", tipo: "doenca", nome: "Mancha-parda (septoriose)", cientifico: "Septoria glycines", culturas: ["Soja"], texto: {
+    reconhecer: "Manchas pequenas castanho-avermelhadas, angulares, com halo amarelo, começando nas folhas de baixo (unifolioladas); folhas amarelam e caem de baixo para cima.",
+    confunde: "Com ferrugem no início (ferrugem tem pústula) e com mancha-alvo (maior, com anéis).",
+    dano: "Desfolha do baixeiro; grave em soja precoce.",
+    quando: "Vegetativo com chuva; fim de ciclo.",
+    manejo: "Programa de fungicidas da ferrugem cobre; rotação." } },
+  { id: "f-olhoderã", tipo: "doenca", nome: "Mancha-olho-de-rã", cientifico: "Cercospora sojina", culturas: ["Soja"], texto: {
+    reconhecer: "Manchas circulares pequenas com centro cinza-claro e borda marrom-avermelhada (olho de rã); nas vagens, manchas circulares escuras.",
+    confunde: "Com mancha-alvo (anéis) e mancha-parda (sem o centro claro).",
+    dano: "Desfolha, grãos manchados; voltou com cultivares suscetíveis.",
+    quando: "Chuva e calor no reprodutivo.",
+    manejo: "Cultivar resistente (gene Rcs3); estrobilurinas + triazóis." } },
+  { id: "f-mildio", tipo: "doenca", nome: "Míldio", cientifico: "Peronospora manshurica", culturas: ["Soja"], texto: {
+    reconhecer: "Manchas amareladas na face de cima; na face de baixo, mofo cinza-arroxeado (esporulação) em tempo úmido; sementes com crosta branca.",
+    confunde: "Com oídio (branco por cima) — o míldio é por baixo e acinzentado.",
+    dano: "Pouco dano econômico em geral.",
+    quando: "Tempo fresco e úmido.",
+    manejo: "Raramente exige controle; fungicidas do programa cobrem." } },
+  { id: "f-mela", tipo: "doenca", nome: "Mela (requeima)", cientifico: "Rhizoctonia solani AG1", culturas: ["Soja", "Feijão"], texto: {
+    reconhecer: "Folhas com lesões encharcadas verde-acinzentadas que se juntam, micélio em teia de aranha ligando folhas; reboleiras no baixeiro, cheiro de mofo; esclerócios marrons pequenos.",
+    confunde: "Com mofo-branco (micélio branco denso e escleródios pretos grandes).",
+    dano: "Desfolha intensa em reboleira no norte/Tocantins com chuva contínua.",
+    quando: "Calor (> 25 °C) e chuva prolongada, lavoura fechada.",
+    manejo: "Palhada bem distribuída, espaçamento, fungicidas (estrobilurinas, pencicurom, fluxapiroxade) nas reboleiras cedo." } },
+  { id: "f-fitoftora", tipo: "doenca", nome: "Podridão radicular de Phytophthora", cientifico: "Phytophthora sojae", culturas: ["Soja"], texto: {
+    reconhecer: "Plantas murchas e mortas em reboleiras em solo encharcado; lesão marrom-escura subindo da raiz pela haste (até vários nós); folhas secas presas na planta.",
+    confunde: "Com encharcamento simples e com mofo-branco; a lesão contínua da raiz para cima identifica.",
+    dano: "Morte de plântulas e plantas adultas em baixadas.",
+    quando: "Solos compactados e encharcados após chuva forte.",
+    manejo: "Cultivar com resistência (Rps); drenagem; tratamento de semente com metalaxil." } },
+  { id: "f-cancro", tipo: "doenca", nome: "Cancro da haste", cientifico: "Diaporthe aspalathi / D. caulivora", culturas: ["Soja"], texto: {
+    reconhecer: "Lesão marrom-avermelhada alongada na base de um ramo ou na haste, a partir do nó; folhas murcham entre as nervuras (clorose) e ficam presas; medula escura.",
+    confunde: "Com antracnose e podridão por fitóftora.",
+    dano: "Morte de plantas no reprodutivo.",
+    quando: "Chuva no vegetativo; cultivares suscetíveis.",
+    manejo: "Cultivar resistente (a maioria); semente tratada; rotação." } },
+  { id: "f-fusarium", tipo: "doenca", nome: "Fusariose / tombamento (damping-off)", cientifico: "Fusarium spp., Rhizoctonia, Pythium", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    reconhecer: "Plântulas que não emergem ou tombam com lesão escura e estrangulada no colo; raiz podre; falhas de estande em reboleira.",
+    confunde: "Com dano de elasmo (galeria no colmo) e com coró (raiz comida).",
+    dano: "Falha de estande; replantio.",
+    quando: "Semeadura em solo frio e encharcado ou muito seco.",
+    manejo: "Tratamento de semente (fungicida), semeadura em solo com umidade boa, Trichoderma." } },
+  { id: "f-nematoides", tipo: "doenca", nome: "Nematoides (cisto, galhas, lesões, reniforme)", cientifico: "Heterodera glycines, Meloidogyne, Pratylenchus brachyurus, Rotylenchulus", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    reconhecer: "Reboleiras de plantas baixas e amareladas em solo arenoso; raízes com galhas (Meloidogyne), com cistos brancos/amarelos do tamanho de grão de areia (cisto) ou escurecidas e pobres (Pratylenchus).",
+    confunde: "Com deficiência de nutrientes e compactação; arrancar e lavar a raiz. Nódulos de rizóbio são róseos por dentro e soltam; galhas são parte da raiz.",
+    dano: "Perda de produção em reboleiras que crescem a cada safra.",
+    quando: "Sintomas no vegetativo em veranico; análise de solo e raiz confirma a espécie.",
+    manejo: "Cultivar resistente, rotação com crotalária/milheto/braquiária conforme a espécie, biológicos (Bacillus, Pochonia), tratamento de semente." } },
+  { id: "f-macrophomina", tipo: "doenca", nome: "Podridão de carvão (Macrophomina)", cientifico: "Macrophomina phaseolina", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    reconhecer: "Plantas murchas em seca, com a casca da base da haste e raiz cinza-prateada e pontos pretos (microescleródios) por dentro; folhas secas presas.",
+    confunde: "Com seca simples e com fitóftora (lesão marrom).",
+    dano: "Morte antecipada em veranico.",
+    quando: "Veranico com calor no reprodutivo.",
+    manejo: "Sem fungicida eficaz; rotação, palhada, cultivares menos sensíveis, Trichoderma." } },
+  { id: "f-cercmilho", tipo: "doenca", nome: "Cercosporiose do milho", cientifico: "Cercospora zeae-maydis", culturas: ["Milho"], texto: {
+    reconhecer: "Lesões retangulares, cinza a bege, paralelas às nervuras, limitadas por elas (parece com 'fósforo'); começam nas folhas de baixo.",
+    confunde: "Com helmintosporiose (lesão elíptica grande) e mancha-branca (pequena e arredondada).",
+    dano: "Seca de folhas antes do enchimento; perda grande em híbrido suscetível.",
+    quando: "Umidade alta e palhada de milho; V8 em diante.",
+    manejo: "Híbrido tolerante, rotação, fungicidas (estrobilurina + triazol) a partir de V8/pré-pendoamento." } },
+  { id: "f-manchabranca", tipo: "doenca", nome: "Mancha-branca do milho", cientifico: "Pantoea ananatis + fungos (Phaeosphaeria)", culturas: ["Milho"], texto: {
+    reconhecer: "Lesões pequenas, arredondadas, aquosas e verde-claras que viram brancas com borda escura, começando no baixeiro; muitas lesões por folha.",
+    confunde: "Com cercosporiose (retangular) e com dano de inseto.",
+    dano: "Seca precoce das folhas; perda em safrinha.",
+    quando: "Temperatura amena com umidade (noites frias) — safrinha.",
+    manejo: "Híbrido tolerante; fungicida (estrobilurina + triazol) no início dos sintomas, com cobre em alguns casos." } },
+  { id: "f-helminto", tipo: "doenca", nome: "Helmintosporiose (Turcicum)", cientifico: "Exserohilum turcicum", culturas: ["Milho", "Sorgo"], texto: {
+    reconhecer: "Lesões grandes (3–15 cm), elípticas em charuto, cinza-esverdeadas a marrons, atravessando as nervuras; com esporulação escura no centro em tempo úmido.",
+    confunde: "Com cercosporiose (menor, retangular).",
+    dano: "Queima grande área foliar antes do enchimento.",
+    quando: "Temperatura amena e orvalho; safrinha e regiões altas.",
+    manejo: "Híbrido com resistência (Ht); fungicida no início." } },
+  { id: "f-polissora", tipo: "doenca", nome: "Ferrugem-polissora", cientifico: "Puccinia polysora", culturas: ["Milho"], texto: {
+    reconhecer: "Pústulas pequenas, circulares, alaranjadas a marrom-claras, principalmente na face de cima da folha, em grande número; a ferrugem-comum (P. sorghi) tem pústulas alongadas marrom-escuras nas duas faces.",
+    confunde: "Entre as ferrugens; a polissora é a de clima quente e mais agressiva.",
+    dano: "Desfolha e perda em híbrido suscetível, pior em calor e umidade.",
+    quando: "Verão quente e úmido; de V8 em diante.",
+    manejo: "Híbrido resistente; triazol + estrobilurina preventivo." } },
+  { id: "f-enfezamento", tipo: "doenca", nome: "Enfezamentos do milho (pálido e vermelho)", cientifico: "Spiroplasma kunkelii / fitoplasma — vetor Dalbulus maidis", culturas: ["Milho"], texto: {
+    reconhecer: "Plantas baixas com entrenós curtos, folhas avermelhadas (vermelho) ou com estrias amareladas na base (pálido), perfilhamento, espigas pequenas e múltiplas, grãos chochos.",
+    confunde: "Com deficiência de fósforo (roxo) e com vírus da risca.",
+    dano: "Perda total em plantas infectadas cedo; vem crescendo no cerrado.",
+    quando: "Infecção nos primeiros 30 dias; sintoma após 45–60 dias.",
+    manejo: "Não há cura: controlar a cigarrinha e o milho tiguera, híbrido tolerante, evitar escalonamento longo." } },
+  { id: "f-podridaocolmo", tipo: "doenca", nome: "Podridão de colmo do milho", cientifico: "Fusarium, Colletotrichum graminicola, Stenocarpella", culturas: ["Milho"], texto: {
+    reconhecer: "Colmo oco e mole nos entrenós de baixo (aperta com os dedos), medula desfiada rosada (Fusarium) ou escura (antracnose); plantas quebram ou tombam antes da colheita.",
+    confunde: "Com dano de broca.",
+    dano: "Acamamento e perda na colheita; grãos ardidos.",
+    quando: "Enchimento de grãos com estresse (seca, desfolha por doença, potássio baixo).",
+    manejo: "Híbrido tolerante, potássio adequado, controle de doenças foliares, colher cedo áreas afetadas." } },
+  { id: "f-espiga", tipo: "doenca", nome: "Podridão de espiga / grãos ardidos", cientifico: "Stenocarpella (Diplodia), Fusarium verticillioides, Gibberella", culturas: ["Milho"], texto: {
+    reconhecer: "Espigas com mofo branco-acinzentado (Diplodia, começa na base), rosado (Fusarium, grãos esparsos) ou avermelhado (Gibberella, da ponta); grãos ardidos descoloridos.",
+    confunde: "Com dano de lagarta que abre porta para o fungo.",
+    dano: "Grãos ardidos e micotoxinas: desconto ou recusa na entrega.",
+    quando: "Chuva na maturação; espiga mal empalhada.",
+    manejo: "Híbrido com boa empalhamento, controle de lagarta, colher no ponto, secagem." } },
+  { id: "f-ramularia", tipo: "doenca", nome: "Ramulária", cientifico: "Ramularia areola", culturas: ["Algodão"], texto: {
+    reconhecer: "Manchas angulares entre nervuras, azuladas/esbranquiçadas na face de baixo com esporulação branca (pó), depois amareladas; começa no baixeiro e sobe nó a nó.",
+    confunde: "Com mancha-angular (bacteriana, aquosa e sem o pó branco).",
+    dano: "Desfolha precoce, maçãs que não enchem; principal doença do algodão no cerrado.",
+    quando: "A partir dos 40–50 dias com chuva; anotar o nó mais alto com sintoma.",
+    manejo: "Calendário de fungicidas (triazol + estrobilurina + multissítio) a partir dos 45–50 DAE ou 1º sintoma no 5º nó; cultivar tolerante." } },
+  { id: "f-alternaria", tipo: "doenca", nome: "Mancha-de-alternária", cientifico: "Alternaria macrospora", culturas: ["Algodão"], texto: {
+    reconhecer: "Manchas circulares marrons com anéis concêntricos e centro seco que rasga, em folhas mais velhas e plantas estressadas (potássio baixo).",
+    confunde: "Com mancha-alvo (Corynespora).",
+    dano: "Desfolha em fim de ciclo.",
+    quando: "Final do ciclo, deficiência de potássio.",
+    manejo: "Nutrição com potássio; fungicidas do programa cobrem." } },
+  { id: "f-angular", tipo: "doenca", nome: "Mancha-angular (bacteriose)", cientifico: "Xanthomonas citri pv. malvacearum", culturas: ["Algodão"], texto: {
+    reconhecer: "Manchas angulares aquosas verde-escuras entre as nervuras, depois escuras; lesões pretas alongadas no caule (cancro) e maçãs com manchas aquosas.",
+    confunde: "Com ramulária (pó branco por baixo).",
+    dano: "Desfolha e maçãs podres em chuva.",
+    quando: "Chuva com vento; cultivar suscetível.",
+    manejo: "Cultivar resistente; semente sadia; cobre tem efeito parcial." } },
+  { id: "f-mirotecio", tipo: "doenca", nome: "Mirotécio", cientifico: "Myrothecium roridum", culturas: ["Algodão"], texto: {
+    reconhecer: "Manchas circulares marrons com anéis, centro claro e esporodóquios (pontos pretos com borda branca) em anel na face de cima; o centro rasga.",
+    confunde: "Com alternária e mancha-alvo; os pontos pretos em anel identificam.",
+    dano: "Desfolha, lesões em maçãs.",
+    quando: "Chuva e calor.",
+    manejo: "Fungicidas do programa (estrobilurinas, multissítio)." } },
+  { id: "f-fusariumalg", tipo: "doenca", nome: "Fusariose do algodão (murcha)", cientifico: "Fusarium oxysporum f. sp. vasinfectum", culturas: ["Algodão"], texto: {
+    reconhecer: "Murcha e amarelecimento das folhas de baixo, escurecimento dos vasos do caule (corte mostra anéis marrons); plantas mortas em reboleira, associada a nematoides.",
+    confunde: "Com nematoides (geralmente juntos) e com seca.",
+    dano: "Morte de plantas, perda em solos infestados.",
+    quando: "Vegetativo em solo arenoso com nematoide.",
+    manejo: "Cultivar resistente, controle de nematoides, rotação." } },
+  { id: "f-doencaazul", tipo: "doenca", nome: "Doença azul", cientifico: "Cotton leafroll dwarf virus (CLRDV) — vetor pulgão", culturas: ["Algodão"], texto: {
+    reconhecer: "Plantas anãs com entrenós curtos, folhas pequenas e azuladas/escuras, enroladas para baixo e quebradiças; nervuras amareladas; 'vermelhão' em outra forma.",
+    confunde: "Com fitotoxidez de herbicida (2,4-D) e com deficiência.",
+    dano: "Planta não produz; infecção cedo é perda total da planta.",
+    quando: "Até 50 dias após emergência, com pulgão.",
+    manejo: "Cultivar resistente; controle rigoroso do pulgão no início; tratamento de semente." } },
+  { id: "f-podridaomaca", tipo: "doenca", nome: "Podridão de maçãs", cientifico: "Colletotrichum, Diplodia, Fusarium, bactérias", culturas: ["Algodão"], texto: {
+    reconhecer: "Maçãs com manchas escuras encharcadas que apodrecem, pluma manchada, maçãs duras que não abem (hard lock).",
+    confunde: "Com picada de percevejo (pontos internos) e lagarta (furo).",
+    dano: "Perda direta de maçãs no baixeiro em chuva.",
+    quando: "Chuva na maturação, lavoura fechada.",
+    manejo: "Controle de percevejo e lagarta; regulador de crescimento para abrir dossel; fungicida no baixeiro tem efeito limitado." } },
+  // ---------- DEFICIÊNCIAS NUTRICIONAIS ----------
+  { id: "n-N", tipo: "deficiencia", nome: "Nitrogênio (N)", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    sintoma: "Amarelecimento uniforme das folhas VELHAS (de baixo), planta pálida e pequena; o sintoma sobe. Nutriente móvel: a planta tira das folhas velhas.",
+    soja: "Soja amarela nas folhas de baixo quando a nodulação falhou (nódulos ausentes ou brancos por dentro). Conferir raiz: nódulo bom é rosado.",
+    milho: "Amarelecimento em V da ponta para a base da folha velha, ao longo da nervura central; planta fina, espiga pequena.",
+    algodao: "Folhas velhas amareladas e caem; planta pequena, poucas maçãs; comum em solo arenoso com chuva forte.",
+    confunde: "Com enxofre (que é nas folhas NOVAS) e com encharcamento/raiz ruim.",
+    manejo: "Soja: inoculação bem feita e cobalto/molibdênio; milho e algodão: cobertura com ureia/nitrato parcelada." } },
+  { id: "n-P", tipo: "deficiencia", nome: "Fósforo (P)", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    sintoma: "Planta pequena, verde-escura; folhas VELHAS com tom arroxeado/avermelhado (milho e algodão) ou verde-escuro opaco (soja); crescimento lento e raiz pobre.",
+    soja: "Plantas baixas, verde-escuras, folhas pequenas; florescimento atrasado.",
+    milho: "Arroxeamento das folhas velhas em plântula (até V6), pior em frio e solo compactado; espiga torta.",
+    algodao: "Planta anã, verde-escura, folhas velhas vermelho-arroxeadas, atraso na frutificação.",
+    confunde: "Roxo do milho jovem pode ser frio ou compactação; enfezamento vermelho é no fim do ciclo.",
+    manejo: "Fósforo no sulco ou a lanço incorporado; calagem para disponibilizar." } },
+  { id: "n-K", tipo: "deficiencia", nome: "Potássio (K)", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    sintoma: "Amarelecimento e queima (necrose) das BORDAS das folhas VELHAS, do ápice para a base; a nervura central fica verde. Móvel: começa embaixo.",
+    soja: "Bordas amarelas e depois secas nas folhas de baixo; grãos pequenos e enrugados; vagens chochas.",
+    milho: "Queima das bordas das folhas de baixo (margem seca), colmo fraco, acamamento, espiga com ponta falhada.",
+    algodao: "Folhas velhas amarelo-bronzeadas com bordas queimadas e enroladas, caem cedo; maçãs pequenas que não abrem ('ferrugem do potássio').",
+    confunde: "Com magnésio (que amarela entre nervuras) e com alternária no algodão (que vem junto).",
+    manejo: "KCl no plantio e cobertura; em solo arenoso, parcelar; corrigir pelo DRIS/análise." } },
+  { id: "n-Ca", tipo: "deficiencia", nome: "Cálcio (Ca)", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    sintoma: "Folhas NOVAS deformadas, pontas queimadas, ponteiro morto; raízes curtas e escuras. Imóvel: aparece em cima.",
+    soja: "Folhas novas pequenas e deformadas, morte do ponteiro, raiz curta (ácido em profundidade).",
+    milho: "Ponteiro com folhas presas que não desenrolam, pontas queimadas gelatinosas.",
+    algodao: "Folhas novas encarquilhadas, morte de gemas, maçãs caem.",
+    confunde: "Com dano de tripes/ácaro-branco no ponteiro e com toxidez de alumínio (raiz).",
+    manejo: "Calagem com antecedência, gesso para profundidade; cálcio foliar não corrige." } },
+  { id: "n-Mg", tipo: "deficiencia", nome: "Magnésio (Mg)", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    sintoma: "Amarelecimento ENTRE as nervuras nas folhas VELHAS, nervuras verdes (desenho de espinha de peixe); depois manchas avermelhadas.",
+    soja: "Folhas de baixo amarelas entre nervuras, com nervuras verdes; bordas podem avermelhar.",
+    milho: "Estrias amarelas entre nervuras nas folhas velhas, com nervuras verdes; depois necrose.",
+    algodao: "Folhas velhas avermelhadas/arroxeadas entre nervuras, nervuras verdes, caem cedo.",
+    confunde: "Com potássio (bordas) e com manganês/ferro (que são nas folhas novas).",
+    manejo: "Calcário dolomítico; sulfato ou óxido de magnésio; foliar em emergência." } },
+  { id: "n-S", tipo: "deficiencia", nome: "Enxofre (S)", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    sintoma: "Amarelecimento uniforme das folhas NOVAS (parece nitrogênio, mas em cima); planta pequena e pálida. Pouco móvel.",
+    soja: "Folhas do ponteiro amarelas uniformes, planta pálida; comum em solo arenoso com pouca matéria orgânica.",
+    milho: "Estrias amarelas nas folhas novas, planta pálida.",
+    algodao: "Folhas novas amarelo-pálidas, planta fina.",
+    confunde: "Com nitrogênio (folhas velhas) e com ferro (entre nervuras, nervuras verdes).",
+    manejo: "Gesso agrícola, sulfato de amônio, superfosfato simples; manter matéria orgânica." } },
+  { id: "n-B", tipo: "deficiencia", nome: "Boro (B)", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    sintoma: "Folhas NOVAS grossas, enrugadas e quebradiças, entrenós curtos, morte do ponteiro, brotação lateral; flores e maçãs caem. Imóvel.",
+    soja: "Folhas novas coriáceas e deformadas, pecíolos quebradiços, vagens falhadas.",
+    milho: "Espigas com falhas de grãos, folhas novas com estrias transparentes, pendão falhado.",
+    algodao: "Anéis escuros no pecíolo (corte), queda de botões e maçãs, maçãs deformadas, ponteiro morto; muito comum no cerrado.",
+    confunde: "Com cálcio (ponteiro) e com dano de ácaro-branco/tripes; o anel no pecíolo do algodão é típico de boro.",
+    manejo: "Boro no solo (ulexita, ácido bórico) e foliar nas fases de florescimento; cuidado com dose (fitotóxico)." } },
+  { id: "n-Zn", tipo: "deficiencia", nome: "Zinco (Zn)", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    sintoma: "Folhas NOVAS pequenas e estreitas, entrenós curtos (planta em roseta), faixas branco-amareladas entre nervuras. Imóvel.",
+    soja: "Folhas novas pequenas, amareladas entre nervuras, internódios curtos.",
+    milho: "Faixas largas brancas ou amareladas dos dois lados da nervura central nas folhas novas (base), planta baixa; o mais comum no cerrado.",
+    algodao: "Folhas novas pequenas, grossas, amareladas entre nervuras; entrenós curtos; atraso.",
+    confunde: "Com fitotoxidez de herbicida e com magnésio (que é embaixo).",
+    manejo: "Zinco no sulco (sulfato, óxido), foliar cedo (V4) no milho." } },
+  { id: "n-Mn", tipo: "deficiencia", nome: "Manganês (Mn)", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    sintoma: "Amarelecimento ENTRE as nervuras das folhas NOVAS, com nervuras finas verdes (reticulado); folhas pequenas. Comum em solo com pH alto ou após glifosato na soja RR.",
+    soja: "Folhas novas amarelas entre nervuras (reticulado verde), especialmente após glifosato em solo arenoso com calagem excessiva.",
+    milho: "Estrias amareladas entre nervuras nas folhas novas, menos comum.",
+    algodao: "Folhas novas amarelas entre nervuras com nervuras verdes.",
+    confunde: "Com ferro (muito parecido: ferro deixa a folha quase branca) e com magnésio (embaixo).",
+    manejo: "Manganês foliar (sulfato, quelato) 1–2 aplicações; evitar calagem em excesso." } },
+  { id: "n-Fe", tipo: "deficiencia", nome: "Ferro (Fe)", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    sintoma: "Folhas NOVAS amarelas a quase brancas entre as nervuras, com as nervuras bem verdes; as folhas velhas ficam verdes. Imóvel.",
+    soja: "Ponteiro amarelo-esbranquiçado com nervuras verdes; em solo encharcado, calcário em excesso ou após herbicida.",
+    milho: "Estrias branco-amareladas nas folhas novas.",
+    algodao: "Folhas novas amarelo-claras com nervuras verdes.",
+    confunde: "Com manganês (ferro é mais branco) e com fitotoxidez.",
+    manejo: "Ferro foliar (quelato, sulfato) e corrigir drenagem/pH." } },
+  { id: "n-Cu", tipo: "deficiencia", nome: "Cobre (Cu)", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    sintoma: "Folhas NOVAS enroladas, murchas mesmo com água, ponteiro seco; grãos mal formados. Imóvel; comum em solo arenoso e com muita matéria orgânica.",
+    soja: "Folhas novas cinzentas, murchas, pecíolos tortos.",
+    milho: "Folhas novas enroladas e pálidas, pontas secas, pendão falhado.",
+    algodao: "Folhas novas verde-escuras enroladas, ponteiro seco.",
+    confunde: "Com seca e com boro.",
+    manejo: "Cobre no solo (sulfato) ou foliar; muitos fungicidas cúpricos suprem." } },
+  { id: "n-Mo", tipo: "deficiencia", nome: "Molibdênio (Mo)", culturas: ["Soja"], texto: {
+    sintoma: "Na soja, parece deficiência de nitrogênio (folhas pálidas) porque o rizóbio precisa de Mo para fixar; folhas com bordas enroladas e manchas.",
+    soja: "Plantas pálidas com nodulação fraca em solo ácido; responde muito a Mo na semente.",
+    milho: "Raro.",
+    algodao: "Raro.",
+    confunde: "Com nitrogênio/nodulação falha; conferir pH e Mo na semente.",
+    manejo: "Cobalto + molibdênio na semente ou foliar até V4; calagem." } },
+  { id: "n-Al", tipo: "deficiencia", nome: "Toxidez de alumínio / acidez", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    sintoma: "Raízes curtas, grossas, escuras e sem radicelas (parecem 'tocos'); planta murcha fácil em veranico; sintomas de cálcio e magnésio nas folhas.",
+    soja: "Plantas baixas, raízes atrofiadas na camada abaixo de 20 cm; sensível ao veranico.",
+    milho: "Raízes curtas, planta pequena, sintomas de fósforo (roxo).",
+    algodao: "Muito sensível: raízes paradas, plantas pequenas, murcha.",
+    confunde: "Com nematoides (raiz) e com compactação; a análise de solo (Al, saturação por bases) confirma.",
+    manejo: "Calagem bem antes do plantio, gesso para profundidade, cultivar tolerante." } },
+  // ---------- ESTÁDIOS ----------
+  { id: "e-soja", tipo: "estadio", nome: "Soja — estádios (Fehr e Caviness)", culturas: ["Soja"], estagios: [
+    ["VE", "Emergência", "Cotilédones acima do solo.", "Estande (plantas/m) e falhas; tratamento de semente; elasmo e rosca."],
+    ["VC", "Cotilédone", "Folhas unifolioladas abertas (bordas não se tocam).", "Tripes, vaquinha, lagarta-rosca; herbicida pós inicial."],
+    ["V1–V3", "1º ao 3º nó", "Primeiro a terceiro trifólio totalmente desenvolvido.", "Daninhas em pós (até V3), nodulação (arrancar e cortar nódulos: rosado = bom), broca-das-axilas, tamanduá."],
+    ["V4–Vn", "4º nó em diante", "Um trifólio novo a cada 3–5 dias até o florescimento.", "Fechamento das entrelinhas (~V6), lagartas desfolhadoras (nível 30% de desfolha), 1ª fungicida aos 25 DAE no programa."],
+    ["R1", "Início do florescimento", "Uma flor aberta em qualquer nó da haste principal.", "Mofo-branco (1ª aplicação se tempo fresco), fungicida da ferrugem, boro foliar."],
+    ["R2", "Florescimento pleno", "Flor aberta num dos 2 nós superiores com folha desenvolvida.", "Percevejos começam a entrar; helicoverpa no ponteiro; irrigação crítica começa."],
+    ["R3", "Início da formação de vagens", "Vagem com 5 mm num dos 4 nós superiores.", "PANO DE BATIDA: percevejo (nível 2/m), lagartas (15% de desfolha), 2ª/3ª fungicida."],
+    ["R4", "Vagens plenas", "Vagem com 2 cm num dos 4 nós superiores.", "Período mais crítico a seca e a percevejo; ferrugem; mancha-alvo."],
+    ["R5", "Início do enchimento de grãos", "Grão de 3 mm na vagem de um dos 4 nós superiores (R5.1 a R5.5).", "Percevejo (dano máximo), falsa-medideira, crestamento; última fungicida geralmente em R5.3."],
+    ["R6", "Grãos plenos", "Vagem com grãos verdes enchendo a cavidade (num dos 4 nós superiores).", "Percevejo ainda causa dano até R6; fim dos fungicidas; avaliar retenção foliar (soja louca)."],
+    ["R7", "Início da maturação", "Uma vagem com cor madura na haste principal.", "Percevejo não prejudica mais o grão; dessecação pré-colheita possível (após R7.3)."],
+    ["R8", "Maturação plena", "95% das vagens com cor madura.", "Colheita 5–10 dias depois, grão com 13–15% de umidade; perdas na plataforma."],
+  ] },
+  { id: "e-milho", tipo: "estadio", nome: "Milho — estádios (Ritchie e Hanway)", culturas: ["Milho"], estagios: [
+    ["VE", "Emergência", "Coleóptilo rompe o solo (4–6 dias com umidade).", "Estande, elasmo, rosca, percevejo-barriga-verde, coró."],
+    ["V1–V3", "1ª a 3ª folha", "Folha com colar visível conta; raízes seminais.", "Cigarrinha-do-milho (vetor), lagarta-do-cartucho começa, herbicida pós (atrazina + nicosulfurom até V4)."],
+    ["V4–V6", "4ª a 6ª folha", "Ponto de crescimento ainda no solo até V6; define número de fileiras da espiga em V5–V6.", "Cobertura de nitrogênio (V4–V6), zinco foliar, cartucho (nível 20% raspagem), cigarrinha até V8."],
+    ["V7–V10", "7ª a 10ª folha", "Crescimento rápido, ponto de crescimento acima do solo.", "Segunda cobertura de N; doenças foliares começam no baixeiro; cartucho."],
+    ["V12–V15", "12ª a 15ª folha", "Define número de grãos por fileira e tamanho da espiga.", "Estresse hídrico aqui reduz grãos; fungicida preventivo pré-pendoamento (V8–VT)."],
+    ["VT", "Pendoamento", "Último ramo do pendão visível; polinização em 2–3 dias.", "Período MAIS crítico à seca e ao calor (polinização); pulgão no pendão; fungicida."],
+    ["R1", "Embonecamento", "Estilo-estigmas (cabelos) visíveis; polinização.", "Seca e calor = falha de grãos; lagarta na espiga (helicoverpa)."],
+    ["R2", "Grão bolha", "Grãos brancos pequenos cheios de líquido claro (10–14 dias após R1).", "Define número final de grãos; doenças de folha ainda importam."],
+    ["R3", "Grão leitoso", "Grãos amarelos com líquido leitoso (18–22 dias).", "Enchimento depende da folha verde: manter sanidade; podridão de colmo se estresse."],
+    ["R4", "Grão pastoso", "Grão pastoso, amido acumulando (24–28 dias).", "Perda por seca ainda significativa; acamamento."],
+    ["R5", "Grão farináceo (dente)", "Linha de leite visível descendo no grão (35–42 dias); silagem no ponto quando a linha está na metade.", "Colheita de silagem (1/2 a 2/3 da linha de leite)."],
+    ["R6", "Maturidade fisiológica", "Camada preta na base do grão (55–65 dias após R1); umidade ~30–35%.", "Colheita de grãos quando secar (< 20% com secagem, 14–16% direto); podridão de espiga em chuva."],
+  ] },
+  { id: "e-algodao", tipo: "estadio", nome: "Algodão — estádios (Marur e Ruano)", culturas: ["Algodão"], estagios: [
+    ["VE / V0", "Emergência", "Cotilédones abertos (5–10 dias).", "Estande, tripes, tombamento, pulgão (doença azul)."],
+    ["V1–V4", "Folhas verdadeiras", "1ª a 4ª folha verdadeira na haste principal; nós contados a partir do cotilédone.", "Pulgão, tripes, ácaro-branco; herbicida pós; mapeamento de nós começa."],
+    ["V5–V6", "Pré-botão", "5–6 nós; primeiro ramo frutífero se forma por volta do 5º–7º nó (~30–35 DAE).", "Regulador de crescimento se vigor alto; ramulária pode iniciar; daninhas tardias."],
+    ["B1", "1º botão floral", "Primeiro botão visível (pinhead) no 1º ramo frutífero (~35–45 DAE).", "BICUDO: armadilhas e monitoramento de botões começam; lagartas (curuquerê, Spodoptera); programa de fungicida (ramulária) a partir de ~45 DAE."],
+    ["B4–B8", "Botões em sequência", "Botões em 4 a 8 ramos frutíferos; planta em crescimento rápido (1 nó a cada 3 dias).", "Regulador parcelado (manter altura), bicudo (nível 5% botões atacados), helicoverpa, lagarta-rosada começa com as primeiras flores."],
+    ["F1", "1ª flor", "Primeira flor branca aberta (~55–65 DAE); fica rosa no dia seguinte e cai em 3 dias.", "Flor em roseta = lagarta-rosada; percevejos começam; boro foliar; pico de demanda de água e potássio."],
+    ["F4–F8", "Florescimento pleno", "Flores em vários ramos, maçãs novas no baixeiro; cut-out (parada do crescimento) acontece quando as flores chegam ao ponteiro (NAWF = 5 nós acima da flor branca).", "Percevejos, lagartas das maçãs, mosca-branca; ramulária sobe nó a nó (anotar o nó); último regulador."],
+    ["C1", "1ª maçã aberta (capulho)", "Primeira maçã abre (~110–120 DAE).", "Pluma exposta: mosca-branca (fumagina), podridão de maçãs, bicudo nas maçãs novas de cima; parar inseticidas de longa carência."],
+    ["C4–C8", "Abertura em sequência", "Mais de 60% das maçãs abertas; definir desfolha (quando 4 nós acima da última maçã aberta / 60% abertas).", "Desfolhante + maturador; cronograma de colheita; destruição de soqueira depois (obrigatória)."],
+  ] },
+];
+// busca sem acento no nome, científico, família e texto
+const guiaNormal = (s) => semAcento(String(s || "")).toLowerCase().replace(/-/g, " ");
+function buscarNoGuia(lista, termo, tipo, cultura) {
+  const q = guiaNormal(termo).trim();
+  return (lista || []).filter((g) => (!tipo || g.tipo === tipo) && (!cultura || (g.culturas || []).includes(cultura))
+    && (!q || guiaNormal([g.nome, g.cientifico, g.familia, ...Object.values(g.texto || {}), ...((g.estagios || []).flat())].join(" ")).includes(q)));
+}
+// item do guia que bate com o nome usado na visita/monitoramento ("Capim-amargoso", "Percevejo-marrom (adulto)", "Doença · Ferrugem-asiática")
+function acharNoGuia(nome) {
+  const limpo = guiaNormal(String(nome || "").replace(/^doen[cç]a\s*·\s*/i, "").replace(/\s*\(.*?\)\s*$/, "").replace(/-/g, " ")).trim();
+  if (!limpo) return null;
+  const nomeDe = (g) => guiaNormal(g.nome.replace(/\s*\(.*?\)\s*$/, "").replace(/-/g, " "));
+  return GUIA_CAMPO.find((g) => nomeDe(g) === limpo)
+    || GUIA_CAMPO.find((g) => g.tipo !== "estadio" && (nomeDe(g).startsWith(limpo) || limpo.startsWith(nomeDe(g)) || guiaNormal(g.cientifico || "").includes(limpo)))
+    || GUIA_CAMPO.find((g) => g.tipo !== "estadio" && limpo.split(" ")[0].length > 4 && nomeDe(g).includes(limpo.split(" ")[0]))
+    || null;
+}
+// ---- fotos do guia: metadados (lista leve) + dados (um registro por foto), guardados no aparelho ----
+// A lista de fotos fica em localStorage (agrocr:guia-fotos) e cada foto baixada vai para o IndexedDB
+// (foto:guia-ID) — depois de baixar, tudo abre sem internet. "📥 Baixar tudo" puxa o que falta.
+const K_GUIA_FOTOS = "agrocr:guia-fotos";
+const lerGuiaFotosLocal = () => { try { return JSON.parse(localStorage.getItem(K_GUIA_FOTOS) || "[]"); } catch (e) { return []; } };
+const gravarGuiaFotosLocal = (l) => { try { localStorage.setItem(K_GUIA_FOTOS, JSON.stringify(l || [])); } catch (e) {} };
+async function dadosDaFotoGuia(id) {
+  if (FOTOS_MEM.has("guia-" + id)) return FOTOS_MEM.get("guia-" + id);
+  let d = null;
+  try { d = await idbGet("foto:guia-" + id); } catch (e) {}
+  if (!d && navigator.onLine && window.Nuvem && Nuvem.guiaFotoLer) { try { d = await Nuvem.guiaFotoLer(id); if (d) idbSet("foto:guia-" + id, d); } catch (e) {} }
+  if (d) FOTOS_MEM.set("guia-" + id, d);
+  return d;
+}
+function FotoGuia({ id, style, onClick }) {
+  const [dados, setDados] = useState(() => FOTOS_MEM.get("guia-" + id) || null);
+  useEffect(() => { let vivo = true; if (dados) return; dadosDaFotoGuia(id).then((d) => { if (vivo) setDados(d || "erro"); }); return () => { vivo = false; }; }, [id]);
+  if (!dados || dados === "erro") return <div onClick={onClick} style={{ ...style, background: C.fundo, color: C.cinza, fontSize: 11, display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center", padding: 6 }}>{dados === "erro" ? "📷 foto ainda não baixou (precisa de internet uma vez)" : "…"}</div>;
+  return <img src={dados} alt="" onClick={onClick} style={style} />;
+}
+// quantas fotos do guia já estão no aparelho (para o botão "baixar tudo")
+async function fotosGuiaNoAparelho(metas) {
+  let n = 0;
+  for (const m of metas || []) { if (FOTOS_MEM.has("guia-" + m.id)) { n++; continue; } try { if (await idbGet("foto:guia-" + m.id)) n++; } catch (e) {} }
+  return n;
+}
+// 🔍 Identificar pela foto: a IA olha a foto e devolve os candidatos DENTRO do guia (nunca inventa
+// espécie fora da lista); a pessoa confere nas fotos do guia e decide.
+async function identificarPelaFoto(fotoDataUri, cultura, tipos) {
+  const lista = GUIA_CAMPO.filter((g) => g.tipo !== "estadio" && (!cultura || (g.culturas || []).includes(cultura)) && (!tipos || !tipos.length || tipos.includes(g.tipo)));
+  const nomes = lista.map((g) => `${g.id} = ${g.nome}${g.cientifico ? ` (${g.cientifico})` : ""} [${GUIA_TIPOS.find((t) => t[0] === g.tipo)[2]}]`).join("\n");
+  const r = await Nuvem.lerNota({
+    foto: fotoDataUri, modo: "voz",
+    contexto: {
+      descricao: "Foto tirada no campo por um técnico agrícola" + (cultura ? ` numa lavoura de ${cultura}` : "") + ", no Brasil (cerrado). " +
+        "Identifique o que aparece na foto ESCOLHENDO SOMENTE entre os itens desta lista (daninhas, pragas, inimigos naturais, doenças e deficiências nutricionais). " +
+        "Devolva até 3 candidatos em ordem de probabilidade, com a confiança de 0 a 100 e o motivo visual (o que na foto lembra o item). " +
+        "Se a foto não permitir identificar (desfocada, longe) ou nada da lista parecer, devolva candidatos vazio e explique em 'observacao'. Nunca invente item fora da lista.\nLISTA:\n" + nomes,
+      formato: '{"candidatos":[{"id":"id da lista","confianca":0,"motivo":"…"}],"observacao":"…|null"}',
+    },
+  });
+  const cands = Array.isArray(r && r.candidatos) ? r.candidatos : [];
+  return { candidatos: cands.map((c) => ({ item: GUIA_CAMPO.find((g) => g.id === c.id) || acharNoGuia(c.id), confianca: num(c.confianca), motivo: c.motivo || "" })).filter((c) => c.item).slice(0, 3), observacao: r && r.observacao ? String(r.observacao) : "" };
+}
+function IdentificarPelaFoto({ cultura, tipos, onEscolher, onFechar }) {
+  const [foto, setFoto] = useState(null);
+  const [estado, setEstado] = useState("");   // "" · lendo · pronto · erro
+  const [res, setRes] = useState(null);
+  const [erro, setErro] = useState("");
+  const podeIA = !!(window.AGROCR_FIREBASE && window.Nuvem && Nuvem.lerNota);
+  async function pegar(e) {
+    const f = (e.target.files || [])[0]; e.target.value = ""; if (!f) return;
+    try { const d = await comprimirFoto(f, 1024, 0.7); setFoto(d); setRes(null); setErro(""); } catch (err) { setErro("Não consegui ler a foto."); }
+  }
+  async function identificar() {
+    if (!foto) return;
+    if (!navigator.onLine) { setErro("A identificação pela IA precisa de internet. Sem sinal, compare com as fotos do guia."); return; }
+    setEstado("lendo"); setErro("");
+    try { setRes(await identificarPelaFoto(foto, cultura, tipos)); setEstado("pronto"); }
+    catch (err) { setEstado(""); setErro("Não deu: " + String((err && err.message) || err)); }
+  }
+  return (
+    <Modal titulo="🔍 Identificar pela foto" onFechar={onFechar}>
+      <div style={{ fontSize: 12.5, color: C.cinza }}>Tire a foto de perto, com a praga, a folha ou a planta inteira no foco. A IA compara com o guia{cultura ? ` da ${cultura}` : ""} e sugere até 3 candidatos — quem decide é você, olhando as fotos do guia.</div>
+      {!podeIA && <div style={{ marginTop: 8, fontSize: 12.5, color: C.vermelho, fontWeight: 700 }}>A identificação pela IA só funciona com a conta na nuvem.</div>}
+      <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+        <label style={{ flex: 1, margin: 0, padding: "11px 8px", background: C.navy, color: "#fff", borderRadius: 10, fontWeight: 800, fontSize: 13, textAlign: "center", cursor: "pointer" }}>📷 Tirar foto<input type="file" accept="image/*" capture="environment" onChange={pegar} style={{ display: "none" }} /></label>
+        <label style={{ flex: 1, margin: 0, padding: "11px 8px", background: "#fff", color: C.navy, border: `1.5px solid ${C.navy}`, borderRadius: 10, fontWeight: 800, fontSize: 13, textAlign: "center", cursor: "pointer" }}>🖼 Da galeria<input type="file" accept="image/*" onChange={pegar} style={{ display: "none" }} /></label>
+      </div>
+      {foto && <img src={foto} alt="" style={{ width: "100%", maxHeight: 260, objectFit: "contain", borderRadius: 10, marginTop: 10, background: "#000" }} />}
+      {foto && podeIA && <button onClick={identificar} disabled={estado === "lendo"} style={{ width: "100%", marginTop: 8, padding: 12, background: C.verde, color: "#fff", border: "none", borderRadius: 10, fontWeight: 900, fontSize: 14 }}>{estado === "lendo" ? "🔍 Analisando a foto…" : "🔍 Identificar"}</button>}
+      {erro && <div style={{ marginTop: 8, fontSize: 12.5, color: C.vermelho, fontWeight: 700 }}>{erro}</div>}
+      {res && (
+        <div style={{ marginTop: 10 }}>
+          {res.candidatos.length === 0 && <div style={{ fontSize: 13, color: C.cinza }}>Não reconheci nada do guia nesta foto.{res.observacao ? ` ${res.observacao}` : ""} Tente mais de perto ou de outro ângulo.</div>}
+          {res.candidatos.map((c, i) => (
+            <button key={i} onClick={() => onEscolher(c.item)} style={{ width: "100%", textAlign: "left", background: i === 0 ? C.verdeBg : "#fff", border: `1.5px solid ${i === 0 ? C.verde : C.borda}`, borderRadius: 12, padding: "10px 12px", marginBottom: 6 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}><b style={{ color: C.navy, fontSize: 14 }}>{GUIA_TIPOS.find((t) => t[0] === c.item.tipo)[1]} {c.item.nome}</b><b style={{ color: c.confianca >= 70 ? C.verdeEscuro : "#7A5C00" }}>{fmtN(Math.round(c.confianca))}%</b></div>
+              {c.item.cientifico && <div style={{ fontSize: 11.5, color: C.cinza, fontStyle: "italic" }}>{c.item.cientifico}</div>}
+              {c.motivo && <div style={{ fontSize: 12.5, color: C.navyEscuro, marginTop: 2 }}>{c.motivo}</div>}
+              <div style={{ fontSize: 11.5, color: C.verdeEscuro, fontWeight: 800, marginTop: 4 }}>📖 abrir no guia e comparar com as fotos →</div>
+            </button>
+          ))}
+          {res.candidatos.length > 0 && res.observacao && <div style={{ fontSize: 12, color: C.cinza }}>{res.observacao}</div>}
+        </div>
+      )}
+    </Modal>
+  );
+}
+// um verbete do guia: textos, fotos da equipe, mandar foto, apagar foto
+const ROTULOS_GUIA = { reconhecer: "Como reconhecer", confunde: "Com o que confunde", dano: "Dano", quando: "Quando olhar", manejo: "Manejo", sintoma: "Sintoma", soja: "Na soja", milho: "No milho", algodao: "No algodão" };
+function GuiaItem({ item, fotos, usuario, fazenda, naNuvem, consultor, onFotos, compacto }) {
+  const [enviando, setEnviando] = useState("");
+  const [grande, setGrande] = useState(null);
+  const minhas = (fotos || []).filter((f) => f.item === item.id);
+  const uid = window.Nuvem && Nuvem.usuarioAtual ? ((Nuvem.usuarioAtual() || {}).uid || "") : "";
+  async function mandar(e) {
+    const f = (e.target.files || [])[0]; e.target.value = ""; if (!f) return;
+    if (!naNuvem || !window.Nuvem || !Nuvem.guiaFotoGravar) { setEnviando("Mandar foto para o guia precisa da conta na nuvem."); return; }
+    setEnviando("enviando");
+    try {
+      const dados = await comprimirFoto(f, 720, 0.6);
+      const id = "g" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+      const meta = { id, item: item.id, quem: (usuario && usuario.nomeUsuario) || "", fazendaNome: (fazenda && fazenda.nome) || "", data: hojeISO() };
+      await Nuvem.guiaFotoGravar({ ...meta, dados });
+      FOTOS_MEM.set("guia-" + id, dados); try { idbSet("foto:guia-" + id, dados); } catch (err) {}
+      onFotos && onFotos([...(fotos || []), meta]);
+      setEnviando("");
+    } catch (err) { setEnviando("Não deu: " + String((err && err.message) || err)); }
+  }
+  async function apagar(f) {
+    if (!confirm("Tirar esta foto do guia?")) return;
+    try { await Nuvem.guiaFotoApagar(f.id); onFotos && onFotos((fotos || []).filter((x) => x.id !== f.id)); } catch (err) { alert("Não deu: " + String((err && err.message) || err)); }
+  }
+  const tipo = GUIA_TIPOS.find((t) => t[0] === item.tipo) || ["", "", ""];
+  return (
+    <div>
+      {!compacto && <div style={{ fontSize: 12, color: C.cinza, marginBottom: 2 }}>{tipo[1]} {tipo[2]} · {(item.culturas || []).join(" · ")}{item.familia ? ` · ${item.familia}` : ""}</div>}
+      {item.cientifico && <div style={{ fontSize: 13, color: C.cinza, fontStyle: "italic", marginBottom: 8 }}>{item.cientifico}</div>}
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+        {minhas.map((f) => (
+          <div key={f.id} style={{ position: "relative" }}>
+            <FotoGuia id={f.id} onClick={() => setGrande(f)} style={{ width: 104, height: 104, objectFit: "cover", borderRadius: 10, display: "block", cursor: "zoom-in" }} />
+            {(consultor || (uid && f.uid === uid)) && <button onClick={() => apagar(f)} title="tirar do guia" style={{ position: "absolute", top: -6, right: -6, width: 22, height: 22, borderRadius: 11, border: "none", background: C.vermelho, color: "#fff", fontWeight: 900, fontSize: 12 }}>✕</button>}
+          </div>
+        ))}
+        <label title="foto tirada agora" style={{ margin: 0, width: 104, height: 104, borderRadius: 10, border: `1.5px dashed ${C.navy}`, background: C.fundo, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: C.navy, fontSize: 11.5, fontWeight: 800, cursor: "pointer", textAlign: "center" }}>
+          <span style={{ fontSize: 22 }}>📷</span>mandar foto<br />para o guia
+          <input type="file" accept="image/*" onChange={mandar} style={{ display: "none" }} />
+        </label>
+      </div>
+      {minhas.length === 0 && <div style={{ fontSize: 12, color: C.cinza, marginBottom: 8 }}>Ainda sem foto. A primeira foto que a equipe mandar fica aqui para todo mundo — tire no campo, de perto, com boa luz.</div>}
+      {enviando && <div style={{ fontSize: 12.5, color: enviando === "enviando" ? C.cinza : C.vermelho, fontWeight: 700, marginBottom: 6 }}>{enviando === "enviando" ? "📤 Enviando a foto…" : enviando}</div>}
+      {item.texto && Object.keys(ROTULOS_GUIA).filter((k) => item.texto[k]).map((k) => (
+        <div key={k} style={{ marginBottom: 8 }}>
+          <div style={{ fontWeight: 900, fontSize: 12, color: C.verdeEscuro, textTransform: "uppercase", letterSpacing: 0.4 }}>{ROTULOS_GUIA[k]}</div>
+          <div style={{ fontSize: 13.5, color: C.navyEscuro, lineHeight: 1.4 }}>{item.texto[k]}</div>
+        </div>
+      ))}
+      {item.estagios && (
+        <div style={{ display: "grid", gap: 6 }}>
+          {item.estagios.map(([cod, nome, desc, olhar], i) => (
+            <div key={i} style={{ background: C.fundo, borderRadius: 10, padding: "8px 10px" }}>
+              <div style={{ fontWeight: 900, color: C.navy, fontSize: 13.5 }}>{cod} <span style={{ fontWeight: 700, color: C.verdeEscuro }}>· {nome}</span></div>
+              <div style={{ fontSize: 13, color: C.navyEscuro }}>{desc}</div>
+              {olhar && <div style={{ fontSize: 12.5, color: C.cinza, marginTop: 2 }}>👁 {olhar}</div>}
+            </div>
+          ))}
+        </div>
+      )}
+      {grande && (
+        <div onClick={() => setGrande(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.92)", zIndex: 90, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 12 }}>
+          <FotoGuia id={grande.id} style={{ maxWidth: "100%", maxHeight: "80vh", objectFit: "contain", borderRadius: 8 }} />
+          <div style={{ color: "#fff", fontSize: 12.5, marginTop: 8, textAlign: "center" }}>{item.nome}{grande.quem ? ` · foto de ${grande.quem}` : ""}{grande.fazendaNome ? ` · ${grande.fazendaNome}` : ""}{grande.data ? ` · ${fmtD(grande.data)}` : ""}<br /><span style={{ opacity: 0.7 }}>toque para fechar</span></div>
+        </div>
+      )}
+    </div>
+  );
+}
+// fotos do guia (lista leve) — do aparelho na hora, da nuvem quando dá
+function useFotosGuia(naNuvem) {
+  const [fotos, setFotos] = useState(() => lerGuiaFotosLocal());
+  useEffect(() => {
+    if (!naNuvem || !navigator.onLine || !window.Nuvem || !Nuvem.guiaFotosListar) return;
+    let vivo = true;
+    Nuvem.guiaFotosListar().then((l) => { if (vivo && Array.isArray(l)) { setFotos(l); gravarGuiaFotosLocal(l); } }).catch(() => {});
+    return () => { vivo = false; };
+  }, [naNuvem]);
+  const mudar = (l) => { setFotos(l); gravarGuiaFotosLocal(l); };
+  return [fotos, mudar];
+}
+// janela do verbete, para abrir de dentro da visita e do monitoramento
+function ModalGuiaItem({ item, usuario, fazenda, naNuvem, consultor, onFechar }) {
+  const [fotos, setFotos] = useFotosGuia(naNuvem);
+  if (!item) return null;
+  return (
+    <Modal titulo={`📖 ${item.nome}`} onFechar={onFechar}>
+      <GuiaItem item={item} fotos={fotos} usuario={usuario} fazenda={fazenda} naNuvem={naNuvem} consultor={consultor} onFotos={setFotos} />
+    </Modal>
+  );
+}
+function SecaoGuia({ usuario, fazenda, naNuvem, consultor }) {
+  const [tipo, setTipo] = useState("");
+  const [cultura, setCultura] = useState(((fazenda && fazenda.talhoes) || []).map((t) => t.cultura).find((c) => GUIA_CULTURAS.includes(c)) || "");
+  const [busca, setBusca] = useState("");
+  const [aberto, setAberto] = useState(null);
+  const [identificando, setIdentificando] = useState(false);
+  const [fotos, setFotos] = useFotosGuia(naNuvem);
+  const [baixa, setBaixa] = useState(null);   // {feitas, total} enquanto baixa; null parado
+  const [noAparelho, setNoAparelho] = useState(null);
+  useEffect(() => { let vivo = true; fotosGuiaNoAparelho(fotos).then((n) => { if (vivo) setNoAparelho(n); }); return () => { vivo = false; }; }, [fotos.length, baixa]);
+  const lista = buscarNoGuia(GUIA_CAMPO, busca, tipo, cultura);
+  const item = aberto ? GUIA_CAMPO.find((g) => g.id === aberto) : null;
+  const nFotos = (id) => fotos.filter((f) => f.item === id).length;
+  async function baixarTudo() {
+    if (!navigator.onLine) { alert("Precisa de internet para baixar as fotos. Depois disso, tudo abre sem sinal."); return; }
+    const faltam = []; for (const f of fotos) { if (FOTOS_MEM.has("guia-" + f.id)) continue; try { if (await idbGet("foto:guia-" + f.id)) continue; } catch (e) {} faltam.push(f); }
+    setBaixa({ feitas: 0, total: faltam.length });
+    for (let i = 0; i < faltam.length; i++) { try { await dadosDaFotoGuia(faltam[i].id); } catch (e) {} setBaixa({ feitas: i + 1, total: faltam.length }); }
+    setTimeout(() => setBaixa(null), 1500);
+  }
+  const chip = (ativo) => ({ padding: "7px 10px", borderRadius: 10, fontWeight: 800, fontSize: 12.5, border: "none", background: ativo ? C.navy : "#fff", color: ativo ? "#fff" : C.navy, boxShadow: ativo ? "none" : `inset 0 0 0 1.5px ${C.borda}`, flex: "none" });
+  if (item) return (
+    <div>
+      <div className="nao-imprimir" style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+        <button onClick={() => setAberto(null)} style={{ padding: "9px 14px", background: "#fff", border: `1.5px solid ${C.borda}`, borderRadius: 10, fontWeight: 800, color: C.navy }}>← Guia</button>
+        <div style={{ flex: 1, fontWeight: 900, fontSize: 16, color: C.navy, alignSelf: "center" }}>{item.nome}</div>
+      </div>
+      <div style={{ background: "#fff", border: `1.5px solid ${C.borda}`, borderRadius: 12, padding: 14 }}>
+        <GuiaItem item={item} fotos={fotos} usuario={usuario} fazenda={fazenda} naNuvem={naNuvem} consultor={consultor} onFotos={setFotos} />
+      </div>
+    </div>
+  );
+  return (
+    <div>
+      <div style={{ fontSize: 12.5, color: C.cinza, marginBottom: 8 }}>Daninhas, pragas, inimigos naturais, doenças, deficiências e estádios de soja, milho e algodão. Os textos funcionam sem internet; as fotos são da própria equipe — mande as suas de dentro de cada item.</div>
+      <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+        <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="🔎 Buscar: buva, percevejo, ferrugem, boro, R3…" style={{ flex: 1, marginTop: 0 }} />
+        <button onClick={() => setIdentificando(true)} title="a IA compara a foto com o guia" style={{ flex: "none", padding: "9px 12px", background: C.verde, color: "#fff", border: "none", borderRadius: 10, fontWeight: 800, fontSize: 13 }}>🔍 Pela foto</button>
+      </div>
+      <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 4, marginBottom: 4 }}>
+        <button onClick={() => setTipo("")} style={chip(!tipo)}>Tudo</button>
+        {GUIA_TIPOS.map(([id, e, r]) => <button key={id} onClick={() => setTipo(tipo === id ? "" : id)} style={chip(tipo === id)}>{e} {r}</button>)}
+      </div>
+      <div style={{ display: "flex", gap: 6, marginBottom: 10, alignItems: "center", flexWrap: "wrap" }}>
+        <button onClick={() => setCultura("")} style={chip(!cultura)}>Todas as culturas</button>
+        {GUIA_CULTURAS.map((c) => <button key={c} onClick={() => setCultura(cultura === c ? "" : c)} style={chip(cultura === c)}>{c}</button>)}
+        {naNuvem && fotos.length > 0 && (
+          <button onClick={baixarTudo} disabled={!!baixa} style={{ marginLeft: "auto", padding: "7px 10px", background: C.verdeBg, color: C.verdeEscuro, border: "none", borderRadius: 10, fontWeight: 800, fontSize: 12 }}>
+            {baixa ? `📥 ${baixa.feitas} de ${baixa.total}…` : noAparelho != null && noAparelho >= fotos.length ? `✓ ${fotos.length} fotos no aparelho` : `📥 Baixar fotos p/ usar sem internet${noAparelho != null ? ` (${fotos.length - noAparelho})` : ""}`}
+          </button>
+        )}
+      </div>
+      {lista.length === 0 && <Vazio icone="visita" titulo="Nada com esse nome" texto="Tente outra palavra, ou tire a busca por tipo e cultura." />}
+      {lista.map((g) => {
+        const t = GUIA_TIPOS.find((x) => x[0] === g.tipo) || ["", "", ""]; const n = nFotos(g.id);
+        return (
+          <button key={g.id} onClick={() => setAberto(g.id)} style={{ width: "100%", textAlign: "left", background: "#fff", border: `1.5px solid ${C.borda}`, borderRadius: 12, padding: "10px 12px", marginBottom: 6, display: "flex", gap: 10, alignItems: "center" }}>
+            <span style={{ fontSize: 22, flex: "none" }}>{t[1]}</span>
+            <span style={{ flex: 1, minWidth: 0 }}>
+              <span style={{ fontWeight: 900, color: C.navy, fontSize: 14.5, display: "block" }}>{g.nome}</span>
+              <span style={{ fontSize: 12, color: C.cinza, display: "block" }}>{g.cientifico ? <i>{g.cientifico} · </i> : null}{t[2]} · {(g.culturas || []).join(", ")}</span>
+            </span>
+            <span style={{ flex: "none", fontSize: 11.5, fontWeight: 800, color: n ? C.verdeEscuro : C.cinza, background: n ? C.verdeBg : C.fundo, borderRadius: 8, padding: "4px 8px" }}>{n ? `📷 ${n}` : "sem foto"}</span>
+          </button>
+        );
+      })}
+      {identificando && <IdentificarPelaFoto cultura={cultura} onFechar={() => setIdentificando(false)} onEscolher={(it) => { setIdentificando(false); setAberto(it.id); }} />}
+    </div>
+  );
+}
+
 // =========================== VISITA DE CAMPO ===========================
 // Lançamento ESTRUTURADO, por toques — nada de ditado que escreve errado.
 // O técnico escolhe a categoria (praga, doença, daninha…), toca no item
@@ -22954,6 +23931,8 @@ function ChatVisita({ fazenda, lavoura, kml, usuario, onFechar, onSalvar }) {
   const [acao, setAcao] = useState("Só monitorar");
   const [nota, setNota] = useState("");
   const [fotosPend, setFotosPend] = useState([]);   // fotos da observação que está sendo lançada
+  const [identificando, setIdentificando] = useState(false);   // 🔍 identificar pela foto (guia)
+  const [guiaAberto, setGuiaAberto] = useState(null);           // verbete do guia aberto
   // diário falado: null | "ouvindo" | "gravando" | "processando"
   const [vozEstado, setVozEstado] = useState(null);
   const [vozMsg, setVozMsg] = useState("");
@@ -23306,6 +24285,12 @@ function ChatVisita({ fazenda, lavoura, kml, usuario, onFechar, onSalvar }) {
             ))}
           </div>
         )}
+      {cat && (
+        <div className="nao-imprimir" style={{ display: "flex", gap: 6, padding: "0 12px 6px", flexWrap: "wrap" }}>
+          <button onClick={() => setIdentificando(true)} style={{ flex: 1, padding: "8px 10px", background: C.verdeBg, color: C.verdeEscuro, border: "none", borderRadius: 10, fontWeight: 800, fontSize: 12.5 }}>🔍 Não sei o que é — identificar pela foto</button>
+          {itemFinal && acharNoGuia(itemFinal) && <button onClick={() => setGuiaAberto(acharNoGuia(itemFinal))} style={{ flex: 1, padding: "8px 10px", background: "#fff", color: C.navy, border: `1.5px solid ${C.borda}`, borderRadius: 10, fontWeight: 800, fontSize: 12.5 }}>📖 Ver no guia: {acharNoGuia(itemFinal).nome}</button>}
+        </div>
+      )}
         {cat && !item && (
           <div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
@@ -23365,6 +24350,9 @@ function ChatVisita({ fazenda, lavoura, kml, usuario, onFechar, onSalvar }) {
           </div>
         )}
       </div>
+      {identificando && <IdentificarPelaFoto cultura={tAtual ? (((lavoura || []).find((l) => l.talhaoId === tAtual.id) || {}).cultura || tAtual.cultura || "") : ""} onFechar={() => setIdentificando(false)}
+        onEscolher={(it) => { setIdentificando(false); const catDo = { daninha: "🌿 Daninha", praga: "🐛 Praga", doenca: "🦠 Doença", deficiencia: "🧪 Nutrição", inimigo: "🐛 Praga" }[it.tipo]; if (catDo) setCat(catDo); const lista = catDo ? [...(OBS_CATALOGO[catDo] || []), ...(OBS_CATALOGO_MAIS[catDo] || [])] : []; const igual = lista.find((n) => acharNoGuia(n) === it); if (igual) { setItem(igual); setOutroTexto(""); } else { setItem("__outro"); setOutroTexto(it.nome); } setGuiaAberto(it); }} />}
+      {guiaAberto && <ModalGuiaItem item={guiaAberto} usuario={usuario} fazenda={fazenda} naNuvem={!!window.AGROCR_FIREBASE} consultor={!!(usuario && usuario.tipo === "consultoria")} onFechar={() => setGuiaAberto(null)} />}
     </div>
   );
 }
@@ -23536,6 +24524,8 @@ function MonitoramentoPragas({ fazenda, lavoura, kml, usuario, onFechar, onSalva
   const [atual, setAtual] = useState(null);      // ponto em edição {n, lat, lng, hora, pragas, obs}
   const [obs, setObs] = useState("");
   const [fotosGeral, setFotosGeral] = useState([]);       // fotos gerais do talhão neste monitoramento
+  const [identificando, setIdentificando] = useState(false);   // 🔍 identificar pela foto (guia)
+  const [guiaAberto, setGuiaAberto] = useState(null);
   const [msg, setMsg] = useState("");
   const [pegando, setPegando] = useState(false);
   const [modoPontos, setModoPontos] = useState("livre");   // livre (marco onde estou) · planejado (o app distribui)
@@ -23771,6 +24761,7 @@ function MonitoramentoPragas({ fazenda, lavoura, kml, usuario, onFechar, onSalva
             <div style={{ background: C.verdeBg, borderRadius: 12, padding: "10px 12px", marginTop: 6 }}>
               <div style={{ fontWeight: 900, color: C.verdeEscuro, fontSize: 14 }}>Ponto {atual.n} <span style={{ fontWeight: 600, fontSize: 12, color: C.cinza }}>· {atual.hora}{coordOk(atual.lat) && atual.lat != null ? ` · ${Number(atual.lat).toFixed(5)}, ${Number(atual.lng).toFixed(5)}` : " · sem posição"}</span></div>
               <div style={{ fontSize: 11.5, color: C.cinza, marginBottom: 4 }}>{metodo === "pano" ? "Quantos por metro de linha no pano de batida" : "Marque o que está presente neste ponto"}</div>
+              <button onClick={() => setIdentificando(true)} style={{ width: "100%", marginBottom: 6, padding: "9px 10px", background: C.verdeBg, color: C.verdeEscuro, border: "none", borderRadius: 10, fontWeight: 800, fontSize: 12.5 }}>🔍 Não sei o que é — identificar pela foto (guia)</button>
               {itens.map((it, idx) => {
                 const v = atual.pragas[it.chave];
                 const novoGrupo = it.grupo && (idx === 0 || itens[idx - 1].grupo !== it.grupo);
@@ -23778,7 +24769,7 @@ function MonitoramentoPragas({ fazenda, lavoura, kml, usuario, onFechar, onSalva
                   <div key={it.chave}>
                     {novoGrupo && <div style={{ fontWeight: 900, color: C.navy, fontSize: 12.5, marginTop: 8, paddingTop: 4, borderTop: `2px solid #C9D8C0`, textTransform: "uppercase", letterSpacing: 0.3 }}>{it.grupo}</div>}
                     <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0", borderBottom: `1px dashed #C9D8C0` }}>
-                      <span style={{ flex: 1, fontSize: 13.5 }}>{it.nome || it.grupo}</span>
+                      <span style={{ flex: 1, fontSize: 13.5 }}>{it.nome || it.grupo}{acharNoGuia(it.nome || it.grupo) ? <button onClick={() => setGuiaAberto(acharNoGuia(it.nome || it.grupo))} title="ver no guia" style={{ marginLeft: 6, background: "transparent", border: "none", fontSize: 14, padding: 0 }}>📖</button> : null}</span>
                       {it.tipo === "numero" && (
                         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                           <button onClick={() => mudarPraga(it.chave, Math.max(0, num(v) - 1))} style={{ width: 34, height: 34, borderRadius: 8, border: "none", background: "#fff", fontWeight: 900, fontSize: 18, color: C.navy }}>−</button>
@@ -23862,6 +24853,8 @@ function MonitoramentoPragas({ fazenda, lavoura, kml, usuario, onFechar, onSalva
         </>
       )}
       {msg && <div style={{ marginTop: 8, background: C.amareloBg, color: C.amarelo, borderRadius: 10, padding: "8px 12px", fontSize: 13, fontWeight: 700 }}>{msg}</div>}
+      {identificando && <IdentificarPelaFoto cultura={cultura} onFechar={() => setIdentificando(false)} onEscolher={(it) => { setIdentificando(false); setGuiaAberto(it); }} />}
+      {guiaAberto && <ModalGuiaItem item={guiaAberto} usuario={usuario} fazenda={fazenda} naNuvem={!!window.AGROCR_FIREBASE} consultor={!!(usuario && usuario.tipo === "consultoria")} onFechar={() => setGuiaAberto(null)} />}
     </Modal>
   );
 }

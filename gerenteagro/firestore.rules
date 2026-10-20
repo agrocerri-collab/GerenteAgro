@@ -446,6 +446,21 @@ service cloud.firestore {
     // só o dono escreve.
     // ---- comunidade: mural por estado entre quem usa o app ----
     // qualquer pessoa logada lê e publica em seu nome; só apaga a própria (ou o administrador)
+    // Guia de campo: fotos da equipe. "guia" = lista leve (item, quem, data); "guiaFotos" = a imagem.
+    // Quem está logado lê e manda; só quem mandou ou a consultoria tira. Na versão de venda, cada conta vê as suas.
+    match /guia/{id} {
+      allow read: if logado() && minhaContaNoDoc();
+      allow create: if logado() && request.resource.data.uid == request.auth.uid && mesmaConta(request.resource.data);
+      allow update: if false;
+      allow delete: if logado() && minhaContaNoDoc() && (resource.data.uid == request.auth.uid || ehConsultoria());
+    }
+    match /guiaFotos/{id} {
+      allow read: if logado() && minhaContaNoDoc();
+      allow create: if logado() && request.resource.data.uid == request.auth.uid && mesmaConta(request.resource.data)
+                    && request.resource.data.dados is string && request.resource.data.dados.size() < 950000;
+      allow update: if false;
+      allow delete: if logado() && minhaContaNoDoc() && (resource.data.uid == request.auth.uid || ehConsultoria());
+    }
     match /comunidade/{uf}/mensagens/{id} {
       allow read: if logado();
       allow create: if logado() && request.resource.data.uid == request.auth.uid
