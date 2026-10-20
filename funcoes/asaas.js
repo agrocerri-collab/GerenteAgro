@@ -12,8 +12,10 @@
 const { onRequest } = require("firebase-functions/v2/https");
 const { getFirestore, Timestamp } = require("firebase-admin/firestore");
 
-function registrar() {
+function registrar(opcoes) {
   const db = getFirestore();
+  // aviso no celular do dono da plataforma (vem do index.js); nunca derruba o webhook
+  const avisar = async (titulo, corpo) => { try { if (opcoes && opcoes.avisarDonos) await opcoes.avisarDonos(titulo, corpo); } catch (e) {} };
   const asaas = onRequest({ cors: false, timeoutSeconds: 60 }, async (req, res) => {
     if (req.method !== "POST") { res.status(405).send("use POST"); return; }
     const cfg = ((await db.collection("financeiroDono").doc("asaas").get()).data()) || {};
@@ -48,6 +50,7 @@ function registrar() {
         tipo: "asaasPendente", motivo, email: email || "", nome: nomeCliente || (pag.customer || ""), valor, dias, pagamentoId: pag.id || "",
         pagoEm: pag.paymentDate || pag.confirmedDate || pag.clientPaymentDate || null, descricao: pag.description || "", em: Timestamp.now(),
       });
+      await avisar("Pagamento recebido — conferir", `${nomeCliente || email || pag.customer || "pagador?"} · R$ ${valor.toFixed(2)} · ${motivo}`);
       res.status(200).send("pendente: " + motivo);
     };
     if (!email.includes("@")) { await pendente("pagamento sem e-mail do pagador"); return; }
@@ -63,6 +66,7 @@ function registrar() {
       quem: `Asaas · pagamento ${pag.id || ""} · ${valor.toFixed(2)}`, suspensa: false,
       ultimoPagamento: { id: pag.id || "", valor, em: pag.paymentDate || pag.confirmedDate || null, forma: pag.billingType || "" },
     }, { merge: true });
+    await avisar("Pagamento recebido ✓", `${nomeCliente || email} · R$ ${valor.toFixed(2)} · ${dias === 365 ? "anual" : "mensal"} · válido até ${nova.toLocaleDateString("pt-BR")}`);
     res.status(200).send(`ok: ${email} até ${nova.toISOString().slice(0, 10)}`);
   });
   return { asaas };

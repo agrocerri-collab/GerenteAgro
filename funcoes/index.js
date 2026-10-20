@@ -42,14 +42,21 @@ exports.aoCriarFazenda = onDocumentCreated("fazendas/{fazendaId}", async (evento
 });
 
 // Cobrança automática do GerenteAgro (webhook do Asaas): só no projeto gerenteagro
-if (SO_AVISOS) exports.asaas = require("./asaas").registrar().asaas;
+if (SO_AVISOS) exports.asaas = require("./asaas").registrar({ avisarDonos: (titulo, corpo) => avisarDonos(titulo, corpo) }).asaas;
 // GerenteAgro: um titular criou um acesso extra que NÃO entrou sozinho (não é o 1º incluso nem teste)
 // → avisa o dono da plataforma no celular para liberar em Conta → Licenças
 const DONOS_PLATAFORMA = ["administrativo@gerenteagro.com", "agrocerri@gmail.com"];
 exports.avisoNovoAcesso = onDocumentCreated("usuarios/{uid}", async (evento) => {
   if (!SO_AVISOS) return;
   const u = evento.data ? evento.data.data() : null;
-  if (!u || !u.email || !u.conta || u.conta === evento.params.uid) return;   // titular (conta == uid) não é extra
+  if (!u || !u.email) return;
+  const email0 = String(u.email).toLowerCase();
+  if (DONOS_PLATAFORMA.includes(email0)) return;
+  if (!u.conta || u.conta === evento.params.uid) {
+    // CADASTRO NOVO (titular: conta == uid): avisa o dono da plataforma no celular
+    await avisarDonos("Cadastro novo no GerenteAgro", `${u.nome || email0}${u.nome ? ` · ${email0}` : ""}${u.planoEscolhido ? ` · plano ${u.planoEscolhido}` : ""}${u.formaPagamento ? ` · ${u.formaPagamento}` : ""}${u.telefone || u.whats ? ` · ${u.telefone || u.whats}` : ""}`);
+    return;
+  }
   await new Promise((r) => setTimeout(r, 8000));   // tempo para o app gravar a licença "incluso"/teste, se couber
   const email = String(u.email).toLowerCase();
   const lic = await db.collection("licencas").doc(email).get();
@@ -101,6 +108,26 @@ function tokensDe(docs) {
     for (const t of (d.data().fcmTokens || [])) lista.push({ uid: d.id, token: t });
   }
   return lista;
+}
+// GerenteAgro: quem recebe os avisos de UMA fazenda — o pessoal com acesso a ela + a consultoria DA MESMA CONTA.
+// O dono da plataforma (administrativo) fica de fora: ele só recebe cadastro novo, acesso novo e pagamento.
+function filtrarDestinatarios(docs, contaDaFazenda) {
+  return docs.filter((d) => {
+    const u = d.data() || {};
+    if (!SO_AVISOS) return true;
+    if (DONOS_PLATAFORMA.includes(String(u.email || "").toLowerCase())) return false;
+    if (contaDaFazenda && u.papel === "consultoria" && u.conta && String(u.conta) !== String(contaDaFazenda)) return false;
+    return true;
+  });
+}
+async function contaDaFazenda(fazendaId) {
+  if (!SO_AVISOS) return null;
+  try { const d = await db.collection("fazendas").doc(fazendaId).get(); return d.exists ? (d.data().conta || null) : null; } catch (e) { return null; }
+}
+// aviso só para o dono da plataforma (celular do administrativo)
+async function avisarDonos(titulo, corpo) {
+  try { const donos = await db.collection("usuarios").where("email", "in", DONOS_PLATAFORMA).get(); await mandar(tokensDe(donos.docs), titulo, corpo); }
+  catch (e) { console.warn("avisarDonos:", e && e.message); }
 }
 
 async function nomeDaFazenda(fazendaId) {
@@ -157,7 +184,7 @@ exports.avisoRecomendacao = onDocumentCreated("fazendas/{fazendaId}/recomendacoe
   ]);
   const ciclo = rec.ciclo === "Safrinha" ? " (safrinha)" : "";
   await mandar(
-    tokensDe([...daFazenda.docs, ...consultoria.docs]),
+    tokensDe(filtrarDestinatarios([...daFazenda.docs, ...consultoria.docs], await contaDaFazenda(fazendaId))),
     `Nova recomendação — ${fazenda}`,
     `${rec.tipo || "Operação"}${rec.alvo ? ` · ${rec.alvo}` : ""}${ciclo}${rec.recomendadoPor ? ` · por ${rec.recomendadoPor}` : ""}`,
     destino(fazendaId, "apl", rec.modulo || "pulverizacao", null, evento.params.recId)
@@ -177,7 +204,7 @@ exports.avisoChuva = onDocumentCreated("fazendas/{fazendaId}/chuvas/{chuvaId}", 
   const mm = Number(ch.mm) || 0;
   const dia = ch.data ? `${String(ch.data).slice(8, 10)}/${String(ch.data).slice(5, 7)}` : "";
   await mandar(
-    tokensDe([...daFazenda.docs, ...consultoria.docs]),
+    tokensDe(filtrarDestinatarios([...daFazenda.docs, ...consultoria.docs], await contaDaFazenda(fazendaId))),
     `Chuva — ${fazenda}`,
     `${mm.toLocaleString("pt-BR")} mm${ch.local ? ` no ${ch.local}` : ""}${dia ? ` em ${dia}` : ""}${ch.quem ? ` · por ${ch.quem}` : ""}`,
     destino(fazendaId, "chuva")
@@ -201,7 +228,7 @@ exports.avisoExecucao = onDocumentCreated("fazendas/{fazendaId}/execucoes/{execI
   const onde = talhao.nome ? ` em ${talhao.nome}${ex.areaExecutada ? ` (${ex.areaExecutada} ha)` : ""}` : "";
   const quando = ex.data ? ` em ${String(ex.data).slice(8, 10)}/${String(ex.data).slice(5, 7)}` : "";
   await mandar(
-    tokensDe(consultoria.docs),
+    tokensDe(filtrarDestinatarios(consultoria.docs, await contaDaFazenda(fazendaId))),
     `Execução registrada — ${fazenda}`,
     `${oque}${onde}${ex.operador ? ` · por ${ex.operador}` : ""}${quando}`,
     destino(fazendaId, "apl", rec.modulo || "pulverizacao", null, ex.recomendacaoId || null)
@@ -238,6 +265,7 @@ exports.lembretesDiarios = onSchedule({ schedule: "every day 06:30", timeZone: "
   for (const fz of fazendas.docs) {
     const fazendaId = fz.id;
     const dados = fz.data() || {};
+    const contaFz = dados.conta || null;   // GerenteAgro: só a consultoria desta conta recebe
     const nome = dados.nome || "a fazenda";
     const nomeTalhao = (tid) => ((dados.talhoes || []).find((t) => t.id === tid) || {}).nome || "talhão";
     const base = db.collection("fazendas").doc(fazendaId);
@@ -272,7 +300,7 @@ exports.lembretesDiarios = onSchedule({ schedule: "every day 06:30", timeZone: "
           });
           if (ultimaM && diasEntre(ultimaM, hoje) === 10 && !(await jaAvisou(fazendaId, `seca-${m.id}-${ultimaM}`))) {
             const daFazenda = await db.collection("usuarios").where("fazendas", "array-contains", fazendaId).get();
-            await mandar(tokensDe([...daFazenda.docs, ...consultoria.docs]),
+            await mandar(tokensDe(filtrarDestinatarios([...daFazenda.docs, ...consultoria.docs], contaFz)),
               `⚠ 10 dias sem chuva no ${m.nome} — ${nome}`,
               `A área do pluviômetro ${m.nome} não vê chuva desde ${ultimaM.slice(8, 10)}/${ultimaM.slice(5, 7)}. Ponto de atenção na lavoura.`);
           }
@@ -282,7 +310,7 @@ exports.lembretesDiarios = onSchedule({ schedule: "every day 06:30", timeZone: "
         chuvas.forEach((d) => { const c = d.data(); if ((Number(c.mm) || 0) > 0 && c.data && (!ultima || c.data > ultima)) ultima = c.data; });
         if (ultima && diasEntre(ultima, hoje) === 10 && !(await jaAvisou(fazendaId, "seca-" + ultima))) {
           const daFazenda = await db.collection("usuarios").where("fazendas", "array-contains", fazendaId).get();
-          await mandar(tokensDe([...daFazenda.docs, ...consultoria.docs]),
+          await mandar(tokensDe(filtrarDestinatarios([...daFazenda.docs, ...consultoria.docs], contaFz)),
             `10 dias sem chuva — ${nome}`,
             `Última chuva registrada em ${ultima.slice(8, 10)}/${ultima.slice(5, 7)}. Vale conferir a lavoura.`);
         }
@@ -303,9 +331,9 @@ exports.lembretesDiarios = onSchedule({ schedule: "every day 06:30", timeZone: "
       });
 
       const daFazendaDocs = (await db.collection("usuarios").where("fazendas", "array-contains", fazendaId).get()).docs;
-      const todos = tokensDe([...daFazendaDocs, ...consultoria.docs]);
+      const todos = tokensDe(filtrarDestinatarios([...daFazendaDocs, ...consultoria.docs], contaFz));
       // quem mexe com dinheiro na fazenda (produtor/gerente) + consultoria
-      const financeiro = tokensDe([...daFazendaDocs.filter((d) => !/operador|monitor/i.test(String(d.data().funcao || ""))), ...consultoria.docs]);
+      const financeiro = tokensDe(filtrarDestinatarios([...daFazendaDocs.filter((d) => !/operador|monitor/i.test(String(d.data().funcao || ""))), ...consultoria.docs], contaFz));
       const irFung = destino(fazendaId, "fungicidas");
       const vencidasFung = [];
       for (const d of lavoura.docs) {
