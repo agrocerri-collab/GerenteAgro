@@ -23266,7 +23266,7 @@ const GUIA_CAMPO = [
     pratica: "Tanque com metade da água e agitação ligada. Ordem: 1 condicionador de água/redutor de pH · 2 pó e grânulo (WG, WP, SP, SG — pré-dissolvidos) · 3 suspensões (SC) · 4 emulsões e óleos formulados (EC, EW, OD) · 5 solúveis (SL) · 6 foliar · 7 óleo e adjuvantes · 8 biológico por último, se compatível.",
     atencao: "Com 4 produtos ou mais, ou produto novo na mistura, faça o teste de calda no jarro antes (Visitas técnicas → Regulagem e calda → 🧪 Teste de calda): o app diz quanto de cada produto vai no recipiente e a ordem." } },
   // ---------- ESTÁDIOS ----------
-  { id: "e-soja", tipo: "estadio", nome: "Soja — estádios (Fehr e Caviness)", culturas: ["Soja"],
+  { id: "e-soja", tipo: "estadio", nome: "Soja — estádios (Fehr e Caviness)", resumo: "VE a R8 com ilustração, escala e morfologia", culturas: ["Soja"],
     figuras: [
       { url: "guia/soja/escala-fenologica.jpg", titulo: "Escala fenológica da soja", credito: "Ilustrações: Embrapa" },
       { url: "guia/soja/morfologia.jpg", titulo: "Morfologia de uma planta de soja" },
@@ -23293,6 +23293,32 @@ const GUIA_CAMPO = [
     ["R7", "Início da maturação", "Um legume (vagem) normal na haste principal do caule, com coloração de madura (geralmente marrom) e a planta com folhas amarelas ou em processo de queda.", "Percevejo não prejudica mais o grão; dessecação pré-colheita possível (a partir de R7.3, conforme a bula).", "guia/soja/estadio-R7.jpg"],
     ["R8", "Maturação plena", "Plantas com cerca de 95% das vagens com coloração de madura (geralmente marrom).", "Colheita 5–10 dias depois, com o grão a 13–15% de umidade; regular a plataforma para perder pouco.", "guia/soja/estadio-R8.jpg"],
   ] },
+  { id: "e-soja-nodulacao", tipo: "estadio", nome: "Soja — nodulação e FBN", resumo: "Quantos nódulos por estádio e como avaliar", culturas: ["Soja"],
+    figuras: [{ url: "guia/soja/nodulacao.jpg", titulo: "Avaliação da nodulação na soja" }],
+    texto: {
+      principio: "A Fixação Biológica de Nitrogênio (FBN) é um dos principais processos fisiológicos para o desempenho da soja e um grande diferencial da cultura em relação a outras espécies agrícolas. Ocorre pela simbiose entre a soja e bactérias do gênero Bradyrhizobium, especialmente B. japonicum e B. elkanii, que colonizam as raízes e formam nódulos. Dentro dos nódulos, as bactérias convertem o nitrogênio do ar (N₂) em formas que a planta usa, como o amônio (NH₄⁺), incorporado em aminoácidos, proteínas e clorofila. Nódulos saudáveis indicam simbiose eficiente e mais nitrogênio para a cultura.",
+      pratica: "Arranque as plantas com pá ou enxadão, sem puxar (puxar deixa os nódulos no chão), lave as raízes num balde e conte os nódulos de 10 plantas seguidas na linha, em vários pontos do talhão. Corte alguns nódulos ao meio: coloração rosada a avermelhada indica nódulos ativos; branco, verde ou marrom por dentro não fixa. No começo, a maior parte deve estar na raiz principal.",
+      atencao: "Os valores podem variar de acordo com o tipo de solo, a cultivar, o inoculante utilizado e o histórico da área. Nodulação fraca: confira inoculação (dose, mistura com fungicida/inseticida no tratamento de semente, sol no inoculante), cobalto e molibdênio, acidez e encharcamento.",
+    },
+    tabelas: [{ titulo: "Faixa ideal de nódulos por estádio", colunas: ["Estádio", "Faixa ideal", "Interpretação"], linhas: [
+      ["V2–V3 (início do desenvolvimento vegetativo)", "15 a 20 nódulos por planta", "A maior parte deve estar concentrada na raiz principal."],
+      ["R1–R2 (florescimento)", "25 a 40 nódulos por planta", "Indica boa colonização e simbiose em atividade."],
+      ["R5–R6 (enchimento de grãos)", "30 a 50 nódulos ativos (coloração rosada a avermelhada)", "Fase de máxima FBN e contribuição mais eficiente de N₂."],
+    ] }] },
+  { id: "e-soja-acompanhamento", tipo: "estadio", nome: "Soja — guia de acompanhamento da lavoura", resumo: "O que olhar em cada fase do ciclo", culturas: ["Soja"],
+    texto: { pratica: "Use a tabela como roteiro da visita: veja em que estádio a lavoura está (aba Estádios) e confira as categorias cujo período crítico inclui esse estádio." },
+    tabelas: [{ titulo: "Guia de acompanhamento da lavoura", colunas: ["Categoria", "Período crítico", "O que observar / monitorar"], linhas: [
+      ["Implantação", "VE – V3", "Emergência, falhas de estande, profundidade de semeadura, danos mecânicos."],
+      ["Plantas daninhas", "Pré-plantio – R1", "Infestação, espécies resistentes, escapes após pré e pós-emergência."],
+      ["Pragas iniciais", "VE – V6", "Lagartas, brocas, corós, vaquinhas, tripes, lesmas, caramujos."],
+      ["Nodulação e FBN", "V2 – V5", "Nódulos ativos, tamanho, distribuição e coloração (rosa = ativo)."],
+      ["Deficiências nutricionais", "V3 – R2", "Sintomas visuais, crescimento desigual, folhas cloróticas."],
+      ["Doenças iniciais", "VE – R1", "Doenças de solo, míldio, manchas foliares, oídio."],
+      ["Arquitetura e crescimento", "V3 – R1", "Altura de plantas, número de ramificações, índice de área foliar (IAF), uso de bioestimulantes e reguladores."],
+      ["Doenças da fase reprodutiva", "R1 – R5", "Ferrugem asiática, manchas, antracnose, oídio, cercosporiose."],
+      ["Pragas da fase reprodutiva", "R1 – R6", "Percevejos, tripes, lagartas das vagens, vaquinhas, mosca-branca."],
+      ["Maturação e pré-colheita", "R6 – R8", "Percevejos, uniformidade de maturação, teor de umidade, ponto ideal de colheita."],
+    ] }] },
   { id: "e-milho", tipo: "estadio", nome: "Milho — estádios (Ritchie e Hanway)", culturas: ["Milho"], estagios: [
     ["VE", "Emergência", "Coleóptilo rompe o solo (4–6 dias com umidade).", "Estande, elasmo, rosca, percevejo-barriga-verde, coró."],
     ["V1–V3", "1ª a 3ª folha", "Folha com colar visível conta; raízes seminais.", "Cigarrinha-do-milho (vetor), lagarta-do-cartucho começa, herbicida pós (atrazina + nicosulfurom até V4)."],
@@ -23324,7 +23350,7 @@ const guiaNormal = (s) => semAcento(String(s || "")).toLowerCase().replace(/-/g,
 function buscarNoGuia(lista, termo, tipo, cultura) {
   const q = guiaNormal(termo).trim();
   return (lista || []).filter((g) => (!tipo || g.tipo === tipo) && (!cultura || (g.culturas || []).includes(cultura))
-    && (!q || guiaNormal([g.nome, g.cientifico, g.familia, ...Object.values(g.texto || {}), ...((g.estagios || []).flat())].join(" ")).includes(q)));
+    && (!q || guiaNormal([g.nome, g.cientifico, g.familia, ...Object.values(g.texto || {}), ...((g.estagios || []).flat()), ...((g.tabelas || []).flatMap((tb) => tb.linhas.flat()))].join(" ")).includes(q)));
 }
 // item do guia que bate com o nome usado na visita/monitoramento ("Capim-amargoso", "Percevejo-marrom (adulto)", "Doença · Ferrugem-asiática")
 // cultura (opcional): procura primeiro entre os verbetes daquela cultura ("Cercosporiose" no milho → a do milho)
@@ -23500,12 +23526,23 @@ function GuiaItem({ item, fotos, usuario, fazenda, naNuvem, consultor, onFotos, 
           <input type="file" accept="image/*" onChange={mandar} style={{ display: "none" }} />
         </label>
       </div>
-      {minhas.length === 0 && fixas.length === 0 && <div style={{ fontSize: 12, color: C.cinza, marginBottom: 8 }}>Ainda sem foto. A primeira foto que a equipe mandar fica aqui para todo mundo — tire no campo, de perto, com boa luz.</div>}
+      {minhas.length === 0 && fixas.length === 0 && !["estadio", "aplicacao"].includes(item.tipo) && <div style={{ fontSize: 12, color: C.cinza, marginBottom: 8 }}>Ainda sem foto. A primeira foto que a equipe mandar fica aqui para todo mundo — tire no campo, de perto, com boa luz.</div>}
       {enviando && <div style={{ fontSize: 12.5, color: enviando === "enviando" ? C.cinza : C.vermelho, fontWeight: 700, marginBottom: 6 }}>{enviando === "enviando" ? "📤 Enviando a foto…" : enviando}</div>}
       {item.texto && Object.keys(ROTULOS_GUIA).filter((k) => item.texto[k] && !outrasCulturas.includes(k)).map((k) => (
         <div key={k} style={{ marginBottom: 8 }}>
           <div style={{ fontWeight: 900, fontSize: 12, color: C.verdeEscuro, textTransform: "uppercase", letterSpacing: 0.4 }}>{ROTULOS_GUIA[k]}</div>
           <div style={{ fontSize: 13.5, color: C.navyEscuro, lineHeight: 1.4 }}>{item.texto[k]}</div>
+        </div>
+      ))}
+      {(item.tabelas || []).map((tb, ti) => (
+        <div key={ti} style={{ marginBottom: 10 }}>
+          <div style={{ fontWeight: 900, fontSize: 12, color: C.verdeEscuro, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 4 }}>{tb.titulo}</div>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
+              <thead><tr>{tb.colunas.map((c, ci) => <th key={ci} style={{ background: C.navy, color: "#fff", textAlign: "left", padding: "6px 8px", fontWeight: 800 }}>{c}</th>)}</tr></thead>
+              <tbody>{tb.linhas.map((l, li) => <tr key={li} style={{ background: li % 2 ? "#fff" : C.fundo }}>{l.map((v, vi) => <td key={vi} style={{ padding: "6px 8px", verticalAlign: "top", color: C.navyEscuro, fontWeight: vi === 0 ? 800 : 400, borderBottom: `1px solid ${C.borda}`, whiteSpace: vi === 1 && tb.colunas.length === 3 && String(v).length < 22 ? "nowrap" : "normal" }}>{v}</td>)}</tr>)}</tbody>
+            </table>
+          </div>
         </div>
       ))}
       {item.estagios && (
@@ -23594,9 +23631,9 @@ function SecaoGuia({ usuario, fazenda, naNuvem, consultor }) {
   const abrirTipo = (id) => { setTipo(id); setCultura(SEM_CULTURA.includes(id) ? "" : null); setBusca(""); };
   const escolherCultura = (c) => {
     setCultura(c);
-    if (tipo === "estadio") { const e = GUIA_CAMPO.find((g) => g.tipo === "estadio" && (g.culturas || []).includes(c)); if (e) setAberto(e.id); }
+    if (tipo === "estadio") { const es = GUIA_CAMPO.filter((g) => g.tipo === "estadio" && (g.culturas || []).includes(c)); if (es.length === 1) setAberto(es[0].id); }
   };
-  const voltar = () => { if (aberto) { setAberto(null); if (tipo === "estadio") setCultura(null); return; } if (buscando) { setBusca(""); return; } if (cultura !== null && !SEM_CULTURA.includes(tipo)) { setCultura(null); return; } setCultura(null); setTipo(""); };
+  const voltar = () => { if (aberto) { setAberto(null); if (tipo === "estadio" && GUIA_CAMPO.filter((g) => g.tipo === "estadio" && (g.culturas || []).includes(cultura)).length <= 1) setCultura(null); return; } if (buscando) { setBusca(""); return; } if (cultura !== null && !SEM_CULTURA.includes(tipo)) { setCultura(null); return; } setCultura(null); setTipo(""); };
   const tituloTela = buscando ? `Busca: "${busca.trim()}"` : tipo ? `${GUIA_TIPO_INFO[tipo][0]} ${GUIA_TIPO_INFO[tipo][1]}${cultura ? ` · ${cultura}` : cultura === "" && !SEM_CULTURA.includes(tipo) ? " · todas as culturas" : ""}` : "📖 Guia de campo";
   const lista = buscando ? buscarNoGuia(GUIA_CAMPO, busca, "", "") : (tipo && cultura !== null ? buscarNoGuia(GUIA_CAMPO, "", tipo, cultura) : []);
   const tile = (onClick, emoji, titulo, sub, cor) => (

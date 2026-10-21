@@ -1004,7 +1004,14 @@ teste("fenologia da soja: 16 estádios VE–R8 com ilustração, figuras da esca
   const urls = C.urlsFixasDoGuia();
   return cods === "VE,VC,V1,V2,V3,V4,V5,V6,R1,R2,R3,R4,R5,R6,R7,R8" && e.estagios.every((x) => x[4] && fs.existsSync(path.join(raiz, "web", x[4])))
     && e.figuras.length === 2 && e.figuras.every((f) => fs.existsSync(path.join(raiz, "web", f.url))) && e.texto.contar && e.texto.partes
-    && urls.length === 30 + 16 + 2 && urls.every((u) => fs.existsSync(path.join(raiz, "web", u)));
+    && urls.length === 30 + 16 + 3 && urls.every((u) => fs.existsSync(path.join(raiz, "web", u)));
+});
+
+teste("soja: nodulação (3 faixas) e guia de acompanhamento (10 categorias) na fenologia, busca acha 'FBN' e 'nódulos'", () => {
+  const n = C.GUIA_CAMPO.find((g) => g.id === "e-soja-nodulacao"), a = C.GUIA_CAMPO.find((g) => g.id === "e-soja-acompanhamento");
+  const fen = C.buscarNoGuia(C.GUIA_CAMPO, "", "estadio", "Soja").map((g) => g.id);
+  return n.tabelas[0].linhas.length === 3 && a.tabelas[0].linhas.length === 10 && fen.join(",") === "e-soja,e-soja-nodulacao,e-soja-acompanhamento"
+    && C.buscarNoGuia(C.GUIA_CAMPO, "nodulos ativos").some((g) => g.id === "e-soja-nodulacao") && C.buscarNoGuia(C.GUIA_CAMPO, "uniformidade de maturacao").some((g) => g.id === "e-soja-acompanhamento");
 });
 
 teste("visita: 'mais opções' tem daninhas do cerrado e entra no dicionário da transcrição", () => {
