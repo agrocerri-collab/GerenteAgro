@@ -22511,7 +22511,11 @@ const GUIA_TIPOS = [["daninha", "🌿", "Daninhas"], ["praga", "🐛", "Pragas"]
 const GUIA_FOTOS_FIXAS = (() => {
   const m = (cultura, pasta, mapa) => Object.fromEntries(Object.entries(mapa).map(([id, nome]) => [id, [1, 2, 3].map((n) => ({ url: `guia/${pasta}/${nome}-${n}.jpg`, cultura }))]));
   const milho = m("Milho", "milho", { "f-diplodiafolha": "diplodia", "f-polissora": "ferrugem-polissora", "f-ferrugemcomum": "ferrugem-comum", "f-helminto": "turcicum", "f-ferrugemtropical": "ferrugem-tropical", "f-bipolaris": "bipolaris", "f-ocular": "mancha-ocular", "f-cercmilho": "cercosporiose", "f-manchabranca": "mancha-branca", "f-estriabact": "estria-bacteriana" });
-  return { ...milho };
+  const umaSoja = (mapa) => Object.fromEntries(Object.entries(mapa).map(([id, arq]) => [id, [{ url: `guia/soja/${arq}.jpg`, cultura: "Soja", inteira: true }]]));
+  const soja = umaSoja({ "n-Mg": "deficiencia-Mg", "n-K": "deficiencia-K", "n-Mn": "deficiencia-Mn", "n-Fe": "deficiencia-Fe", "n-Zn": "deficiencia-Zn", "n-B": "deficiencia-B", "n-FeCo": "deficiencia-FeCo", "n-Ni": "deficiencia-Ni" });
+  // mesmo verbete com fotos de culturas diferentes: junta as listas
+  const junta = (...ms) => { const o = {}; for (const m of ms) for (const [k, v] of Object.entries(m)) o[k] = [...(o[k] || []), ...v]; return o; };
+  return junta(milho, soja);
 })();
 // todas as imagens que vêm com o app (fotos de referência, figuras e ilustrações de estádio) — para baixar de uma vez
 const urlsFixasDoGuia = () => [...Object.values(GUIA_FOTOS_FIXAS).flat().map((f) => f.url), ...GUIA_CAMPO.flatMap((g) => [...(g.figuras || []).map((f) => f.url), ...(g.estagios || []).map((e) => e[4]).filter(Boolean)])];
@@ -23133,7 +23137,7 @@ const GUIA_CAMPO = [
     manejo: "Fósforo no sulco ou a lanço incorporado; calagem para disponibilizar." } },
   { id: "n-K", tipo: "deficiencia", nome: "Potássio (K)", culturas: ["Soja", "Milho", "Algodão"], texto: {
     sintoma: "Amarelecimento e queima (necrose) das BORDAS das folhas VELHAS, do ápice para a base; a nervura central fica verde. Móvel: começa embaixo.",
-    soja: "Bordas amarelas e depois secas nas folhas de baixo; grãos pequenos e enrugados; vagens chochas.",
+    soja: "Clorose internerval amarelada que começa nas folhas mais VELHAS. Com o avanço, necrose nas margens das folhas, com manchas marrons. Grãos pequenos e enrugados, vagens chochas.",
     milho: "Queima das bordas das folhas de baixo (margem seca), colmo fraco, acamamento, espiga com ponta falhada.",
     algodao: "Folhas velhas amarelo-bronzeadas com bordas queimadas e enroladas, caem cedo; maçãs pequenas que não abrem ('ferrugem do potássio').",
     confunde: "Com magnésio (que amarela entre nervuras) e com alternária no algodão (que vem junto).",
@@ -23147,7 +23151,7 @@ const GUIA_CAMPO = [
     manejo: "Calagem com antecedência, gesso para profundidade; cálcio foliar não corrige." } },
   { id: "n-Mg", tipo: "deficiencia", nome: "Magnésio (Mg)", culturas: ["Soja", "Milho", "Algodão"], texto: {
     sintoma: "Amarelecimento ENTRE as nervuras nas folhas VELHAS, nervuras verdes (desenho de espinha de peixe); depois manchas avermelhadas.",
-    soja: "Folhas de baixo amarelas entre nervuras, com nervuras verdes; bordas podem avermelhar.",
+    soja: "Sintomas nas folhas mais VELHAS: clorose (amarelecimento) entre as nervuras. Com o tempo as folhas ficam mais amareladas e podem necrosar.",
     milho: "Estrias amarelas entre nervuras nas folhas velhas, com nervuras verdes; depois necrose.",
     algodao: "Folhas velhas avermelhadas/arroxeadas entre nervuras, nervuras verdes, caem cedo.",
     confunde: "Com potássio (bordas) e com manganês/ferro (que são nas folhas novas).",
@@ -23161,28 +23165,28 @@ const GUIA_CAMPO = [
     manejo: "Gesso agrícola, sulfato de amônio, superfosfato simples; manter matéria orgânica." } },
   { id: "n-B", tipo: "deficiencia", nome: "Boro (B)", culturas: ["Soja", "Milho", "Algodão"], texto: {
     sintoma: "Folhas NOVAS grossas, enrugadas e quebradiças, entrenós curtos, morte do ponteiro, brotação lateral; flores e maçãs caem. Imóvel.",
-    soja: "Folhas novas coriáceas e deformadas, pecíolos quebradiços, vagens falhadas.",
+    soja: "Folhas engrossadas e enrugadas, com certa clorose internerval. Os ponteiros costumam ficar arqueados para baixo. Internódios mais curtos e deformações nas folhas encurtadas. Pecíolos quebradiços e vagens falhadas.",
     milho: "Espigas com falhas de grãos, folhas novas com estrias transparentes, pendão falhado.",
     algodao: "Anéis escuros no pecíolo (corte), queda de botões e maçãs, maçãs deformadas, ponteiro morto; muito comum no cerrado.",
     confunde: "Com cálcio (ponteiro) e com dano de ácaro-branco/tripes; o anel no pecíolo do algodão é típico de boro.",
     manejo: "Boro no solo (ulexita, ácido bórico) e foliar nas fases de florescimento; cuidado com dose (fitotóxico)." } },
   { id: "n-Zn", tipo: "deficiencia", nome: "Zinco (Zn)", culturas: ["Soja", "Milho", "Algodão"], texto: {
     sintoma: "Folhas NOVAS pequenas e estreitas, entrenós curtos (planta em roseta), faixas branco-amareladas entre nervuras. Imóvel.",
-    soja: "Folhas novas pequenas, amareladas entre nervuras, internódios curtos.",
+    soja: "Sintomas em folhas NOVAS (o zinco tem menor mobilidade no tecido vegetal): encurtamento de internódios, folhas novas pequenas, com clorose e aspecto lanceolado (mais estreitas).",
     milho: "Faixas largas brancas ou amareladas dos dois lados da nervura central nas folhas novas (base), planta baixa; o mais comum no cerrado.",
     algodao: "Folhas novas pequenas, grossas, amareladas entre nervuras; entrenós curtos; atraso.",
     confunde: "Com fitotoxidez de herbicida e com magnésio (que é embaixo).",
     manejo: "Zinco no sulco (sulfato, óxido), foliar cedo (V4) no milho." } },
   { id: "n-Mn", tipo: "deficiencia", nome: "Manganês (Mn)", culturas: ["Soja", "Milho", "Algodão"], texto: {
     sintoma: "Amarelecimento ENTRE as nervuras das folhas NOVAS, com nervuras finas verdes (reticulado); folhas pequenas. Comum em solo com pH alto ou após glifosato na soja RR.",
-    soja: "Folhas novas amarelas entre nervuras (reticulado verde), especialmente após glifosato em solo arenoso com calagem excessiva.",
+    soja: "Clorose internerval com as nervuras permanecendo mais escuras (reticulado verde). Pode ser confundida com deficiência de ferro, mas ocorre em folhas VELHAS e NOVAS. Comum após glifosato em solo arenoso com calagem excessiva.",
     milho: "Estrias amareladas entre nervuras nas folhas novas, menos comum.",
     algodao: "Folhas novas amarelas entre nervuras com nervuras verdes.",
     confunde: "Com ferro (muito parecido: ferro deixa a folha quase branca) e com magnésio (embaixo).",
     manejo: "Manganês foliar (sulfato, quelato) 1–2 aplicações; evitar calagem em excesso." } },
   { id: "n-Fe", tipo: "deficiencia", nome: "Ferro (Fe)", culturas: ["Soja", "Milho", "Algodão"], texto: {
     sintoma: "Folhas NOVAS amarelas a quase brancas entre as nervuras, com as nervuras bem verdes; as folhas velhas ficam verdes. Imóvel.",
-    soja: "Ponteiro amarelo-esbranquiçado com nervuras verdes; em solo encharcado, calcário em excesso ou após herbicida.",
+    soja: "Primeiros sintomas em folhas NOVAS: clorose internerval e redução do crescimento. Em casos mais severos as folhas ficam bem cloróticas (amarelo-esbranquiçadas) e a planta atrasa o desenvolvimento. Comum em solo encharcado ou com calcário em excesso.",
     milho: "Estrias branco-amareladas nas folhas novas.",
     algodao: "Folhas novas amarelo-claras com nervuras verdes.",
     confunde: "Com manganês (ferro é mais branco) e com fitotoxidez.",
@@ -23201,6 +23205,16 @@ const GUIA_CAMPO = [
     algodao: "Raro.",
     confunde: "Com nitrogênio/nodulação falha; conferir pH e Mo na semente.",
     manejo: "Cobalto + molibdênio na semente ou foliar até V4; calagem." } },
+  { id: "n-FeCo", tipo: "deficiencia", nome: "Ferro induzido por excesso de cobalto (Fe/Co)", culturas: ["Soja"], texto: {
+    sintoma: "Clorose generalizada ou internerval que aparece logo no começo da lavoura, geralmente nas folhas jovens (unifolioladas).",
+    soja: "Ocorre pelo excesso de cobalto no tratamento de sementes: o cobalto em excesso atrapalha o ferro na planta. Geralmente afeta as folhas jovens (unifolioladas) e provoca clorose generalizada ou internerval.",
+    confunde: "Com deficiência de ferro e de manganês. Pista: começa logo após a emergência, em toda a área semeada com o mesmo lote tratado, e as folhas seguintes saem normais.",
+    manejo: "Evitar doses excessivas de cobalto: respeitar a dose recomendada no tratamento de semente e não somar cobalto na semente e no foliar sem necessidade." } },
+  { id: "n-Ni", tipo: "deficiencia", nome: "Níquel (Ni)", culturas: ["Soja"], texto: {
+    sintoma: "O níquel faz parte da urease (enzima que quebra a ureia). Na falta, a ureia se acumula nas folhas e pode levar à necrose apical — pontas das folhas queimadas.",
+    soja: "Acúmulo de ureia nas folhas, podendo levar à necrose apical (pontas queimadas). Mais comum em solos muito intemperizados e arenosos, com pH elevado. Pode estar relacionado ao uso excessivo de fertilizantes nitrogenados sem o balanço de micronutrientes.",
+    confunde: "Com queima de ponta por adubo foliar, por herbicida ou por potássio (no potássio a queima é na margem toda, começando nas folhas velhas).",
+    manejo: "Níquel via semente ou foliar conforme recomendação técnica; equilibrar micronutrientes e não exagerar no nitrogênio." } },
   { id: "n-Al", tipo: "deficiencia", nome: "Toxidez de alumínio / acidez", culturas: ["Soja", "Milho", "Algodão"], texto: {
     sintoma: "Raízes curtas, grossas, escuras e sem radicelas (parecem 'tocos'); planta murcha fácil em veranico; sintomas de cálcio e magnésio nas folhas.",
     soja: "Plantas baixas, raízes atrofiadas na camada abaixo de 20 cm; sensível ao veranico.",
@@ -23467,7 +23481,7 @@ function IdentificarPelaFoto({ cultura, tipos, onEscolher, onFechar }) {
   );
 }
 // um verbete do guia: textos, fotos da equipe, mandar foto, apagar foto
-const ROTULOS_GUIA = { contar: "Como contar os estádios", partes: "Partes da planta", principio: "Como funciona", pratica: "Na prática", conta: "A conta", atencao: "Cuidado", reconhecer: "Como reconhecer", confunde: "Com o que confunde", dano: "Dano", quando: "Quando olhar", manejo: "Manejo", sintoma: "Sintoma", soja: "Na soja", milho: "No milho", algodao: "No algodão" };
+const ROTULOS_GUIA = { contar: "Como contar os estádios", partes: "Partes da planta", principio: "Como funciona", pratica: "Na prática", conta: "A conta", atencao: "Cuidado", reconhecer: "Como reconhecer", sintoma: "Sintoma", soja: "Na soja", milho: "No milho", algodao: "No algodão", confunde: "Com o que confunde", dano: "Dano", quando: "Quando olhar", manejo: "Manejo" };
 // cultura escolhida (Soja/Milho/Algodão): mostra só o texto dela e as fotos dela; a foto mandada leva a cultura
 const GUIA_CHAVE_CULTURA = { Soja: "soja", Milho: "milho", "Algodão": "algodao" };
 function GuiaItem({ item, fotos, usuario, fazenda, naNuvem, consultor, onFotos, compacto, cultura }) {
@@ -23509,7 +23523,7 @@ function GuiaItem({ item, fotos, usuario, fazenda, naNuvem, consultor, onFotos, 
       {fixas.length > 0 && (
         <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 6, marginBottom: 8, scrollSnapType: "x mandatory" }}>
           {fixas.map((f, i) => (
-            <FotoGuia key={f.url} url={f.url} onClick={() => setGrande({ url: f.url, ref: true, n: i + 1, total: fixas.length })} style={{ flex: "none", width: 200, height: 200, objectFit: "cover", borderRadius: 12, display: "block", cursor: "zoom-in", scrollSnapAlign: "start", boxShadow: "0 1px 4px rgba(0,0,0,.18)" }} />
+            <FotoGuia key={f.url} url={f.url} onClick={() => setGrande({ url: f.url, ref: true, n: i + 1, total: fixas.length })} style={{ flex: "none", width: 200, height: f.inteira ? 240 : 200, objectFit: f.inteira ? "contain" : "cover", background: f.inteira ? "#F4F6F1" : undefined, borderRadius: 12, display: "block", cursor: "zoom-in", scrollSnapAlign: "start", boxShadow: "0 1px 4px rgba(0,0,0,.18)" }} />
           ))}
         </div>
       )}

@@ -990,7 +990,7 @@ teste("guia por cultura: deficiência tem texto de cada cultura e a chave de cad
 });
 
 teste("guia: fotos de referência do milho — 10 doenças com 3 fotos cada, arquivos existem, verbetes existem e o monitoramento acha cada uma", () => {
-  const F = C.GUIA_FOTOS_FIXAS, ids = Object.keys(F);
+  const F = C.GUIA_FOTOS_FIXAS, ids = Object.keys(F).filter((id) => F[id][0].cultura === "Milho");
   const arquivosOk = ids.every((id) => F[id].length === 3 && F[id].every((f) => f.cultura === "Milho" && fs.existsSync(path.join(raiz, "web", f.url))));
   const verbetes = ids.every((id) => C.GUIA_CAMPO.some((g) => g.id === id && g.tipo === "doenca" && g.culturas.includes("Milho")));
   const monit = ["Mancha de Diplodia", "Ferrugem-comum", "Ferrugem-tropical", "Mancha de Bipolaris", "Mancha ocular", "Estria bacteriana", "Helmintosporiose (Turcicum)", "Ferrugem-polissora", "Cercosporiose", "Mancha-branca"].map((n) => (C.acharNoGuia(n, "Milho") || {}).id);
@@ -1004,7 +1004,7 @@ teste("fenologia da soja: 16 estádios VE–R8 com ilustração, figuras da esca
   const urls = C.urlsFixasDoGuia();
   return cods === "VE,VC,V1,V2,V3,V4,V5,V6,R1,R2,R3,R4,R5,R6,R7,R8" && e.estagios.every((x) => x[4] && fs.existsSync(path.join(raiz, "web", x[4])))
     && e.figuras.length === 2 && e.figuras.every((f) => fs.existsSync(path.join(raiz, "web", f.url))) && e.texto.contar && e.texto.partes
-    && urls.length === 30 + 16 + 3 && urls.every((u) => fs.existsSync(path.join(raiz, "web", u)));
+    && urls.length === 30 + 8 + 16 + 3 && urls.every((u) => fs.existsSync(path.join(raiz, "web", u)));
 });
 
 teste("soja: nodulação (3 faixas) e guia de acompanhamento (10 categorias) na fenologia, busca acha 'FBN' e 'nódulos'", () => {
@@ -1012,6 +1012,13 @@ teste("soja: nodulação (3 faixas) e guia de acompanhamento (10 categorias) na 
   const fen = C.buscarNoGuia(C.GUIA_CAMPO, "", "estadio", "Soja").map((g) => g.id);
   return n.tabelas[0].linhas.length === 3 && a.tabelas[0].linhas.length === 10 && fen.join(",") === "e-soja,e-soja-nodulacao,e-soja-acompanhamento"
     && C.buscarNoGuia(C.GUIA_CAMPO, "nodulos ativos").some((g) => g.id === "e-soja-nodulacao") && C.buscarNoGuia(C.GUIA_CAMPO, "uniformidade de maturacao").some((g) => g.id === "e-soja-acompanhamento");
+});
+
+teste("deficiências da soja: folha de referência para Mg, K, Mn, Fe, Zn, B, Fe/Co e Ni; texto na soja; não aparecem no milho", () => {
+  const ids = ["n-Mg", "n-K", "n-Mn", "n-Fe", "n-Zn", "n-B", "n-FeCo", "n-Ni"];
+  return ids.every((id) => C.fotosFixasDe(id, "Soja").length === 1 && fs.existsSync(path.join(raiz, "web", C.fotosFixasDe(id, "Soja")[0].url)) && C.fotosFixasDe(id, "Milho").length === 0)
+    && ids.every((id) => (C.GUIA_CAMPO.find((g) => g.id === id) || { texto: {} }).texto.soja) && /lanceolado/.test(C.GUIA_CAMPO.find((g) => g.id === "n-Zn").texto.soja)
+    && C.buscarNoGuia(C.GUIA_CAMPO, "", "deficiencia", "Soja").some((g) => g.id === "n-Ni") && !C.buscarNoGuia(C.GUIA_CAMPO, "", "deficiencia", "Milho").some((g) => g.id === "n-FeCo");
 });
 
 teste("visita: 'mais opções' tem daninhas do cerrado e entra no dicionário da transcrição", () => {
