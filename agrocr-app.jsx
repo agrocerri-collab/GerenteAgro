@@ -8037,7 +8037,7 @@ function SecaoComunidade({ fazenda, usuario, naNuvem }) {
             <span style={{ flex: "none" }}>{m.data ? quando(m.data) : ""}</span>
           </div>
           <div style={{ fontSize: 14, marginTop: 4, whiteSpace: "pre-wrap" }}>{m.texto}</div>
-          {(m.uid === meuUid || (usuario && usuario.admin)) && (
+          {(m.uid === meuUid || ehDonoPlataforma(usuario) || (!MARCA_VENDA && usuario && usuario.admin)) && (
             apagando === m.id
               ? <div style={{ display: "flex", gap: 6, marginTop: 6 }}><button onClick={async () => { try { await Nuvem.apagarComunidade(uf, m.id); } catch (e) {} setApagando(null); }} style={{ background: C.vermelho, color: "#fff", border: "none", borderRadius: 8, padding: "5px 10px", fontSize: 12, fontWeight: 800 }}>apagar mesmo</button><button onClick={() => setApagando(null)} style={{ background: "#fff", border: `1px solid ${C.borda}`, borderRadius: 8, padding: "5px 10px", fontSize: 12 }}>cancelar</button></div>
               : <button onClick={() => setApagando(m.id)} style={{ background: "transparent", border: "none", color: C.cinza, fontSize: 11.5, padding: 0, marginTop: 4 }}>apagar</button>
@@ -22506,7 +22506,7 @@ function RelatorioRegulagem({ fazenda, reg, onVoltar }) {
 // embutidos (funcionam sem internet); as fotos vêm da própria equipe pelo app
 // (coleção "guia" + "guiaFotos" na nuvem, guardadas no aparelho depois de baixadas).
 // Chaves do texto: reconhecer · confunde · dano · quando · manejo · sintoma · soja · milho · algodao
-const GUIA_TIPOS = [["daninha", "🌿", "Daninhas"], ["praga", "🐛", "Pragas"], ["inimigo", "🐞", "Inimigos naturais"], ["doenca", "🦠", "Doenças"], ["deficiencia", "🧪", "Deficiências"], ["estadio", "🌱", "Estádios"]];
+const GUIA_TIPOS = [["daninha", "🌿", "Daninhas"], ["praga", "🐛", "Pragas"], ["inimigo", "🐞", "Inimigos naturais"], ["doenca", "🦠", "Doenças"], ["deficiencia", "🧪", "Deficiências"], ["estadio", "🌱", "Estádios"], ["aplicacao", "💧", "Tecnologia de aplicação"]];
 const GUIA_CULTURAS = ["Soja", "Milho", "Algodão"];
 const GUIA_CAMPO = [
   // ---------- DANINHAS ----------
@@ -23163,6 +23163,63 @@ const GUIA_CAMPO = [
     algodao: "Muito sensível: raízes paradas, plantas pequenas, murcha.",
     confunde: "Com nematoides (raiz) e com compactação; a análise de solo (Al, saturação por bases) confirma.",
     manejo: "Calagem bem antes do plantio, gesso para profundidade, cultivar tolerante." } },
+  // ---------- TECNOLOGIA DE APLICAÇÃO ----------
+  { id: "a-gota", tipo: "aplicacao", nome: "Tamanho de gota", resumo: "Classes de gota e qual usar para cada produto", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    principio: "A gota é medida pelo DMV (diâmetro mediano volumétrico, em µm). Classes (ASABE S572): muito fina (< 145 µm), fina (145–225), média (226–325), grossa (326–400), muito grossa (401–500), extremamente grossa (> 500). Gota fina cobre mais, mas evapora e deriva; gota grossa cai no alvo, mas cobre menos.",
+    pratica: "Fungicida e inseticida de contato, lavoura fechada: gota fina a média (mais gotas por cm², penetra no baixeiro). Fungicida e inseticida sistêmicos: média. Herbicida sistêmico em pós (glifosato, 2,4-D, dicamba): grossa a muito grossa. Dessecação e pré-emergente: média a grossa.",
+    atencao: "Com calor e ar seco, gota fina some antes de chegar (evaporação). Hormonais (2,4-D, dicamba) só com gota grossa ou maior e ponta de indução de ar, por causa da deriva para lavouras vizinhas." } },
+  { id: "a-pontas", tipo: "aplicacao", nome: "Pontas de pulverização (bicos)", resumo: "Leque, cone, indução de ar; código e cor do bico", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    principio: "O código diz o ângulo e a vazão: 110.02 = leque de 110° que solta 0,2 galão/min a 40 psi (2,8 bar) ≈ 0,76 L/min. A cor segue a norma ISO: 01 laranja · 015 verde · 02 amarelo · 025 lilás · 03 azul · 04 vermelho · 05 marrom · 06 cinza · 08 branco.",
+    pratica: "Leque simples: herbicida em área total. Leque duplo (twin): cobre os dois lados da folha, bom para fungicida/inseticida em lavoura fechada. Cone vazio: gota fina, muita cobertura, mais deriva. Indução de ar (AI, AD-IA, TTI): gota grossa com bolhas de ar, a escolha para reduzir deriva e para hormonais.",
+    atencao: "Ponta gasta solta mais e com gota pior: trocar quando a vazão passar 10% da nominal (meça na regulagem do app). Barra com pontas de modelos ou desgaste diferentes não aplica por igual." } },
+  { id: "a-vazao", tipo: "aplicacao", nome: "Vazão e volume de calda (L/ha)", resumo: "A conta do L/ha e volumes de referência", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    conta: "L/ha = 600 × vazão do bico (L/min) ÷ (velocidade km/h × espaçamento entre bicos m). Exemplo: 0,76 L/min, 15 km/h, 0,5 m → 600 × 0,76 ÷ 7,5 = 61 L/ha. Para achar a vazão que o bico precisa: L/min = L/ha × km/h × m ÷ 600.",
+    pratica: "Referências de campo (terrestre): herbicida pós e dessecação 50–100 L/ha; fungicida e inseticida 80–150 L/ha (mais na lavoura fechada e no algodão alto). Aérea: 10–40 L/ha. Drone: 8–15 L/ha. A bula manda: respeite o volume mínimo do rótulo.",
+    atencao: "Baixar o volume aumenta a concentração e exige gota menor para manter a cobertura — confira com cartão hidrossensível. A 'Regulagem de máquina' do app faz essa conta com as coletas." } },
+  { id: "a-pressao", tipo: "aplicacao", nome: "Pressão e velocidade", resumo: "Como a pressão muda vazão e gota", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    principio: "A vazão cresce com a raiz quadrada da pressão: vazão nova = vazão × √(pressão nova ÷ pressão antiga). Dobrar a pressão aumenta só ~41% a vazão e AFINA a gota. Para mudar muito a taxa, troque a ponta, não a pressão.",
+    pratica: "Trabalhe na faixa de pressão da ponta (veja o catálogo: leque comum 1,5–4 bar; indução de ar 3–7 bar). Mantenha a velocidade constante: com controlador de vazão ele compensa mexendo na pressão — e a gota muda junto.",
+    atencao: "Velocidade alta (acima de ~18–20 km/h no autopropelido) faz a barra balançar e aumenta a deriva. Nas curvas e cabeceiras a aplicação fica desigual." } },
+  { id: "a-altura", tipo: "aplicacao", nome: "Altura da barra", resumo: "Altura certa para o transpasse dos leques", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    principio: "Os leques precisam se cruzar (transpasse ~100%) para a faixa sair uniforme. Leque de 110° com bicos a 50 cm: barra a ~50 cm do ALVO (topo da lavoura, não do chão). Leque de 80°: ~75 cm.",
+    pratica: "Meça do topo das plantas até a ponta. Abaixo da altura, ficam faixas sem produto; acima, deriva aumenta muito (cada 10 cm a mais pesa). Use o controle automático de altura quando houver.",
+    atencao: "Barra oscilando (terreno, velocidade) muda a altura o tempo todo — reduza a velocidade em terreno irregular." } },
+  { id: "a-clima", tipo: "aplicacao", nome: "Condições do tempo para aplicar", resumo: "Temperatura, umidade, vento e ΔT", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    pratica: "Aplique com: temperatura abaixo de 30 °C, umidade relativa acima de 55%, vento entre 3 e 10 km/h, e sem previsão de chuva nas próximas horas (veja o intervalo na bula; muitos produtos pedem 1–2 h). Melhores horas: manhã cedo (depois que o orvalho escorre) e fim de tarde.",
+    conta: "ΔT (delta T) = temperatura do bulbo seco − bulbo úmido. Ideal entre 2 e 8. Acima de 10: evaporação forte, pare com gota fina. Abaixo de 2: risco de inversão térmica e de escorrimento.",
+    atencao: "Vento abaixo de 3 km/h não é seguro — pode ser inversão térmica (ver item próprio). O painel Hoje do app avisa “Bom para pulverizar / atenção / pare” com a temperatura, a umidade e o vento do momento." } },
+  { id: "a-inversao", tipo: "aplicacao", nome: "Inversão térmica", resumo: "Quando o ar parado leva a gota para longe", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    principio: "Em noites e manhãs frias, sem vento e céu limpo, o ar junto do chão fica mais frio que o de cima e não sobe. As gotas finas ficam suspensas nessa camada e andam quilômetros quando o ar se move.",
+    pratica: "Sinais: vento abaixo de 3 km/h, neblina ou fumaça que fica parada em camada, poeira que não assenta, orvalho forte, céu limpo de madrugada. Espere o sol aquecer (geralmente 1–3 h após nascer) e o vento firmar acima de 3 km/h.",
+    atencao: "Hormonais (2,4-D, dicamba) com inversão são a maior causa de dano em lavoura vizinha. Não aplique à noite sem conferir." } },
+  { id: "a-deriva", tipo: "aplicacao", nome: "Deriva", resumo: "Por que o produto sai do alvo e como reduzir", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    principio: "Deriva é o produto que vai para fora do alvo: em gotas levadas pelo vento (deriva física) ou em vapor depois de aplicado (volatilização, ex.: 2,4-D éster, dicamba em calor).",
+    pratica: "Reduz deriva: ponta de indução de ar, gota maior, barra mais baixa, velocidade menor, vento entre 3 e 10 km/h, adjuvante antideriva, faixa de bordadura sem aplicação perto de área sensível (APP, casas, outra cultura).",
+    atencao: "Vizinho com algodão, uva, hortaliça ou soja não tolerante: redobre o cuidado com hormonais e glifosato. Registre a condição do tempo na hora da aplicação." } },
+  { id: "a-cartao", tipo: "aplicacao", nome: "Cartão hidrossensível (cobertura)", resumo: "Quantas gotas por cm² cada produto precisa", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    pratica: "Cartão amarelo que fica azul onde a gota cai. Coloque no topo, no meio e no baixeiro da planta (presos com clipe), aplique e conte as gotas por cm² com lupa ou app. Referências: herbicida sistêmico 20–30; herbicida de contato 30–40; inseticida sistêmico 20–30; inseticida de contato 50–70; fungicida sistêmico 30–50; fungicida de contato acima de 70.",
+    atencao: "Pouca gota no baixeiro é o normal na lavoura fechada — se o alvo está embaixo (ferrugem, mosca-branca, lagarta no baixeiro), ajuste gota, volume e ponta. Cartão encharcado (tudo azul) = gota demais ou escorrimento. Mande a foto do cartão para o guia." } },
+  { id: "a-adjuvantes", tipo: "aplicacao", nome: "Adjuvantes", resumo: "Espalhante, óleo, antideriva, redutor de pH…", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    principio: "Espalhante/surfactante: quebra a tensão da gota e espalha na folha. Adesivo: segura contra a chuva. Óleo mineral ou vegetal: ajuda a penetrar a cutícula e reduz evaporação. Antideriva: engrossa a gota. Redutor de pH/condicionador: corrige água alcalina ou dura. Antiespumante: tira a espuma do tanque.",
+    pratica: "Use o que a bula do produto pede ou permite. Óleo entra por último na mistura. Muitos produtos já vêm formulados com adjuvante — somar outro pode causar fitotoxidez.",
+    atencao: "Óleo com calor e com fungicidas/enxofre pode queimar a folha. Antiespumante resolve espuma, não substitui o teste de calda." } },
+  { id: "a-agua", tipo: "aplicacao", nome: "Qualidade da água", resumo: "pH, dureza e água suja", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    principio: "A maioria dos defensivos fica estável com pH entre 5 e 6,5. Água alcalina (pH alto) degrada vários inseticidas e fungicidas em horas. Água dura (cálcio e magnésio) prende o glifosato. Água barrenta (argila, matéria orgânica) inativa glifosato, paraquat e diquat.",
+    pratica: "Use água limpa (poço, caixa decantada). Meça pH e dureza do ponto de captação uma vez por safra. Com água dura no glifosato, sulfato de amônio ou condicionador ANTES do glifosato. Biológico: água sem cloro, pH perto do neutro.",
+    atencao: "Não deixe a calda pronta de um dia para o outro. Faça o teste de calda (Visitas técnicas → Regulagem e calda) quando trocar a fonte de água." } },
+  { id: "a-calibracao", tipo: "aplicacao", nome: "Calibração do pulverizador", resumo: "Coleta por bico, CV e quando trocar", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    pratica: "Com a pressão de trabalho, colete a água de cada bico por 1 minuto (ou 30 s) num copo graduado. Compare com a vazão nominal da ponta e entre os bicos. Calcule o L/ha com a velocidade real medida no campo (tempo para andar 50 m).",
+    conta: "Troque o bico que sair mais de 10% da nominal. CV (coeficiente de variação) entre bicos: até 10% está bom. A 'Regulagem de máquina → Pulverizador' do app faz a conta e o relatório com as coletas.",
+    atencao: "Calibre no começo da safra, a cada troca de ponta e quando mudar muito o volume. Filtros sujos e mangueiras dobradas também desregulam." } },
+  { id: "a-limpeza", tipo: "aplicacao", nome: "Limpeza do pulverizador", resumo: "Tríplice lavagem e resíduo de herbicida", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    pratica: "Ao trocar de produto: esvazie, enxágue o tanque, a barra e os filtros três vezes com água limpa (10% do volume do tanque cada vez), passando pela barra. Depois de hormonal (2,4-D, dicamba) ou sulfonilureia, use limpa-tanque/amônia conforme a bula e deixe circular.",
+    atencao: "Resíduo de herbicida no tanque queima a lavoura seguinte (soja não tolerante, algodão). Descarte a água de lavagem na área tratada ou em local indicado — nunca em rio ou córrego. Embalagem: tríplice lavagem e devolução." } },
+  { id: "a-aerea", tipo: "aplicacao", nome: "Aplicação aérea e por drone", resumo: "Faixa, altura, volume e cuidados", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    pratica: "Avião: 10–40 L/ha, faixa conforme a aeronave (15–20 m), altura de voo 3–4 m. Drone: 8–15 L/ha, altura 2–3 m acima da lavoura, faixa de 5–9 m conforme o modelo, velocidade 4–6 m/s. Gota fina a média e adjuvante específico para baixo volume.",
+    atencao: "Condições do tempo mais rigorosas que no terrestre (deriva maior). Bordadura de segurança perto de áreas sensíveis. Confira se o produto tem registro para aplicação aérea/drone na bula." } },
+  { id: "a-mistura", tipo: "aplicacao", nome: "Ordem de mistura no tanque", resumo: "Quem entra primeiro e o teste do jarro", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    pratica: "Tanque com metade da água e agitação ligada. Ordem: 1 condicionador de água/redutor de pH · 2 pó e grânulo (WG, WP, SP, SG — pré-dissolvidos) · 3 suspensões (SC) · 4 emulsões e óleos formulados (EC, EW, OD) · 5 solúveis (SL) · 6 foliar · 7 óleo e adjuvantes · 8 biológico por último, se compatível.",
+    atencao: "Com 4 produtos ou mais, ou produto novo na mistura, faça o teste de calda no jarro antes (Visitas técnicas → Regulagem e calda → 🧪 Teste de calda): o app diz quanto de cada produto vai no recipiente e a ordem." } },
   // ---------- ESTÁDIOS ----------
   { id: "e-soja", tipo: "estadio", nome: "Soja — estádios (Fehr e Caviness)", culturas: ["Soja"], estagios: [
     ["VE", "Emergência", "Cotilédones acima do solo.", "Estande (plantas/m) e falhas; tratamento de semente; elasmo e rosca."],
@@ -23217,8 +23274,8 @@ function acharNoGuia(nome) {
   if (!limpo) return null;
   const nomeDe = (g) => guiaNormal(g.nome.replace(/\s*\(.*?\)\s*$/, "").replace(/-/g, " "));
   return GUIA_CAMPO.find((g) => nomeDe(g) === limpo)
-    || GUIA_CAMPO.find((g) => g.tipo !== "estadio" && (nomeDe(g).startsWith(limpo) || limpo.startsWith(nomeDe(g)) || guiaNormal(g.cientifico || "").includes(limpo)))
-    || GUIA_CAMPO.find((g) => g.tipo !== "estadio" && limpo.split(" ")[0].length > 4 && nomeDe(g).includes(limpo.split(" ")[0]))
+    || GUIA_CAMPO.find((g) => !["estadio", "aplicacao"].includes(g.tipo) && (nomeDe(g).startsWith(limpo) || limpo.startsWith(nomeDe(g)) || guiaNormal(g.cientifico || "").includes(limpo)))
+    || GUIA_CAMPO.find((g) => !["estadio", "aplicacao"].includes(g.tipo) && limpo.split(" ")[0].length > 4 && nomeDe(g).includes(limpo.split(" ")[0]))
     || null;
 }
 // ---- fotos do guia: metadados (lista leve) + dados (um registro por foto), guardados no aparelho ----
@@ -23250,7 +23307,7 @@ async function fotosGuiaNoAparelho(metas) {
 // 🔍 Identificar pela foto: a IA olha a foto e devolve os candidatos DENTRO do guia (nunca inventa
 // espécie fora da lista); a pessoa confere nas fotos do guia e decide.
 async function identificarPelaFoto(fotoDataUri, cultura, tipos) {
-  const lista = GUIA_CAMPO.filter((g) => g.tipo !== "estadio" && (!cultura || (g.culturas || []).includes(cultura)) && (!tipos || !tipos.length || tipos.includes(g.tipo)));
+  const lista = GUIA_CAMPO.filter((g) => !["estadio", "aplicacao"].includes(g.tipo) && (!cultura || (g.culturas || []).includes(cultura)) && (!tipos || !tipos.length || tipos.includes(g.tipo)));
   const nomes = lista.map((g) => `${g.id} = ${g.nome}${g.cientifico ? ` (${g.cientifico})` : ""} [${GUIA_TIPOS.find((t) => t[0] === g.tipo)[2]}]`).join("\n");
   const r = await Nuvem.lerNota({
     foto: fotoDataUri, modo: "voz",
@@ -23311,11 +23368,14 @@ function IdentificarPelaFoto({ cultura, tipos, onEscolher, onFechar }) {
   );
 }
 // um verbete do guia: textos, fotos da equipe, mandar foto, apagar foto
-const ROTULOS_GUIA = { reconhecer: "Como reconhecer", confunde: "Com o que confunde", dano: "Dano", quando: "Quando olhar", manejo: "Manejo", sintoma: "Sintoma", soja: "Na soja", milho: "No milho", algodao: "No algodão" };
-function GuiaItem({ item, fotos, usuario, fazenda, naNuvem, consultor, onFotos, compacto }) {
+const ROTULOS_GUIA = { principio: "Como funciona", pratica: "Na prática", conta: "A conta", atencao: "Cuidado", reconhecer: "Como reconhecer", confunde: "Com o que confunde", dano: "Dano", quando: "Quando olhar", manejo: "Manejo", sintoma: "Sintoma", soja: "Na soja", milho: "No milho", algodao: "No algodão" };
+// cultura escolhida (Soja/Milho/Algodão): mostra só o texto dela e as fotos dela; a foto mandada leva a cultura
+const GUIA_CHAVE_CULTURA = { Soja: "soja", Milho: "milho", "Algodão": "algodao" };
+function GuiaItem({ item, fotos, usuario, fazenda, naNuvem, consultor, onFotos, compacto, cultura }) {
   const [enviando, setEnviando] = useState("");
   const [grande, setGrande] = useState(null);
-  const minhas = (fotos || []).filter((f) => f.item === item.id);
+  const minhas = (fotos || []).filter((f) => f.item === item.id && (!cultura || !f.cultura || f.cultura === cultura));
+  const outrasCulturas = cultura ? Object.entries(GUIA_CHAVE_CULTURA).filter(([c]) => c !== cultura).map(([, k]) => k) : [];
   const uid = window.Nuvem && Nuvem.usuarioAtual ? ((Nuvem.usuarioAtual() || {}).uid || "") : "";
   async function mandar(e) {
     const f = (e.target.files || [])[0]; e.target.value = ""; if (!f) return;
@@ -23324,7 +23384,7 @@ function GuiaItem({ item, fotos, usuario, fazenda, naNuvem, consultor, onFotos, 
     try {
       const dados = await comprimirFoto(f, 720, 0.6);
       const id = "g" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-      const meta = { id, item: item.id, quem: (usuario && usuario.nomeUsuario) || "", fazendaNome: (fazenda && fazenda.nome) || "", data: hojeISO() };
+      const meta = { id, item: item.id, quem: (usuario && usuario.nomeUsuario) || "", fazendaNome: (fazenda && fazenda.nome) || "", data: hojeISO(), cultura: cultura || "" };
       await Nuvem.guiaFotoGravar({ ...meta, dados });
       FOTOS_MEM.set("guia-" + id, dados); try { idbSet("foto:guia-" + id, dados); } catch (err) {}
       onFotos && onFotos([...(fotos || []), meta]);
@@ -23338,7 +23398,7 @@ function GuiaItem({ item, fotos, usuario, fazenda, naNuvem, consultor, onFotos, 
   const tipo = GUIA_TIPOS.find((t) => t[0] === item.tipo) || ["", "", ""];
   return (
     <div>
-      {!compacto && <div style={{ fontSize: 12, color: C.cinza, marginBottom: 2 }}>{tipo[1]} {tipo[2]} · {(item.culturas || []).join(" · ")}{item.familia ? ` · ${item.familia}` : ""}</div>}
+      {!compacto && <div style={{ fontSize: 12, color: C.cinza, marginBottom: 2 }}>{tipo[1]} {tipo[2]} · {cultura || (item.culturas || []).join(" · ")}{item.familia ? ` · ${item.familia}` : ""}</div>}
       {item.cientifico && <div style={{ fontSize: 13, color: C.cinza, fontStyle: "italic", marginBottom: 8 }}>{item.cientifico}</div>}
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
         {minhas.map((f) => (
@@ -23354,7 +23414,7 @@ function GuiaItem({ item, fotos, usuario, fazenda, naNuvem, consultor, onFotos, 
       </div>
       {minhas.length === 0 && <div style={{ fontSize: 12, color: C.cinza, marginBottom: 8 }}>Ainda sem foto. A primeira foto que a equipe mandar fica aqui para todo mundo — tire no campo, de perto, com boa luz.</div>}
       {enviando && <div style={{ fontSize: 12.5, color: enviando === "enviando" ? C.cinza : C.vermelho, fontWeight: 700, marginBottom: 6 }}>{enviando === "enviando" ? "📤 Enviando a foto…" : enviando}</div>}
-      {item.texto && Object.keys(ROTULOS_GUIA).filter((k) => item.texto[k]).map((k) => (
+      {item.texto && Object.keys(ROTULOS_GUIA).filter((k) => item.texto[k] && !outrasCulturas.includes(k)).map((k) => (
         <div key={k} style={{ marginBottom: 8 }}>
           <div style={{ fontWeight: 900, fontSize: 12, color: C.verdeEscuro, textTransform: "uppercase", letterSpacing: 0.4 }}>{ROTULOS_GUIA[k]}</div>
           <div style={{ fontSize: 13.5, color: C.navyEscuro, lineHeight: 1.4 }}>{item.texto[k]}</div>
@@ -23393,12 +23453,12 @@ function useFotosGuia(naNuvem) {
   return [fotos, mudar];
 }
 // janela do verbete, para abrir de dentro da visita e do monitoramento
-function ModalGuiaItem({ item, usuario, fazenda, naNuvem, consultor, onFechar }) {
+function ModalGuiaItem({ item, usuario, fazenda, naNuvem, consultor, onFechar, cultura }) {
   const [fotos, setFotos] = useFotosGuia(naNuvem);
   if (!item) return null;
   return (
     <Modal titulo={`📖 ${item.nome}`} onFechar={onFechar}>
-      <GuiaItem item={item} fotos={fotos} usuario={usuario} fazenda={fazenda} naNuvem={naNuvem} consultor={consultor} onFotos={setFotos} />
+      <GuiaItem item={item} fotos={fotos} usuario={usuario} fazenda={fazenda} naNuvem={naNuvem} consultor={consultor} onFotos={setFotos} cultura={GUIA_CULTURAS.includes(cultura) ? cultura : ""} />
     </Modal>
   );
 }
@@ -23408,6 +23468,7 @@ const GUIA_TIPO_INFO = {
   daninha: ["🌿", "Daninhas", "Plantas daninhas: como reconhecer e com o que confunde"],
   praga: ["🐛", "Pragas", "Insetos e ácaros: adulto, ovo, lagarta e dano"],
   inimigo: ["🐞", "Inimigos naturais", "Os que ajudam: joaninha, parasitoides, fungos"],
+  aplicacao: ["💧", "Tecnologia de aplicação", "Gota, bico, vazão, clima, deriva e cartão"],
   doenca: ["🦠", "Doenças", "Sintomas na folha, haste, vagem e maçã"],
   deficiencia: ["🧪", "Deficiências", "Falta de nutriente: folha velha ou nova, desenho do sintoma"],
   estadio: ["🌱", "Fenologia", "Estádios da cultura: o que acontece e o que olhar em cada fase"],
@@ -23435,7 +23496,7 @@ function SecaoGuia({ usuario, fazenda, naNuvem, consultor }) {
     setTimeout(() => setBaixa(null), 1500);
   }
   // daninha é uma só para todas as culturas: abre direto na lista, sem a tela de cultura
-  const SEM_CULTURA = ["daninha"];
+  const SEM_CULTURA = ["daninha", "aplicacao"];
   const abrirTipo = (id) => { setTipo(id); setCultura(SEM_CULTURA.includes(id) ? "" : null); setBusca(""); };
   const escolherCultura = (c) => {
     setCultura(c);
@@ -23454,14 +23515,14 @@ function SecaoGuia({ usuario, fazenda, naNuvem, consultor }) {
   const cabecalho = (
     <div className="nao-imprimir" style={{ display: "flex", gap: 8, marginBottom: 10, alignItems: "center" }}>
       {(tipo || buscando || aberto) && <button onClick={voltar} style={{ padding: "9px 14px", background: "#fff", border: `1.5px solid ${C.borda}`, borderRadius: 10, fontWeight: 800, color: C.navy, flex: "none" }}>← Voltar</button>}
-      <div style={{ flex: 1, fontWeight: 900, fontSize: 16, color: C.navy, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item ? item.nome : tituloTela}</div>
+      <div style={{ flex: 1, fontWeight: 900, fontSize: 16, color: C.navy, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item ? `${item.nome}${!buscando && cultura && item.tipo !== "estadio" ? ` · ${cultura}` : ""}` : tituloTela}</div>
     </div>
   );
   if (item) return (
     <div>
       {cabecalho}
       <div style={{ background: "#fff", border: `1.5px solid ${C.borda}`, borderRadius: 12, padding: 14 }}>
-        <GuiaItem item={item} fotos={fotos} usuario={usuario} fazenda={fazenda} naNuvem={naNuvem} consultor={consultor} onFotos={setFotos} />
+        <GuiaItem item={item} fotos={fotos} usuario={usuario} fazenda={fazenda} naNuvem={naNuvem} consultor={consultor} onFotos={setFotos} cultura={!buscando && cultura ? cultura : ""} />
       </div>
     </div>
   );
@@ -23475,7 +23536,7 @@ function SecaoGuia({ usuario, fazenda, naNuvem, consultor }) {
       {!buscando && !tipo && (
         <>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-            {["estadio", "daninha", "praga", "doenca", "deficiencia", "inimigo"].map((id) => tile(() => abrirTipo(id), GUIA_TIPO_INFO[id][0], GUIA_TIPO_INFO[id][1], GUIA_TIPO_INFO[id][2]))}
+            {["estadio", "daninha", "praga", "doenca", "deficiencia", "inimigo", "aplicacao"].map((id) => tile(() => abrirTipo(id), GUIA_TIPO_INFO[id][0], GUIA_TIPO_INFO[id][1], GUIA_TIPO_INFO[id][2]))}
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 12, flexWrap: "wrap" }}>
             <div style={{ flex: "1 1 200px", fontSize: 12, color: C.cinza }}>Os textos funcionam sem internet. As fotos são da equipe: mande as suas de dentro de cada item{naNuvem && fotos.length ? ` — ${fotos.length} foto${fotos.length === 1 ? "" : "s"} no guia` : ""}.</div>
@@ -23506,7 +23567,7 @@ function SecaoGuia({ usuario, fazenda, naNuvem, consultor }) {
                 <span style={{ fontSize: 22, flex: "none" }}>{t[0]}</span>
                 <span style={{ flex: 1, minWidth: 0 }}>
                   <span style={{ fontWeight: 900, color: C.navy, fontSize: 14.5, display: "block" }}>{g.nome}</span>
-                  <span style={{ fontSize: 12, color: C.cinza, display: "block" }}>{g.cientifico ? <i>{g.cientifico} · </i> : null}{buscando ? `${t[1]} · ` : ""}{(g.culturas || []).join(", ")}</span>
+                  <span style={{ fontSize: 12, color: C.cinza, display: "block" }}>{g.cientifico ? <i>{g.cientifico} · </i> : null}{buscando ? `${t[1]} · ` : ""}{g.resumo || (g.culturas || []).join(", ")}</span>
                 </span>
                 <span style={{ flex: "none", fontSize: 11.5, fontWeight: 800, color: n ? C.verdeEscuro : C.cinza, background: n ? C.verdeBg : C.fundo, borderRadius: 8, padding: "4px 8px" }}>{n ? `📷 ${n}` : "sem foto"}</span>
               </button>
@@ -24948,7 +25009,7 @@ function MonitoramentoPragas({ fazenda, lavoura, kml, usuario, onFechar, onSalva
       )}
       {msg && <div style={{ marginTop: 8, background: C.amareloBg, color: C.amarelo, borderRadius: 10, padding: "8px 12px", fontSize: 13, fontWeight: 700 }}>{msg}</div>}
       {identificando && <IdentificarPelaFoto cultura={cultura} onFechar={() => setIdentificando(false)} onEscolher={(it) => { setIdentificando(false); setGuiaAberto(it); }} />}
-      {guiaAberto && <ModalGuiaItem item={guiaAberto} usuario={usuario} fazenda={fazenda} naNuvem={!!window.AGROCR_FIREBASE} consultor={!!(usuario && usuario.tipo === "consultoria")} onFechar={() => setGuiaAberto(null)} />}
+      {guiaAberto && <ModalGuiaItem cultura={cultura} item={guiaAberto} usuario={usuario} fazenda={fazenda} naNuvem={!!window.AGROCR_FIREBASE} consultor={!!(usuario && usuario.tipo === "consultoria")} onFechar={() => setGuiaAberto(null)} />}
     </Modal>
   );
 }

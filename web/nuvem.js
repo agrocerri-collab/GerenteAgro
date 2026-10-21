@@ -1000,7 +1000,7 @@ window.Nuvem = (function () {
     if (!iniciar()) throw new Error("nuvem indisponível");
     const u = firebase.auth().currentUser; if (!u) throw new Error("entre na sua conta");
     const conta = (multiConta() ? await minhaConta() : null) || "agrocr";
-    const meta = { item: f.item, quem: f.quem || "", fazendaNome: f.fazendaNome || "", data: f.data || new Date().toISOString().slice(0, 10), uid: u.uid, conta, criadaEm: new Date().toISOString() };
+    const meta = { item: f.item, cultura: f.cultura || "", quem: f.quem || "", fazendaNome: f.fazendaNome || "", data: f.data || new Date().toISOString().slice(0, 10), uid: u.uid, conta, criadaEm: new Date().toISOString() };
     await executarOps([{ caminho: "guiaFotos/" + f.id, dados: { dados: f.dados, uid: u.uid, conta, item: f.item } }, { caminho: "guia/" + f.id, dados: meta }], "foto do guia");
   }
   async function guiaFotoApagar(id) { if (!iniciar()) throw new Error("nuvem indisponível"); await executarOps([{ caminho: "guia/" + id, dados: null }, { caminho: "guiaFotos/" + id, dados: null }], "foto do guia"); }

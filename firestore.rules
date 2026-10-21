@@ -464,7 +464,8 @@ service cloud.firestore {
       allow create: if logado() && request.resource.data.uid == request.auth.uid
                     && request.resource.data.texto is string && request.resource.data.texto.size() <= 1000;
       allow update: if false;
-      allow delete: if logado() && (resource.data.uid == request.auth.uid || ehAdmin());
+      // apaga quem mandou, ou o dono da plataforma; no AgroCR (conta única) também o admin da consultoria
+      allow delete: if logado() && (resource.data.uid == request.auth.uid || ehDono() || (!multiConta() && ehAdmin()));
     }
 
     match /plataforma/{doc} {
