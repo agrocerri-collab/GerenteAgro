@@ -22513,6 +22513,8 @@ const GUIA_FOTOS_FIXAS = (() => {
   const milho = m("Milho", "milho", { "f-diplodiafolha": "diplodia", "f-polissora": "ferrugem-polissora", "f-ferrugemcomum": "ferrugem-comum", "f-helminto": "turcicum", "f-ferrugemtropical": "ferrugem-tropical", "f-bipolaris": "bipolaris", "f-ocular": "mancha-ocular", "f-cercmilho": "cercosporiose", "f-manchabranca": "mancha-branca", "f-estriabact": "estria-bacteriana" });
   return { ...milho };
 })();
+// todas as imagens que vêm com o app (fotos de referência, figuras e ilustrações de estádio) — para baixar de uma vez
+const urlsFixasDoGuia = () => [...Object.values(GUIA_FOTOS_FIXAS).flat().map((f) => f.url), ...GUIA_CAMPO.flatMap((g) => [...(g.figuras || []).map((f) => f.url), ...(g.estagios || []).map((e) => e[4]).filter(Boolean)])];
 const fotosFixasDe = (id, cultura) => (GUIA_FOTOS_FIXAS[id] || []).filter((f) => !cultura || f.cultura === cultura);
 const GUIA_CULTURAS = ["Soja", "Milho", "Algodão"];
 const GUIA_CAMPO = [
@@ -23264,19 +23266,32 @@ const GUIA_CAMPO = [
     pratica: "Tanque com metade da água e agitação ligada. Ordem: 1 condicionador de água/redutor de pH · 2 pó e grânulo (WG, WP, SP, SG — pré-dissolvidos) · 3 suspensões (SC) · 4 emulsões e óleos formulados (EC, EW, OD) · 5 solúveis (SL) · 6 foliar · 7 óleo e adjuvantes · 8 biológico por último, se compatível.",
     atencao: "Com 4 produtos ou mais, ou produto novo na mistura, faça o teste de calda no jarro antes (Visitas técnicas → Regulagem e calda → 🧪 Teste de calda): o app diz quanto de cada produto vai no recipiente e a ordem." } },
   // ---------- ESTÁDIOS ----------
-  { id: "e-soja", tipo: "estadio", nome: "Soja — estádios (Fehr e Caviness)", culturas: ["Soja"], estagios: [
-    ["VE", "Emergência", "Cotilédones acima do solo.", "Estande (plantas/m) e falhas; tratamento de semente; elasmo e rosca."],
-    ["VC", "Cotilédone", "Folhas unifolioladas abertas (bordas não se tocam).", "Tripes, vaquinha, lagarta-rosca; herbicida pós inicial."],
-    ["V1–V3", "1º ao 3º nó", "Primeiro a terceiro trifólio totalmente desenvolvido.", "Daninhas em pós (até V3), nodulação (arrancar e cortar nódulos: rosado = bom), broca-das-axilas, tamanduá."],
-    ["V4–Vn", "4º nó em diante", "Um trifólio novo a cada 3–5 dias até o florescimento.", "Fechamento das entrelinhas (~V6), lagartas desfolhadoras (nível 30% de desfolha), 1ª fungicida aos 25 DAE no programa."],
-    ["R1", "Início do florescimento", "Uma flor aberta em qualquer nó da haste principal.", "Mofo-branco (1ª aplicação se tempo fresco), fungicida da ferrugem, boro foliar."],
-    ["R2", "Florescimento pleno", "Flor aberta num dos 2 nós superiores com folha desenvolvida.", "Percevejos começam a entrar; helicoverpa no ponteiro; irrigação crítica começa."],
-    ["R3", "Início da formação de vagens", "Vagem com 5 mm num dos 4 nós superiores.", "PANO DE BATIDA: percevejo (nível 2/m), lagartas (15% de desfolha), 2ª/3ª fungicida."],
-    ["R4", "Vagens plenas", "Vagem com 2 cm num dos 4 nós superiores.", "Período mais crítico a seca e a percevejo; ferrugem; mancha-alvo."],
-    ["R5", "Início do enchimento de grãos", "Grão de 3 mm na vagem de um dos 4 nós superiores (R5.1 a R5.5).", "Percevejo (dano máximo), falsa-medideira, crestamento; última fungicida geralmente em R5.3."],
-    ["R6", "Grãos plenos", "Vagem com grãos verdes enchendo a cavidade (num dos 4 nós superiores).", "Percevejo ainda causa dano até R6; fim dos fungicidas; avaliar retenção foliar (soja louca)."],
-    ["R7", "Início da maturação", "Uma vagem com cor madura na haste principal.", "Percevejo não prejudica mais o grão; dessecação pré-colheita possível (após R7.3)."],
-    ["R8", "Maturação plena", "95% das vagens com cor madura.", "Colheita 5–10 dias depois, grão com 13–15% de umidade; perdas na plataforma."],
+  { id: "e-soja", tipo: "estadio", nome: "Soja — estádios (Fehr e Caviness)", culturas: ["Soja"],
+    figuras: [
+      { url: "guia/soja/escala-fenologica.jpg", titulo: "Escala fenológica da soja", credito: "Ilustrações: Embrapa" },
+      { url: "guia/soja/morfologia.jpg", titulo: "Morfologia de uma planta de soja" },
+    ],
+    texto: {
+      contar: "O nó cotiledonar não é considerado. Uma folha trifoliolada é considerada completamente desenvolvida quando as bordas dos folíolos da folha imediatamente superior não mais se tocam. Vale o estádio de pelo menos 50% das plantas da área.",
+      partes: "Meristema apical: ponta da haste, onde a planta cresce em altura. Nó: ponto da haste onde sai a folha (é o que se conta nos estádios V). Entrenó: pedaço da haste entre dois nós. Gema axilar: broto na junção da folha com a haste — vira ramo ou flor. Pecíolo: cabinho da folha. Folíolo: cada uma das 3 partes da folha trifoliolada. Folha unifoliolada: o primeiro par de folhas simples, opostas. Raiz pivotante: a raiz principal, que desce. Raízes laterais (secundárias): saem da pivotante. Nódulos: bolinhas nas raízes, onde a bactéria fixa o nitrogênio do ar — corte: rosado por dentro está ativo.",
+    },
+    estagios: [
+    ["VE", "Emergência", "Cotilédones acima da superfície do solo.", "Estande (plantas por metro) e falhas; tratamento de semente funcionando; elasmo e lagarta-rosca.", "guia/soja/estadio-VE.jpg"],
+    ["VC", "Cotiledonar", "Cotilédones completamente abertos e folhas unifolioladas em expansão.", "Tripes, vaquinha, lagarta-rosca; daninhas nascendo junto (herbicida pós inicial).", "guia/soja/estadio-VC.jpg"],
+    ["V1", "Primeiro trifólio (2º nó)", "Par de folhas unifolioladas completamente desenvolvidas. Folíolos do 1º trifólio ainda não se tocam.", "Nodulação: arranque plantas e corte os nódulos (rosado por dentro = fixando nitrogênio). Daninhas em pós.", "guia/soja/estadio-V1.jpg"],
+    ["V2", "Segundo trifólio (3º nó)", "Segundo trifólio completamente desenvolvido. Folíolos do 2º trifólio ainda não se tocam.", "Daninhas em pós (até V3 é a melhor hora); tamanduá-da-soja e broca-das-axilas no ponteiro.", "guia/soja/estadio-V2.jpg"],
+    ["V3", "Terceiro trifólio (4º nó)", "Terceiro trifólio completamente desenvolvido. Folíolos do 3º trifólio ainda não se tocam.", "Último momento bom para o herbicida pós na maioria das daninhas; cobalto e molibdênio foliar se não foram na semente.", "guia/soja/estadio-V3.jpg"],
+    ["V4", "Quarto trifólio (5º nó)", "Quarto trifólio completamente desenvolvido. Folíolos do 4º trifólio ainda não se tocam.", "Lagartas desfolhadoras (nível de 30% de desfolha no vegetativo); pano de batida semanal.", "guia/soja/estadio-V4.jpg"],
+    ["V5", "Quinto trifólio (6º nó)", "Quinto trifólio completamente desenvolvido. Folíolos do 5º trifólio ainda não se tocam.", "Entrelinhas começando a fechar; manganês foliar se aparecer sintoma (folha nova amarela entre as nervuras).", "guia/soja/estadio-V5.jpg"],
+    ["V6", "Sexto trifólio (7º nó)", "Sexto trifólio completamente desenvolvido. Folíolos do 6º trifólio ainda não se tocam. Daqui em diante a planta solta um trifólio a cada 3–5 dias (Vn) até florescer.", "1ª fungicida do programa (~25 DAE); fechamento das entrelinhas; ferrugem começa no baixeiro.", "guia/soja/estadio-V6.jpg"],
+    ["R1", "Início do florescimento", "Uma flor aberta em qualquer nó da haste principal.", "Mofo-branco (1ª aplicação se o tempo estiver fresco e úmido); fungicida da ferrugem; boro foliar.", "guia/soja/estadio-R1.jpg"],
+    ["R2", "Florescimento pleno", "Uma flor aberta em um dos dois últimos nós da haste principal do caule, com a folha correspondente completamente desenvolvida.", "Percevejos começam a entrar; helicoverpa no ponteiro; daqui até o enchimento a falta de água pesa mais.", "guia/soja/estadio-R2.jpg"],
+    ["R3", "Início de formação dos legumes", "Legume medindo cerca de 5 mm de comprimento em um dos quatro últimos nós da haste principal do caule, com a folha correspondente desenvolvida.", "PANO DE BATIDA: percevejo (nível 2/m), lagartas (15% de desfolha no reprodutivo); 2ª/3ª fungicida.", "guia/soja/estadio-R3.jpg"],
+    ["R4", "Legumes desenvolvidos", "Legume medindo cerca de 2 cm de comprimento em um dos quatro últimos nós da haste principal do caule, com a folha correspondente desenvolvida.", "Período mais crítico para seca e percevejo; ferrugem e mancha-alvo.", "guia/soja/estadio-R4.jpg"],
+    ["R5", "Enchimento de grãos", "Grãos perceptíveis no legume, com cerca de 3 mm de comprimento em um dos quatro últimos nós da haste principal do caule, com a folha correspondente desenvolvida.", "Percevejo no dano máximo; falsa-medideira no baixeiro; crestamento; última fungicida geralmente em R5.3.", "guia/soja/estadio-R5.jpg"],
+    ["R6", "Grãos cheios", "Vagem com grãos verdes preenchendo completamente as cavidades do legume em um dos quatro últimos nós da haste principal do caule.", "Percevejo ainda dá prejuízo até R6; fim dos fungicidas; olhar retenção foliar (soja louca).", "guia/soja/estadio-R6.jpg"],
+    ["R7", "Início da maturação", "Um legume (vagem) normal na haste principal do caule, com coloração de madura (geralmente marrom) e a planta com folhas amarelas ou em processo de queda.", "Percevejo não prejudica mais o grão; dessecação pré-colheita possível (a partir de R7.3, conforme a bula).", "guia/soja/estadio-R7.jpg"],
+    ["R8", "Maturação plena", "Plantas com cerca de 95% das vagens com coloração de madura (geralmente marrom).", "Colheita 5–10 dias depois, com o grão a 13–15% de umidade; regular a plataforma para perder pouco.", "guia/soja/estadio-R8.jpg"],
   ] },
   { id: "e-milho", tipo: "estadio", nome: "Milho — estádios (Ritchie e Hanway)", culturas: ["Milho"], estagios: [
     ["VE", "Emergência", "Coleóptilo rompe o solo (4–6 dias com umidade).", "Estande, elasmo, rosca, percevejo-barriga-verde, coró."],
@@ -23345,7 +23360,7 @@ async function dadosDaFotoFixa(url) {
   if (FOTOS_MEM.has(k)) return FOTOS_MEM.get(k);
   let d = null;
   try { d = await idbGet("foto:" + k); } catch (e) {}
-  if (!d) { try { const r = await fetch(url); if (r.ok) { const b = await r.blob(); d = await new Promise((ok) => { const fr = new FileReader(); fr.onload = () => ok(fr.result); fr.onerror = () => ok(null); fr.readAsDataURL(b); }); if (d) idbSet("foto:" + k, d); } } catch (e) {} }
+  if (!d) { try { const r = await fetch(url); if (r.ok) { const b0 = await r.blob(); const b = String(b0.type).startsWith("image/") ? b0 : new Blob([b0], { type: String(url).toLowerCase().endsWith(".png") ? "image/png" : "image/jpeg" }); d = await new Promise((ok) => { const fr = new FileReader(); fr.onload = () => ok(fr.result); fr.onerror = () => ok(null); fr.readAsDataURL(b); }); if (d) idbSet("foto:" + k, d); } } catch (e) {} }
   if (d) FOTOS_MEM.set(k, d);
   return d;
 }
@@ -23426,7 +23441,7 @@ function IdentificarPelaFoto({ cultura, tipos, onEscolher, onFechar }) {
   );
 }
 // um verbete do guia: textos, fotos da equipe, mandar foto, apagar foto
-const ROTULOS_GUIA = { principio: "Como funciona", pratica: "Na prática", conta: "A conta", atencao: "Cuidado", reconhecer: "Como reconhecer", confunde: "Com o que confunde", dano: "Dano", quando: "Quando olhar", manejo: "Manejo", sintoma: "Sintoma", soja: "Na soja", milho: "No milho", algodao: "No algodão" };
+const ROTULOS_GUIA = { contar: "Como contar os estádios", partes: "Partes da planta", principio: "Como funciona", pratica: "Na prática", conta: "A conta", atencao: "Cuidado", reconhecer: "Como reconhecer", confunde: "Com o que confunde", dano: "Dano", quando: "Quando olhar", manejo: "Manejo", sintoma: "Sintoma", soja: "Na soja", milho: "No milho", algodao: "No algodão" };
 // cultura escolhida (Soja/Milho/Algodão): mostra só o texto dela e as fotos dela; a foto mandada leva a cultura
 const GUIA_CHAVE_CULTURA = { Soja: "soja", Milho: "milho", "Algodão": "algodao" };
 function GuiaItem({ item, fotos, usuario, fazenda, naNuvem, consultor, onFotos, compacto, cultura }) {
@@ -23459,6 +23474,12 @@ function GuiaItem({ item, fotos, usuario, fazenda, naNuvem, consultor, onFotos, 
     <div>
       {!compacto && <div style={{ fontSize: 12, color: C.cinza, marginBottom: 2 }}>{tipo[1]} {tipo[2]} · {cultura || (item.culturas || []).join(" · ")}{item.familia ? ` · ${item.familia}` : ""}</div>}
       {item.cientifico && <div style={{ fontSize: 13, color: C.cinza, fontStyle: "italic", marginBottom: 8 }}>{item.cientifico}</div>}
+      {(item.figuras || []).map((f) => (
+        <div key={f.url} style={{ marginBottom: 10 }}>
+          <FotoGuia url={f.url} onClick={() => setGrande({ url: f.url, rotulo: f.titulo + (f.credito ? ` · ${f.credito}` : "") })} style={{ width: "100%", maxHeight: 420, objectFit: "contain", background: "#fff", borderRadius: 12, display: "block", cursor: "zoom-in", boxShadow: "0 1px 4px rgba(0,0,0,.15)" }} />
+          <div style={{ fontSize: 11.5, color: C.cinza, marginTop: 3 }}>{f.titulo}{f.credito ? ` · ${f.credito}` : ""} · toque para ampliar</div>
+        </div>
+      ))}
       {fixas.length > 0 && (
         <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 6, marginBottom: 8, scrollSnapType: "x mandatory" }}>
           {fixas.map((f, i) => (
@@ -23489,11 +23510,14 @@ function GuiaItem({ item, fotos, usuario, fazenda, naNuvem, consultor, onFotos, 
       ))}
       {item.estagios && (
         <div style={{ display: "grid", gap: 6 }}>
-          {item.estagios.map(([cod, nome, desc, olhar], i) => (
-            <div key={i} style={{ background: C.fundo, borderRadius: 10, padding: "8px 10px" }}>
-              <div style={{ fontWeight: 900, color: C.navy, fontSize: 13.5 }}>{cod} <span style={{ fontWeight: 700, color: C.verdeEscuro }}>· {nome}</span></div>
-              <div style={{ fontSize: 13, color: C.navyEscuro }}>{desc}</div>
-              {olhar && <div style={{ fontSize: 12.5, color: C.cinza, marginTop: 2 }}>👁 {olhar}</div>}
+          {item.estagios.map(([cod, nome, desc, olhar, img], i) => (
+            <div key={i} style={{ background: C.fundo, borderRadius: 10, padding: "8px 10px", display: "flex", gap: 10, alignItems: "flex-start" }}>
+              {img && <FotoGuia url={img} onClick={() => setGrande({ url: img, rotulo: `${cod} — ${nome}` })} style={{ flex: "none", width: 96, height: 84, objectFit: "contain", background: "#fff", borderRadius: 8, cursor: "zoom-in" }} />}
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontWeight: 900, color: C.navy, fontSize: 13.5 }}>{cod} <span style={{ fontWeight: 700, color: C.verdeEscuro }}>· {nome}</span></div>
+                <div style={{ fontSize: 13, color: C.navyEscuro }}>{desc}</div>
+                {olhar && <div style={{ fontSize: 12.5, color: C.cinza, marginTop: 2 }}>👁 {olhar}</div>}
+              </div>
             </div>
           ))}
         </div>
@@ -23501,7 +23525,7 @@ function GuiaItem({ item, fotos, usuario, fazenda, naNuvem, consultor, onFotos, 
       {grande && (
         <div onClick={() => setGrande(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.92)", zIndex: 90, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 12 }}>
           <FotoGuia id={grande.id} url={grande.url} style={{ maxWidth: "100%", maxHeight: "80vh", objectFit: "contain", borderRadius: 8 }} />
-          <div style={{ color: "#fff", fontSize: 12.5, marginTop: 8, textAlign: "center" }}>{item.nome}{grande.ref ? ` · foto de referência ${grande.n} de ${grande.total}` : ""}{grande.quem ? ` · foto de ${grande.quem}` : ""}{grande.fazendaNome ? ` · ${grande.fazendaNome}` : ""}{grande.data ? ` · ${fmtD(grande.data)}` : ""}<br /><span style={{ opacity: 0.7 }}>toque para fechar</span></div>
+          <div style={{ color: "#fff", fontSize: 12.5, marginTop: 8, textAlign: "center" }}>{grande.rotulo || item.nome}{grande.ref ? ` · foto de referência ${grande.n} de ${grande.total}` : ""}{grande.quem ? ` · foto de ${grande.quem}` : ""}{grande.fazendaNome ? ` · ${grande.fazendaNome}` : ""}{grande.data ? ` · ${fmtD(grande.data)}` : ""}<br /><span style={{ opacity: 0.7 }}>toque para fechar</span></div>
         </div>
       )}
     </div>
@@ -23551,16 +23575,16 @@ function SecaoGuia({ usuario, fazenda, naNuvem, consultor }) {
   const [fotos, setFotos] = useFotosGuia(naNuvem);
   const [baixa, setBaixa] = useState(null);
   const [noAparelho, setNoAparelho] = useState(null);
-  const totalFixas = Object.values(GUIA_FOTOS_FIXAS).flat();
+  const totalFixas = urlsFixasDoGuia().map((url) => ({ url }));
   const totalFotos = fotos.length + totalFixas.length;
   useEffect(() => { let vivo = true; (async () => { let n = await fotosGuiaNoAparelho(fotos); for (const f of totalFixas) { const k = "guiafixa:" + f.url; if (FOTOS_MEM.has(k)) { n++; continue; } try { if (await idbGet("foto:" + k)) n++; } catch (e) {} } if (vivo) setNoAparelho(n); })(); return () => { vivo = false; }; }, [fotos.length, baixa]);
   const item = aberto ? GUIA_CAMPO.find((g) => g.id === aberto) : null;
-  const nFotos = (id) => fotos.filter((f) => f.item === id && (!cultura || !f.cultura || f.cultura === cultura)).length + fotosFixasDe(id, cultura || "").length;
+  const nFotos = (id) => { const g = GUIA_CAMPO.find((x) => x.id === id) || {}; return fotos.filter((f) => f.item === id && (!cultura || !f.cultura || f.cultura === cultura)).length + fotosFixasDe(id, cultura || "").length + (g.figuras || []).length + (g.estagios || []).filter((e) => e[4]).length; };
   const buscando = busca.trim().length > 0;
   async function baixarTudo() {
     if (!navigator.onLine) { alert("Precisa de internet para baixar as fotos. Depois disso, tudo abre sem sinal."); return; }
     const faltam = []; for (const f of fotos) { if (FOTOS_MEM.has("guia-" + f.id)) continue; try { if (await idbGet("foto:guia-" + f.id)) continue; } catch (e) {} faltam.push(f); }
-    for (const f of Object.values(GUIA_FOTOS_FIXAS).flat()) { const k = "guiafixa:" + f.url; if (FOTOS_MEM.has(k)) continue; try { if (await idbGet("foto:" + k)) continue; } catch (e) {} faltam.push({ url: f.url }); }
+    for (const f of urlsFixasDoGuia().map((url) => ({ url }))) { const k = "guiafixa:" + f.url; if (FOTOS_MEM.has(k)) continue; try { if (await idbGet("foto:" + k)) continue; } catch (e) {} faltam.push({ url: f.url }); }
     setBaixa({ feitas: 0, total: faltam.length });
     for (let i = 0; i < faltam.length; i++) { try { await (faltam[i].url ? dadosDaFotoFixa(faltam[i].url) : dadosDaFotoGuia(faltam[i].id)); } catch (e) {} setBaixa({ feitas: i + 1, total: faltam.length }); }
     setTimeout(() => setBaixa(null), 1500);
