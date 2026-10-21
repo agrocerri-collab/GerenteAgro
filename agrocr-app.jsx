@@ -23434,13 +23434,15 @@ function SecaoGuia({ usuario, fazenda, naNuvem, consultor }) {
     for (let i = 0; i < faltam.length; i++) { try { await dadosDaFotoGuia(faltam[i].id); } catch (e) {} setBaixa({ feitas: i + 1, total: faltam.length }); }
     setTimeout(() => setBaixa(null), 1500);
   }
-  const abrirTipo = (id) => { setTipo(id); setCultura(null); setBusca(""); };
+  // daninha é uma só para todas as culturas: abre direto na lista, sem a tela de cultura
+  const SEM_CULTURA = ["daninha"];
+  const abrirTipo = (id) => { setTipo(id); setCultura(SEM_CULTURA.includes(id) ? "" : null); setBusca(""); };
   const escolherCultura = (c) => {
     setCultura(c);
     if (tipo === "estadio") { const e = GUIA_CAMPO.find((g) => g.tipo === "estadio" && (g.culturas || []).includes(c)); if (e) setAberto(e.id); }
   };
-  const voltar = () => { if (aberto) { setAberto(null); if (tipo === "estadio") setCultura(null); return; } if (buscando) { setBusca(""); return; } if (cultura !== null) { setCultura(null); return; } setTipo(""); };
-  const tituloTela = buscando ? `Busca: "${busca.trim()}"` : tipo ? `${GUIA_TIPO_INFO[tipo][0]} ${GUIA_TIPO_INFO[tipo][1]}${cultura ? ` · ${cultura}` : cultura === "" ? " · todas as culturas" : ""}` : "📖 Guia de campo";
+  const voltar = () => { if (aberto) { setAberto(null); if (tipo === "estadio") setCultura(null); return; } if (buscando) { setBusca(""); return; } if (cultura !== null && !SEM_CULTURA.includes(tipo)) { setCultura(null); return; } setCultura(null); setTipo(""); };
+  const tituloTela = buscando ? `Busca: "${busca.trim()}"` : tipo ? `${GUIA_TIPO_INFO[tipo][0]} ${GUIA_TIPO_INFO[tipo][1]}${cultura ? ` · ${cultura}` : cultura === "" && !SEM_CULTURA.includes(tipo) ? " · todas as culturas" : ""}` : "📖 Guia de campo";
   const lista = buscando ? buscarNoGuia(GUIA_CAMPO, busca, "", "") : (tipo && cultura !== null ? buscarNoGuia(GUIA_CAMPO, "", tipo, cultura) : []);
   const tile = (onClick, emoji, titulo, sub, cor) => (
     <button key={titulo} onClick={onClick} style={{ background: cor || "#fff", border: `1.5px solid ${C.borda}`, borderRadius: 16, padding: "18px 12px", textAlign: "left", minHeight: 112 }}>
