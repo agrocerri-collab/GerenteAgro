@@ -22507,6 +22507,13 @@ function RelatorioRegulagem({ fazenda, reg, onVoltar }) {
 // (coleção "guia" + "guiaFotos" na nuvem, guardadas no aparelho depois de baixadas).
 // Chaves do texto: reconhecer · confunde · dano · quando · manejo · sintoma · soja · milho · algodao
 const GUIA_TIPOS = [["daninha", "🌿", "Daninhas"], ["praga", "🐛", "Pragas"], ["inimigo", "🐞", "Inimigos naturais"], ["doenca", "🦠", "Doenças"], ["deficiencia", "🧪", "Deficiências"], ["estadio", "🌱", "Estádios"], ["aplicacao", "💧", "Tecnologia de aplicação"]];
+// fotos de referência que vêm com o app (pasta guia/), por verbete e cultura — além das fotos da equipe
+const GUIA_FOTOS_FIXAS = (() => {
+  const m = (cultura, pasta, mapa) => Object.fromEntries(Object.entries(mapa).map(([id, nome]) => [id, [1, 2, 3].map((n) => ({ url: `guia/${pasta}/${nome}-${n}.jpg`, cultura }))]));
+  const milho = m("Milho", "milho", { "f-diplodiafolha": "diplodia", "f-polissora": "ferrugem-polissora", "f-ferrugemcomum": "ferrugem-comum", "f-helminto": "turcicum", "f-ferrugemtropical": "ferrugem-tropical", "f-bipolaris": "bipolaris", "f-ocular": "mancha-ocular", "f-cercmilho": "cercosporiose", "f-manchabranca": "mancha-branca", "f-estriabact": "estria-bacteriana" });
+  return { ...milho };
+})();
+const fotosFixasDe = (id, cultura) => (GUIA_FOTOS_FIXAS[id] || []).filter((f) => !cultura || f.cultura === cultura);
 const GUIA_CULTURAS = ["Soja", "Milho", "Algodão"];
 const GUIA_CAMPO = [
   // ---------- DANINHAS ----------
@@ -22999,18 +23006,54 @@ const GUIA_CAMPO = [
     dano: "Seca precoce das folhas; perda em safrinha.",
     quando: "Temperatura amena com umidade (noites frias) — safrinha.",
     manejo: "Híbrido tolerante; fungicida (estrobilurina + triazol) no início dos sintomas, com cobre em alguns casos." } },
-  { id: "f-helminto", tipo: "doenca", nome: "Helmintosporiose (Turcicum)", cientifico: "Exserohilum turcicum", culturas: ["Milho", "Sorgo"], texto: {
+  { id: "f-helminto", tipo: "doenca", nome: "Helmintosporiose (Mancha de Turcicum)", cientifico: "Exserohilum turcicum", culturas: ["Milho", "Sorgo"], texto: {
     reconhecer: "Lesões grandes (3–15 cm), elípticas em charuto, cinza-esverdeadas a marrons, atravessando as nervuras; com esporulação escura no centro em tempo úmido.",
     confunde: "Com cercosporiose (menor, retangular).",
     dano: "Queima grande área foliar antes do enchimento.",
     quando: "Temperatura amena e orvalho; safrinha e regiões altas.",
     manejo: "Híbrido com resistência (Ht); fungicida no início." } },
   { id: "f-polissora", tipo: "doenca", nome: "Ferrugem-polissora", cientifico: "Puccinia polysora", culturas: ["Milho"], texto: {
-    reconhecer: "Pústulas pequenas, circulares, alaranjadas a marrom-claras, principalmente na face de cima da folha, em grande número; a ferrugem-comum (P. sorghi) tem pústulas alongadas marrom-escuras nas duas faces.",
-    confunde: "Entre as ferrugens; a polissora é a de clima quente e mais agressiva.",
-    dano: "Desfolha e perda em híbrido suscetível, pior em calor e umidade.",
-    quando: "Verão quente e úmido; de V8 em diante.",
-    manejo: "Híbrido resistente; triazol + estrobilurina preventivo." } },
+    reconhecer: "Pústulas pequenas (até 2 mm), circulares a ovais, alaranjadas a marrom-claras, em grande número, principalmente na face de CIMA da folha. Em ataque forte a folha fica coberta de pó laranja e seca.",
+    confunde: "Com a ferrugem-comum (pústulas maiores, alongadas, cor de canela, nas duas faces, clima ameno) e com a ferrugem-tropical (pústulas cobertas pela epiderme, com halo escuro, em grupos).",
+    dano: "A mais agressiva das ferrugens do milho no cerrado: desfolha rápida antes do enchimento e perda em híbrido suscetível.",
+    quando: "Verão quente (acima de 25 °C) e úmido; de V8 em diante, no baixeiro primeiro.",
+    manejo: "Híbrido resistente; triazol + estrobilurina (ou carboxamida) preventivo no pré-pendoamento." } },
+  { id: "f-ferrugemcomum", tipo: "doenca", nome: "Ferrugem-comum", cientifico: "Puccinia sorghi", culturas: ["Milho"], texto: {
+    reconhecer: "Pústulas alongadas a ovais, cor de canela (marrom-avermelhadas), salientes, que rompem a epiderme, nas DUAS faces da folha; espalhadas ou em grupos. No fim do ciclo ficam pretas.",
+    confunde: "Com a polissora (menor, circular, laranja-clara, mais na face de cima, clima quente) e com a ferrugem-tropical.",
+    dano: "Redução de área foliar; perda maior em híbrido suscetível e em plantio cedo com frio.",
+    quando: "Temperatura amena (16–23 °C) e orvalho: regiões altas, safrinha tardia, noites frias.",
+    manejo: "Híbrido resistente; triazol + estrobilurina quando as pústulas sobem para as folhas da espiga." } },
+  { id: "f-ferrugemtropical", tipo: "doenca", nome: "Ferrugem-tropical (ferrugem-branca)", cientifico: "Physopella zeae", culturas: ["Milho"], texto: {
+    reconhecer: "Pústulas pequenas, arredondadas a ovais, amarelo-creme a alaranjadas, que ficam DEBAIXO da epiderme (abrem por uma fenda) e muitas vezes têm um halo escuro, marrom-arroxeado, em volta; em grupos paralelos às nervuras.",
+    confunde: "Com a polissora (pústula exposta, sem halo escuro) e com a mancha ocular (lesão com anel, sem pústula).",
+    dano: "Seca das folhas no enchimento em ano quente e chuvoso; vem crescendo no Centro-Oeste e Norte.",
+    quando: "Calor e alta umidade; do pré-pendoamento ao enchimento.",
+    manejo: "Híbrido tolerante; fungicida (estrobilurina + triazol/carboxamida) no início dos sintomas." } },
+  { id: "f-diplodiafolha", tipo: "doenca", nome: "Mancha de Diplodia", cientifico: "Stenocarpella macrospora (Diplodia)", culturas: ["Milho"], texto: {
+    reconhecer: "Lesões grandes (até 10 cm), alongadas, marrom-claras a palha, com halo amarelo bem marcado e, às vezes, um ponto ou anel no lugar onde começou a infecção; no centro seco aparecem pontinhos pretos (picnídios). Começa com manchas pequenas arredondadas com halo amarelo.",
+    confunde: "Com a mancha de Turcicum (charuto cinza-esverdeado, sem o halo amarelo forte) e com a de Bipolaris (menor, entre as nervuras).",
+    dano: "Seca de folhas; o mesmo fungo causa podridão de colmo e de espiga (grão ardido) — atenção à palhada infectada.",
+    quando: "Plantio direto sobre palhada de milho, chuva frequente; do pré-pendoamento ao enchimento.",
+    manejo: "Rotação com soja/outra cultura, híbrido tolerante, fungicida (estrobilurina + carboxamida/triazol); colher no ponto para evitar grão ardido." } },
+  { id: "f-bipolaris", tipo: "doenca", nome: "Mancha de Bipolaris", cientifico: "Bipolaris maydis (helmintosporiose maydis)", culturas: ["Milho"], texto: {
+    reconhecer: "Lesões alongadas ENTRE as nervuras, retangulares a fusiformes, de 1 a 3 cm, marrom-claras com borda marrom-escura; muitas lesões juntam e queimam a folha. Lesões maiores ficam parecidas com Turcicum.",
+    confunde: "Com Turcicum (lesão bem maior, elíptica, atravessa as nervuras) e com cercosporiose (retangular cinza, estreita e opaca).",
+    dano: "Queima foliar em clima quente e úmido; perda em híbrido suscetível.",
+    quando: "Calor (20–32 °C) e umidade alta; vegetativo final ao enchimento.",
+    manejo: "Híbrido resistente, rotação, fungicida (estrobilurina + triazol)." } },
+  { id: "f-ocular", tipo: "doenca", nome: "Mancha ocular", cientifico: "Kabatiella zeae (Aureobasidium zeae)", culturas: ["Milho"], texto: {
+    reconhecer: "Manchas pequenas (1 a 4 mm), circulares, translúcidas, com centro creme e anel marrom-arroxeado e halo amarelo — parecem um olho. Muitas manchas juntas fazem a folha secar a partir da ponta.",
+    confunde: "Com o começo da ferrugem (que tem pústula) e com a mancha-branca (sem o anel escuro marcado).",
+    dano: "Seca de folhas em ano frio e úmido; perda maior em híbrido suscetível.",
+    quando: "Temperatura amena e chuva, palhada de milho na superfície; regiões altas e safrinha.",
+    manejo: "Rotação, híbrido tolerante, fungicida (estrobilurina + triazol) quando sobe para as folhas da espiga." } },
+  { id: "f-estriabact", tipo: "doenca", nome: "Estria bacteriana", cientifico: "Xanthomonas vasicola pv. vasculorum", culturas: ["Milho"], texto: {
+    reconhecer: "Estrias estreitas e longas ENTRE as nervuras, amarelo-alaranjadas a marrons, com bordas onduladas; contra a luz do sol as estrias ficam TRANSLÚCIDAS. Às vezes aparecem gotinhas (exsudato bacteriano) que secam e brilham.",
+    confunde: "Com a cercosporiose (lesão retangular opaca, cinza, não translúcida) — olhe a folha contra o sol.",
+    dano: "Doença bacteriana detectada no Brasil em 2018; pode secar muita área foliar em híbrido suscetível.",
+    quando: "Chuva com vento, irrigação por aspersão, calor; do vegetativo ao enchimento.",
+    manejo: "Fungicida NÃO controla. Híbrido tolerante, rotação, manejo da palhada, evitar irrigar por cima em surto. Confirme em laboratório e avise a consultoria." } },
   { id: "f-enfezamento", tipo: "doenca", nome: "Enfezamentos do milho (pálido e vermelho)", cientifico: "Spiroplasma kunkelii / fitoplasma — vetor Dalbulus maidis", culturas: ["Milho"], texto: {
     reconhecer: "Plantas baixas com entrenós curtos, folhas avermelhadas (vermelho) ou com estrias amareladas na base (pálido), perfilhamento, espigas pequenas e múltiplas, grãos chochos.",
     confunde: "Com deficiência de fósforo (roxo) e com vírus da risca.",
@@ -23269,13 +23312,18 @@ function buscarNoGuia(lista, termo, tipo, cultura) {
     && (!q || guiaNormal([g.nome, g.cientifico, g.familia, ...Object.values(g.texto || {}), ...((g.estagios || []).flat())].join(" ")).includes(q)));
 }
 // item do guia que bate com o nome usado na visita/monitoramento ("Capim-amargoso", "Percevejo-marrom (adulto)", "Doença · Ferrugem-asiática")
-function acharNoGuia(nome) {
+// cultura (opcional): procura primeiro entre os verbetes daquela cultura ("Cercosporiose" no milho → a do milho)
+function acharNoGuia(nome, cultura) {
+  if (cultura) { const r = acharNoGuiaEm(GUIA_CAMPO.filter((g) => (g.culturas || []).includes(cultura)), nome); if (r) return r; }
+  return acharNoGuiaEm(GUIA_CAMPO, nome);
+}
+function acharNoGuiaEm(LISTA, nome) {
   const limpo = guiaNormal(String(nome || "").replace(/^doen[cç]a\s*·\s*/i, "").replace(/\s*\(.*?\)\s*$/, "").replace(/-/g, " ")).trim();
   if (!limpo) return null;
   const nomeDe = (g) => guiaNormal(g.nome.replace(/\s*\(.*?\)\s*$/, "").replace(/-/g, " "));
-  return GUIA_CAMPO.find((g) => nomeDe(g) === limpo)
-    || GUIA_CAMPO.find((g) => !["estadio", "aplicacao"].includes(g.tipo) && (nomeDe(g).startsWith(limpo) || limpo.startsWith(nomeDe(g)) || guiaNormal(g.cientifico || "").includes(limpo)))
-    || GUIA_CAMPO.find((g) => !["estadio", "aplicacao"].includes(g.tipo) && limpo.split(" ")[0].length > 4 && nomeDe(g).includes(limpo.split(" ")[0]))
+  return LISTA.find((g) => nomeDe(g) === limpo)
+    || LISTA.find((g) => !["estadio", "aplicacao"].includes(g.tipo) && (nomeDe(g).startsWith(limpo) || limpo.startsWith(nomeDe(g)) || guiaNormal(g.cientifico || "").includes(limpo)))
+    || LISTA.find((g) => !["estadio", "aplicacao"].includes(g.tipo) && limpo.split(" ")[0].length > 4 && nomeDe(g).includes(limpo.split(" ")[0]))
     || null;
 }
 // ---- fotos do guia: metadados (lista leve) + dados (um registro por foto), guardados no aparelho ----
@@ -23292,9 +23340,19 @@ async function dadosDaFotoGuia(id) {
   if (d) FOTOS_MEM.set("guia-" + id, d);
   return d;
 }
-function FotoGuia({ id, style, onClick }) {
-  const [dados, setDados] = useState(() => FOTOS_MEM.get("guia-" + id) || null);
-  useEffect(() => { let vivo = true; if (dados) return; dadosDaFotoGuia(id).then((d) => { if (vivo) setDados(d || "erro"); }); return () => { vivo = false; }; }, [id]);
+async function dadosDaFotoFixa(url) {
+  const k = "guiafixa:" + url;
+  if (FOTOS_MEM.has(k)) return FOTOS_MEM.get(k);
+  let d = null;
+  try { d = await idbGet("foto:" + k); } catch (e) {}
+  if (!d) { try { const r = await fetch(url); if (r.ok) { const b = await r.blob(); d = await new Promise((ok) => { const fr = new FileReader(); fr.onload = () => ok(fr.result); fr.onerror = () => ok(null); fr.readAsDataURL(b); }); if (d) idbSet("foto:" + k, d); } } catch (e) {} }
+  if (d) FOTOS_MEM.set(k, d);
+  return d;
+}
+function FotoGuia({ id, url, style, onClick }) {
+  const chaveMem = url ? "guiafixa:" + url : "guia-" + id;
+  const [dados, setDados] = useState(() => FOTOS_MEM.get(chaveMem) || null);
+  useEffect(() => { let vivo = true; if (dados) return; (url ? dadosDaFotoFixa(url) : dadosDaFotoGuia(id)).then((d) => { if (vivo) setDados(d || "erro"); }); return () => { vivo = false; }; }, [id, url]);
   if (!dados || dados === "erro") return <div onClick={onClick} style={{ ...style, background: C.fundo, color: C.cinza, fontSize: 11, display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center", padding: 6 }}>{dados === "erro" ? "📷 foto ainda não baixou (precisa de internet uma vez)" : "…"}</div>;
   return <img src={dados} alt="" onClick={onClick} style={style} />;
 }
@@ -23375,6 +23433,7 @@ function GuiaItem({ item, fotos, usuario, fazenda, naNuvem, consultor, onFotos, 
   const [enviando, setEnviando] = useState("");
   const [grande, setGrande] = useState(null);
   const minhas = (fotos || []).filter((f) => f.item === item.id && (!cultura || !f.cultura || f.cultura === cultura));
+  const fixas = fotosFixasDe(item.id, cultura);
   const outrasCulturas = cultura ? Object.entries(GUIA_CHAVE_CULTURA).filter(([c]) => c !== cultura).map(([, k]) => k) : [];
   const uid = window.Nuvem && Nuvem.usuarioAtual ? ((Nuvem.usuarioAtual() || {}).uid || "") : "";
   async function mandar(e) {
@@ -23400,6 +23459,14 @@ function GuiaItem({ item, fotos, usuario, fazenda, naNuvem, consultor, onFotos, 
     <div>
       {!compacto && <div style={{ fontSize: 12, color: C.cinza, marginBottom: 2 }}>{tipo[1]} {tipo[2]} · {cultura || (item.culturas || []).join(" · ")}{item.familia ? ` · ${item.familia}` : ""}</div>}
       {item.cientifico && <div style={{ fontSize: 13, color: C.cinza, fontStyle: "italic", marginBottom: 8 }}>{item.cientifico}</div>}
+      {fixas.length > 0 && (
+        <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 6, marginBottom: 8, scrollSnapType: "x mandatory" }}>
+          {fixas.map((f, i) => (
+            <FotoGuia key={f.url} url={f.url} onClick={() => setGrande({ url: f.url, ref: true, n: i + 1, total: fixas.length })} style={{ flex: "none", width: 200, height: 200, objectFit: "cover", borderRadius: 12, display: "block", cursor: "zoom-in", scrollSnapAlign: "start", boxShadow: "0 1px 4px rgba(0,0,0,.18)" }} />
+          ))}
+        </div>
+      )}
+      {fixas.length > 0 && <div style={{ fontSize: 11.5, color: C.cinza, marginTop: -4, marginBottom: 8 }}>Fotos de referência · toque para ampliar{fixas.length > 1 ? " · arraste para o lado" : ""}. Abaixo, as fotos da equipe.</div>}
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
         {minhas.map((f) => (
           <div key={f.id} style={{ position: "relative" }}>
@@ -23412,7 +23479,7 @@ function GuiaItem({ item, fotos, usuario, fazenda, naNuvem, consultor, onFotos, 
           <input type="file" accept="image/*" onChange={mandar} style={{ display: "none" }} />
         </label>
       </div>
-      {minhas.length === 0 && <div style={{ fontSize: 12, color: C.cinza, marginBottom: 8 }}>Ainda sem foto. A primeira foto que a equipe mandar fica aqui para todo mundo — tire no campo, de perto, com boa luz.</div>}
+      {minhas.length === 0 && fixas.length === 0 && <div style={{ fontSize: 12, color: C.cinza, marginBottom: 8 }}>Ainda sem foto. A primeira foto que a equipe mandar fica aqui para todo mundo — tire no campo, de perto, com boa luz.</div>}
       {enviando && <div style={{ fontSize: 12.5, color: enviando === "enviando" ? C.cinza : C.vermelho, fontWeight: 700, marginBottom: 6 }}>{enviando === "enviando" ? "📤 Enviando a foto…" : enviando}</div>}
       {item.texto && Object.keys(ROTULOS_GUIA).filter((k) => item.texto[k] && !outrasCulturas.includes(k)).map((k) => (
         <div key={k} style={{ marginBottom: 8 }}>
@@ -23433,8 +23500,8 @@ function GuiaItem({ item, fotos, usuario, fazenda, naNuvem, consultor, onFotos, 
       )}
       {grande && (
         <div onClick={() => setGrande(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.92)", zIndex: 90, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 12 }}>
-          <FotoGuia id={grande.id} style={{ maxWidth: "100%", maxHeight: "80vh", objectFit: "contain", borderRadius: 8 }} />
-          <div style={{ color: "#fff", fontSize: 12.5, marginTop: 8, textAlign: "center" }}>{item.nome}{grande.quem ? ` · foto de ${grande.quem}` : ""}{grande.fazendaNome ? ` · ${grande.fazendaNome}` : ""}{grande.data ? ` · ${fmtD(grande.data)}` : ""}<br /><span style={{ opacity: 0.7 }}>toque para fechar</span></div>
+          <FotoGuia id={grande.id} url={grande.url} style={{ maxWidth: "100%", maxHeight: "80vh", objectFit: "contain", borderRadius: 8 }} />
+          <div style={{ color: "#fff", fontSize: 12.5, marginTop: 8, textAlign: "center" }}>{item.nome}{grande.ref ? ` · foto de referência ${grande.n} de ${grande.total}` : ""}{grande.quem ? ` · foto de ${grande.quem}` : ""}{grande.fazendaNome ? ` · ${grande.fazendaNome}` : ""}{grande.data ? ` · ${fmtD(grande.data)}` : ""}<br /><span style={{ opacity: 0.7 }}>toque para fechar</span></div>
         </div>
       )}
     </div>
@@ -23484,15 +23551,18 @@ function SecaoGuia({ usuario, fazenda, naNuvem, consultor }) {
   const [fotos, setFotos] = useFotosGuia(naNuvem);
   const [baixa, setBaixa] = useState(null);
   const [noAparelho, setNoAparelho] = useState(null);
-  useEffect(() => { let vivo = true; fotosGuiaNoAparelho(fotos).then((n) => { if (vivo) setNoAparelho(n); }); return () => { vivo = false; }; }, [fotos.length, baixa]);
+  const totalFixas = Object.values(GUIA_FOTOS_FIXAS).flat();
+  const totalFotos = fotos.length + totalFixas.length;
+  useEffect(() => { let vivo = true; (async () => { let n = await fotosGuiaNoAparelho(fotos); for (const f of totalFixas) { const k = "guiafixa:" + f.url; if (FOTOS_MEM.has(k)) { n++; continue; } try { if (await idbGet("foto:" + k)) n++; } catch (e) {} } if (vivo) setNoAparelho(n); })(); return () => { vivo = false; }; }, [fotos.length, baixa]);
   const item = aberto ? GUIA_CAMPO.find((g) => g.id === aberto) : null;
-  const nFotos = (id) => fotos.filter((f) => f.item === id).length;
+  const nFotos = (id) => fotos.filter((f) => f.item === id && (!cultura || !f.cultura || f.cultura === cultura)).length + fotosFixasDe(id, cultura || "").length;
   const buscando = busca.trim().length > 0;
   async function baixarTudo() {
     if (!navigator.onLine) { alert("Precisa de internet para baixar as fotos. Depois disso, tudo abre sem sinal."); return; }
     const faltam = []; for (const f of fotos) { if (FOTOS_MEM.has("guia-" + f.id)) continue; try { if (await idbGet("foto:guia-" + f.id)) continue; } catch (e) {} faltam.push(f); }
+    for (const f of Object.values(GUIA_FOTOS_FIXAS).flat()) { const k = "guiafixa:" + f.url; if (FOTOS_MEM.has(k)) continue; try { if (await idbGet("foto:" + k)) continue; } catch (e) {} faltam.push({ url: f.url }); }
     setBaixa({ feitas: 0, total: faltam.length });
-    for (let i = 0; i < faltam.length; i++) { try { await dadosDaFotoGuia(faltam[i].id); } catch (e) {} setBaixa({ feitas: i + 1, total: faltam.length }); }
+    for (let i = 0; i < faltam.length; i++) { try { await (faltam[i].url ? dadosDaFotoFixa(faltam[i].url) : dadosDaFotoGuia(faltam[i].id)); } catch (e) {} setBaixa({ feitas: i + 1, total: faltam.length }); }
     setTimeout(() => setBaixa(null), 1500);
   }
   // daninha é uma só para todas as culturas: abre direto na lista, sem a tela de cultura
@@ -23539,10 +23609,10 @@ function SecaoGuia({ usuario, fazenda, naNuvem, consultor }) {
             {["estadio", "daninha", "praga", "doenca", "deficiencia", "inimigo", "aplicacao"].map((id) => tile(() => abrirTipo(id), GUIA_TIPO_INFO[id][0], GUIA_TIPO_INFO[id][1], GUIA_TIPO_INFO[id][2]))}
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 12, flexWrap: "wrap" }}>
-            <div style={{ flex: "1 1 200px", fontSize: 12, color: C.cinza }}>Os textos funcionam sem internet. As fotos são da equipe: mande as suas de dentro de cada item{naNuvem && fotos.length ? ` — ${fotos.length} foto${fotos.length === 1 ? "" : "s"} no guia` : ""}.</div>
-            {naNuvem && fotos.length > 0 && (
+            <div style={{ flex: "1 1 200px", fontSize: 12, color: C.cinza }}>Os textos funcionam sem internet. As fotos são da equipe: mande as suas de dentro de cada item{totalFotos ? ` — ${totalFotos} foto${totalFotos === 1 ? "" : "s"} no guia` : ""}.</div>
+            {totalFotos > 0 && (
               <button onClick={baixarTudo} disabled={!!baixa} style={{ flex: "none", padding: "8px 10px", background: C.verdeBg, color: C.verdeEscuro, border: "none", borderRadius: 10, fontWeight: 800, fontSize: 12 }}>
-                {baixa ? `📥 ${baixa.feitas} de ${baixa.total}…` : noAparelho != null && noAparelho >= fotos.length ? `✓ ${fotos.length} fotos no aparelho` : `📥 Baixar fotos p/ usar sem internet${noAparelho != null ? ` (${fotos.length - noAparelho})` : ""}`}
+                {baixa ? `📥 ${baixa.feitas} de ${baixa.total}…` : noAparelho != null && noAparelho >= totalFotos ? `✓ ${totalFotos} fotos no aparelho` : `📥 Baixar fotos p/ usar sem internet${noAparelho != null ? ` (${totalFotos - noAparelho})` : ""}`}
               </button>
             )}
           </div>
@@ -24581,7 +24651,7 @@ const partesDe = (programas, fid, cultura, tid) => { const l = (programas || {})
 // (no pano de batida a praga é contada; a doença é "tem ou não tem"). Daniel edita depois.
 const DOENCAS_PADRAO = {
   Soja: ["Ferrugem-asiática", "Mancha-alvo", "Antracnose", "Mofo-branco", "Oídio", "Cercosporiose (crestamento foliar)", "Mancha-parda (septoriose)", "Mancha-olho-de-rã", "Míldio", "Mela (Rhizoctonia)", "Podridão radicular (Phytophthora)", "Cancro da haste", "Fusariose / tombamento", "Nematoides (reboleira)"],
-  Milho: ["Cercosporiose", "Mancha-branca", "Helmintosporiose (Turcicum)", "Ferrugem-polissora", "Ferrugem-comum", "Enfezamento (molicutes)", "Podridão de colmo", "Podridão de espiga (Diplodia / Fusarium)", "Mancha-de-phaeosphaeria"],
+  Milho: ["Cercosporiose", "Mancha-branca", "Helmintosporiose (Turcicum)", "Mancha de Bipolaris", "Mancha de Diplodia", "Ferrugem-polissora", "Ferrugem-comum", "Ferrugem-tropical", "Mancha ocular", "Estria bacteriana", "Enfezamento (molicutes)", "Podridão de colmo", "Podridão de espiga (Diplodia / Fusarium)", "Mancha-de-phaeosphaeria"],
   Algodão: ["Ramulária", "Mancha-de-alternária", "Mancha-angular (bacteriose)", "Mirotécio", "Mofo-branco", "Fusariose (murcha)", "Doença azul (vírus)", "Podridão de maçãs", "Tombamento (damping-off)"],
   Feijão: ["Antracnose", "Mancha-angular", "Ferrugem", "Mofo-branco", "Oídio", "Crestamento bacteriano", "Mosaico-dourado (vírus)", "Mela", "Podridão radicular"],
   Sorgo: ["Antracnose", "Helmintosporiose", "Ferrugem", "Ergot (doença açucarada)", "Cercosporiose", "Podridão de colmo"],
@@ -24924,7 +24994,7 @@ function MonitoramentoPragas({ fazenda, lavoura, kml, usuario, onFechar, onSalva
                   <div key={it.chave}>
                     {novoGrupo && <div style={{ fontWeight: 900, color: C.navy, fontSize: 12.5, marginTop: 8, paddingTop: 4, borderTop: `2px solid #C9D8C0`, textTransform: "uppercase", letterSpacing: 0.3 }}>{it.grupo}</div>}
                     <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0", borderBottom: `1px dashed #C9D8C0` }}>
-                      <span style={{ flex: 1, fontSize: 13.5 }}>{it.nome || it.grupo}{acharNoGuia(it.nome || it.grupo) ? <button onClick={() => setGuiaAberto(acharNoGuia(it.nome || it.grupo))} title="ver no guia" style={{ marginLeft: 6, background: "transparent", border: "none", fontSize: 14, padding: 0 }}>📖</button> : null}</span>
+                      <span style={{ flex: 1, fontSize: 13.5 }}>{it.nome || it.grupo}{acharNoGuia(it.nome || it.grupo, cultura) ? <button onClick={() => setGuiaAberto(acharNoGuia(it.nome || it.grupo, cultura))} title="ver no guia" style={{ marginLeft: 6, background: "transparent", border: "none", fontSize: 14, padding: 0 }}>📖</button> : null}</span>
                       {it.tipo === "numero" && (
                         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                           <button onClick={() => mudarPraga(it.chave, Math.max(0, num(v) - 1))} style={{ width: 34, height: 34, borderRadius: 8, border: "none", background: "#fff", fontWeight: 900, fontSize: 18, color: C.navy }}>−</button>

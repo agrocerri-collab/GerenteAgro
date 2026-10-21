@@ -322,6 +322,8 @@ if ($Publicar) {
     Copy-Item (Join-Path $aqui $a) (Join-Path $pastaPublicar $a) -Force
   }
   # fontes da marca (Archivo e Instrument Sans), para o visual ser o mesmo sem internet
+  # fotos de referência do guia de campo (pasta guia\ inteira)
+  if (Test-Path (Join-Path $aqui "guia")) { Copy-Item (Join-Path $aqui "guia") $pastaPublicar -Recurse -Force }
   New-Item -ItemType Directory -Path (Join-Path $pastaPublicar "fontes") -Force | Out-Null
   foreach ($f in @("archivo.woff2", "instrument-sans.woff2")) {
     Copy-Item (Join-Path $aqui "fontes\$f") (Join-Path $pastaPublicar "fontes\$f") -Force
