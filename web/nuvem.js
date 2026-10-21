@@ -1420,7 +1420,7 @@ window.NuvemDados = (function () {
   async function baixarTudo() {
     const db2 = db();
     const SUBCOLECOES = ["talhoes", "compras", "recomendacoes", "execucoes", "chuvas",
-      "colheita", "ajustes", "entregas", "historico", "lavoura", "visitas", "fotos", "mapa", "documentos", "arquivos", "cotacoesPecas"];
+      "colheita", "ajustes", "entregas", "historico", "lavoura", "visitas", "fotos", "mapa", "documentos", "arquivos", "cotacoesPecas", "ponto"];
     const fazendas = [];
     const snapF = await db2.collection("fazendas").get();
     for (const f of snapF.docs) {
@@ -1451,7 +1451,7 @@ window.NuvemDados = (function () {
   // espaço para sempre. Aqui varremos cada subcoleção antes.
   async function apagarFazendaInteira(fazendaId) {
     const SUBCOLECOES = ["talhoes", "compras", "recomendacoes", "execucoes", "chuvas",
-      "ajustes", "historico", "lavoura", "visitas", "fotos", "mapa", "documentos", "arquivos", "solo", "almoxarifado", "combustivel", "manutencoes", "cotacoesPecas"];
+      "ajustes", "historico", "lavoura", "visitas", "fotos", "mapa", "documentos", "arquivos", "solo", "almoxarifado", "combustivel", "manutencoes", "cotacoesPecas", "ponto"];
     for (const nome of SUBCOLECOES) {
       const snap = await col(fazendaId, nome).get();
       // lotes de 400: o Firestore recusa lotes acima de 500 operações

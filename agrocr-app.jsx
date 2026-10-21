@@ -117,6 +117,7 @@ const ITENS_ACESSO = [
   ["visitas", "🧑‍🌾 Visitas técnicas (visita, regulagem, pragas)", "Campo"],
   ["diesel", "⛽ Máquinas, diesel e manutenção", "Máquinas"],
   ["almoxarifado", "🔩 Almoxarifado (peças, filtros, óleo)", "Máquinas"],
+  ["ponto", "⏰ Ponto (bater o ponto)", "Máquinas"],
   ["financeiro", "💰 Financeiro (custos, compras, vendas, DRE, notas, funcionários)", "Dinheiro"],
   ["custos", "💵 Ver e lançar valores em R$ dentro do Financeiro", "Dinheiro", true],
   ["cotacoes", "💹 Cotações", "Dinheiro"],
@@ -146,14 +147,14 @@ const funcaoMonitor = (f) => /monitor/i.test(String(f || ""));
 const padraoAreaFazenda = (funcao, chave) => chave === "apagar" ? /produtor|gerente/i.test(String(funcao || "")) : LANCAR_FAZENDA.includes(chave) ? false : !(["financeiro", "cotacoes", "programa"].includes(chave) && funcaoDeCampo(funcao));
 // O que cada função pode, por padrão, nos acessos da EQUIPE (GerenteAgro): o titular escolhe a função e
 // ajusta se quiser. Chave ausente = pode (para as funções de confiança) — a lista diz o que NÃO pode.
-const CAMPO_VER = ["panorama", "dadosfazenda", "lavoura", "solo", "operacoes", "fungicidas", "estoque", "ndvi", "pluviometria", "previsao", "colheita", "visitas", "comunidade", "suporte", "guia"];
+const CAMPO_VER = ["panorama", "dadosfazenda", "lavoura", "solo", "operacoes", "fungicidas", "estoque", "ndvi", "pluviometria", "previsao", "colheita", "visitas", "comunidade", "suporte", "guia", "ponto"];
 const PADRAO_FUNCAO_EQUIPE = {
   "Produtor": { tudo: true },
   "Gerente": { tudo: true, nao: ["acessos"] },
   "Engenheiro agrônomo": { tudo: true, nao: ["custos", "simulacoes", "excluir", "acessos"] },
-  "Escritório": { so: ["panorama", "estoque", "programa", "diesel", "almoxarifado", "financeiro", "custos", "cotacoes", "simulacoes", "relatorios", "documentos", "comunidade", "suporte", "cadastrar"] },
+  "Escritório": { so: ["panorama", "estoque", "programa", "diesel", "almoxarifado", "ponto", "financeiro", "custos", "cotacoes", "simulacoes", "relatorios", "documentos", "comunidade", "suporte", "cadastrar"] },
   "Monitor de campo": { so: CAMPO_VER },
-  "Operador de máquinas": { so: ["panorama", "operacoes", "fungicidas", "estoque", "pluviometria", "previsao", "colheita", "diesel", "almoxarifado", "comunidade", "suporte", "guia"] },
+  "Operador de máquinas": { so: ["panorama", "operacoes", "fungicidas", "estoque", "pluviometria", "previsao", "colheita", "diesel", "almoxarifado", "comunidade", "suporte", "guia", "ponto"] },
 };
 // valores antigos de função ("Monitor", "Operador", "Agrônomo") → nome atual da lista FUNCOES
 const normalizarFuncao = (f) => {
@@ -197,7 +198,9 @@ const kMaq = (f) => `agrocr:maq:${f}`;
 const kSolo = (f) => `agrocr:solo:${f}`;   // análises de solo e pontos de coleta: da fazenda, atravessam as safras
 const kComb = (f) => `agrocr:comb:${f}`;     // diesel: entradas e abastecimentos (contínuo, sem safra)
 const kManut = (f) => `agrocr:manut:${f}`;
-const kCotPecas = (f) => `agrocr:cotpec:${f}`;   // cotações de peças, diesel e serviços (WhatsApp)
+const kCotPecas = (f) => `agrocr:cotpec:${f}`;
+const kPonto = (f, s) => `agrocr:ponto:${f}:${s}`;   // batidas de ponto (por safra)
+const kPontoCfg = (f) => `agrocr:pontocfg:${f}`;  // pessoas, senhas e jornada do ponto   // cotações de peças, diesel e serviços (WhatsApp)
 const kAlmox = (f) => `agrocr:almox:${f}`;   // almoxarifado: entradas, retiradas por máquina, ajustes e mínimos   // manutenções das máquinas
 const kFunc = (f) => `agrocr:func:${f}`;
 const kNotas = (f, s) => `agrocr:notas:${f}:${s}`;  // notas fiscais da safra, destinadas a custo/compra     // quadro de funcionários (salários e comissões)
@@ -393,6 +396,7 @@ const ICONES_SVG = {
   colheita: ["M12 21V8", "M12 8c-3 0-4-2-4-4 3 0 4 2 4 4zM12 8c3 0 4-2 4-4-3 0-4 2-4 4z", "M12 13c-3 0-4.5-2-4.5-4.5 3 0 4.5 2 4.5 4.5zM12 13c3 0 4.5-2 4.5-4.5-3 0-4.5 2-4.5 4.5z", "M12 18c-3 0-4.5-2-4.5-4.5 3 0 4.5 2 4.5 4.5zM12 18c3 0 4.5-2 4.5-4.5-3 0-4.5 2-4.5 4.5z"],
   visita: ["M7 4h10a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z", "M9 4V3h6v1", "M8.5 12.5l2.5 2.5 4.5-5"],
   carteira: ["M5.5 6h13A2.5 2.5 0 0 1 21 8.5v8a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 16.5v-8A2.5 2.5 0 0 1 5.5 6z", "M3 10h18", "M15.5 14.5h2"],
+  relogio: ["M12 3.5a8.5 8.5 0 1 0 0 17 8.5 8.5 0 1 0 0-17z", "M12 7.5V12l3 2"],
   diesel: ["M5.8 4h6.4A1.8 1.8 0 0 1 14 5.8v15.2H4V5.8A1.8 1.8 0 0 1 5.8 4z", "M6.5 8h5v4h-5z", "M14 10h2.5a2 2 0 0 1 2 2v4.5a1.5 1.5 0 0 0 3 0V9l-3-3"],
   relatorio: ["M4 20h16", "M7 17v-6M12 17V7M17 17v-3"],
   suporte: ["M12 3.5a8.5 8.5 0 1 0 0 17 8.5 8.5 0 1 0 0-17z", "M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 1 0 0-7z", "M5.5 6.5l4 4M14.5 14.5l4 4M18.5 6.5l-4 4M9.5 14.5l-4 4"],
@@ -423,7 +427,7 @@ const ICONES_SVG = {
 // qual ícone cada cartão usa (id do cartão → nome acima); sem correspondência, fica o emoji
 const ICONE_DE = {
   panorama: "panorama", geral: "resumo", dados: "fazenda", lavoura: "lavoura", apl: "trator", fungicidas: "escudo", estoque: "caixa", mapa: "sat", chuva: "chuva", previsao: "previsao",
-  colheita: "colheita", visitas: "visita", cotacoes: "cotacoes", fin: "carteira", diesel: "diesel", rel: "relatorio", comunidade: "comunidade", suporte: "suporte", guia: "guia",
+  colheita: "colheita", visitas: "visita", cotacoes: "cotacoes", fin: "carteira", diesel: "diesel", ponto: "relogio", rel: "relatorio", comunidade: "comunidade", suporte: "suporte", guia: "guia",
   doc: "documentos", documentos: "documentos", safras: "safras",
   planocompras: "lista", cotacao: "cotacao", prog: "carrinho", notas: "nota", func: "pessoas", maq: "ferramenta", cotpecas: "cotacao", custos: "cifrao", caixa: "caixaFluxo", vendas: "vendas", dre: "dre", plano: "plano", relfin: "relatorio",
 };
@@ -464,7 +468,7 @@ const CLASSES_MENU = {
 const CLASSE_DO_CARTAO = {
   panorama: "campo", dados: "campo", lavoura: "campo", solo: "campo", apl: "campo", fungicidas: "campo", mapa: "campo", visitas: "campo",
   chuva: "agua", previsao: "agua",
-  diesel: "maquinas", colheita: "maquinas", maq: "maquinas",
+  diesel: "maquinas", colheita: "maquinas", maq: "maquinas", ponto: "maquinas",
   estoque: "insumos", prog: "insumos", planocompras: "insumos", cotacao: "insumos", cotpecas: "maquinas",
   fin: "dinheiro", geral: "dinheiro", cotacoes: "dinheiro", custos: "dinheiro", caixa: "dinheiro", vendas: "dinheiro", dre: "dinheiro", notas: "dinheiro", plano: "dinheiro", func: "dinheiro",
   rel: "apoio", relfin: "apoio", comunidade: "apoio", suporte: "apoio", guia: "apoio", doc: "apoio", documentos: "apoio", safras: "apoio",
@@ -5565,7 +5569,9 @@ function TelaFazenda({ fazenda, fazendas, grupos, papel, usuario, naNuvem, equip
   const [manutencoes, setManutencoes] = useState([]);
   const [almox, setAlmox] = useState([]);
   const [cotPecas, setCotPecas] = useState([]);
-  const SECAO_PERMISSAO = { panorama: "panorama", dados: "dadosfazenda", lavoura: "lavoura", solo: "solo", apl: "operacoes", fungicidas: "fungicidas", estoque: "estoque", mapa: "ndvi", chuva: "pluviometria", previsao: "previsao", colheita: "colheita", visitas: "visitas", diesel: "diesel", rel: "relatorios", doc: "documentos", comunidade: "comunidade", suporte: "suporte", cotacoes: "cotacoes", guia: "guia" };
+  const [ponto, setPonto] = useState([]);
+  const [pontoCfg, setPontoCfg] = useState(null);
+  const SECAO_PERMISSAO = { panorama: "panorama", dados: "dadosfazenda", lavoura: "lavoura", solo: "solo", apl: "operacoes", fungicidas: "fungicidas", estoque: "estoque", mapa: "ndvi", chuva: "pluviometria", previsao: "previsao", colheita: "colheita", visitas: "visitas", diesel: "diesel", rel: "relatorios", doc: "documentos", comunidade: "comunidade", suporte: "suporte", cotacoes: "cotacoes", guia: "guia", ponto: "ponto" };
   const almoxPendRef = useRef("");
   const [funcionarios, setFuncionarios] = useState([]);
   const [notas, setNotas] = useState([]);
@@ -5601,6 +5607,8 @@ function TelaFazenda({ fazenda, fazendas, grupos, papel, usuario, naNuvem, equip
       NuvemDados.observarColecao(f, "manutencoes", null, setManutencoes),
       NuvemDados.observarColecao(f, "almoxarifado", null, setAlmox),
       NuvemDados.observarColecao(f, "cotacoesPecas", null, setCotPecas),
+      NuvemDados.observarColecao(f, "ponto", safra, setPonto),
+      NuvemDados.observarDoc(f, "pontoConfig", (v) => setPontoCfg(v || null)),
       // dinheiro: só quem pode ver assina a lista
       ...(veCustos ? [NuvemDados.observarColecao(f, "funcionarios", null, setFuncionarios)] : []),
       ...(veCustos ? [NuvemDados.observarColecao(f, "notas", safra, setNotas)] : []),
@@ -5645,6 +5653,8 @@ function TelaFazenda({ fazenda, fazendas, grupos, papel, usuario, naNuvem, equip
         sGet(kManut(fazenda.id), []).then(setManutencoes),
         sGet(kAlmox(fazenda.id), []).then(setAlmox),
         sGet(kCotPecas(fazenda.id), []).then(setCotPecas),
+        sGet(kPonto(fazenda.id, safra), []).then(setPonto),
+        sGet(kPontoCfg(fazenda.id), null).then(setPontoCfg),
         sGet(kFunc(fazenda.id), []).then(setFuncionarios),
         sGet(kNotas(fazenda.id, safra), []).then(setNotas),
         sGet(kColh(fazenda.id, safra), []).then(setColheitas),
@@ -5724,7 +5734,7 @@ function TelaFazenda({ fazenda, fazendas, grupos, papel, usuario, naNuvem, equip
   const DESTINOS = {
     prog: ["col", "compras"], apl: ["rec", null], vis: ["col", "visitas"],
     aju: ["col", "ajustes"], chuva: ["col", "chuvas"], colheita: ["col", "colheita"], lavoura: ["col", "lavoura"], ent: ["col", "entregas"], custo: ["col", "custos"], maq: ["colperm", "maquinas"],
-    solo: ["colperm", "solo"], comb: ["colperm", "combustivel"], manut: ["colperm", "manutencoes"], almox: ["colperm", "almoxarifado"], cotpec: ["colperm", "cotacoesPecas"], func: ["colperm", "funcionarios"], notas: ["col", "notas"],
+    solo: ["colperm", "solo"], comb: ["colperm", "combustivel"], manut: ["colperm", "manutencoes"], almox: ["colperm", "almoxarifado"], cotpec: ["colperm", "cotacoesPecas"], ponto: ["col", "ponto"], pontocfg: ["doc", "pontoConfig"], func: ["colperm", "funcionarios"], notas: ["col", "notas"],
     log: ["col", "historico"], kml: ["doc", "kml"], fotomapa: ["doc", "fotosMapa"], doc: ["doc", "documentos"], programas: ["doc", "programas"],
   };
 
@@ -5871,6 +5881,7 @@ function TelaFazenda({ fazenda, fazendas, grupos, papel, usuario, naNuvem, equip
       const usado = combustivel.filter((c) => c.tipo === "abastecimento").reduce((s, c) => s + num(c.litros), 0);
       return combustivel.length ? `${fmtN(entradas - usado)} L no tanque · ${(maquinas || []).length} máquinas` : "Abastecimento, manutenção e inventário";
     })()]] : []),
+    ...(mostrar("ponto") ? [["ponto", "⏰", "Ponto", (() => { const hj = diaLocal(); const v = batidasValidas((ponto || []).filter((x) => x.dia === hj)); const ult = {}; for (const x of v.slice().sort((p, q) => (minDaHora(p.hora) || 0) - (minDaHora(q.hora) || 0))) ult[x.pessoaId] = x.tipo; const trab = Object.values(ult).filter((tp) => tp === "entrada" || tp === "volta_almoco").length; const n = ((pontoCfg && pontoCfg.pessoas) || []).filter((x) => !x.inativa).length; return n ? `${trab} de ${n} trabalhando agora · bater o ponto` : "Bater o ponto · espelho do mês"; })()]] : []),
     ...(mostrar("relatorios") ? [["rel", "📊", "Relatórios", "Geral, por operação, chuva, mapa…"]] : []),
     // documentos ficam dentro de Dados da fazenda; histórico de safras, no seletor "SAFRA ▾" do topo
     ...(naNuvem && mostrar("comunidade") ? [["comunidade", "💬", "Comunidade", comunidadeNovas > 0 ? `${comunidadeNovas} mensage${comunidadeNovas > 1 ? "ns novas" : "m nova"} em ${ufDaFazenda(fazenda)}` : `Produtores e consultores de ${ufDaFazenda(fazenda)} · peça, contato, frete`]] : []),
@@ -5960,10 +5971,10 @@ function TelaFazenda({ fazenda, fazendas, grupos, papel, usuario, naNuvem, equip
         // Tela curta do produtor e do operador: só o que se usa todo dia, em botões grandes.
         // O resto fica atrás de "Mais". O consultor vê o menu completo.
         const principais = modoCampo
-          ? (funcaoMonitor(funcaoDe) ? ["apl", "visitas", "chuva", "estoque"] : ["apl", "chuva", "estoque", "diesel"])
-          : ["panorama", "apl", "fungicidas", "chuva", "estoque", "fin", "visitas", "diesel"];
+          ? (funcaoMonitor(funcaoDe) ? ["apl", "visitas", "chuva", "estoque", "ponto"] : ["apl", "chuva", "estoque", "diesel", "ponto"])
+          : ["panorama", "apl", "fungicidas", "chuva", "estoque", "fin", "visitas", "diesel", "ponto"];
         const cartoes = principais.map((id) => ICONES.find((x) => x[0] === id)).filter(Boolean);
-        const rotulo = { apl: modoCampo ? "O que fazer · Feito" : "Operações no talhão", chuva: "Chuva", estoque: "Estoque", diesel: "Máquinas e diesel" };
+        const rotulo = { apl: modoCampo ? "O que fazer · Feito" : "Operações no talhão", chuva: "Chuva", estoque: "Estoque", diesel: "Máquinas e diesel", ponto: "Bater ponto" };
         return (
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             {cartoes.map(([id, ico, titulo, sub]) => (
@@ -5999,7 +6010,7 @@ function TelaFazenda({ fazenda, fazendas, grupos, papel, usuario, naNuvem, equip
             // no meio, acompanhamento embaixo — cada bloco com um traço verde
             const GRUPOS = [
               ["Fazenda e lavoura", ["dados", "lavoura", "colheita"]],
-              ["Operações e insumos", ["apl", "estoque", "diesel"]],
+              ["Operações e insumos", ["apl", "estoque", "diesel", "ponto"]],
               ["Técnico", ["visitas", "fungicidas", "mapa", "solo", "guia"]],
               ["Clima", ["chuva", "previsao"]],
               ["Dinheiro", ["cotacoes", "fin"]],
@@ -6467,6 +6478,8 @@ function TelaFazenda({ fazenda, fazendas, grupos, papel, usuario, naNuvem, equip
       {secao === "comunidade" && <SecaoComunidade fazenda={fazenda} usuario={usuario} naNuvem={naNuvem} />}
 
       {secao === "suporte" && <SecaoSuporte usuario={usuario} naNuvem={naNuvem} />}
+      {secao === "ponto" && <SecaoPonto fazenda={fazenda} kml={kml} usuario={usuario} batidas={ponto} config={pontoCfg} podeGerir={!!(consultor || ehProdutor)} funcionarios={funcionarios}
+        onBater={(rec) => gravar(kPonto(fazenda.id, safra), [...(ponto || []), rec], setPonto, ponto)} onSalvarConfig={(v) => gravar(kPontoCfg(fazenda.id), v, setPontoCfg, pontoCfg)} />}
       {secao === "guia" && <SecaoGuia usuario={usuario} fazenda={fazenda} naNuvem={naNuvem} consultor={consultor} />}
 
       {secao === "inicio" && window.AGROCR_VERSAO && (
@@ -20353,6 +20366,355 @@ function SeloLavoura({ l, nome }) {
 // Pasta da fazenda: mapa de precisão, pedido de compra, contrato, laudo.
 // Fica no aparelho para abrir no talhão, onde não há sinal.
 const LIMITE_DOC_KB = 1200;
+
+// =========================== PONTO DOS FUNCIONÁRIOS ===========================
+// Controle de jornada INTERNO (não é o REP-P oficial da Portaria 671). A pessoa bate no próprio
+// celular ou no celular da sede: toca no nome, digita a senha de 4 números e registra. Cada batida
+// guarda dia e hora LOCAIS, GPS (e a selfie, se o gestor ligar). Batida não se edita nem se apaga:
+// correção é um AJUSTE novo, com motivo e quem fez, que substitui (ou anula) a original no espelho.
+const TIPOS_PONTO = [["entrada", "Entrada", "🌅"], ["saida_almoco", "Saída para almoço", "🍽"], ["volta_almoco", "Volta do almoço", "↩️"], ["saida", "Saída", "🏠"]];
+const PONTO_PADRAO = { pessoas: [], jornada: { semana: 480, sabado: 240, domingo: 0 }, selfie: false };
+const diaLocal = (d) => { const x = d || new Date(); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`; };
+const horaLocal = (d) => { const x = d || new Date(); return `${String(x.getHours()).padStart(2, "0")}:${String(x.getMinutes()).padStart(2, "0")}`; };
+const minDaHora = (h) => { const m = /^(\d{1,2}):(\d{2})/.exec(String(h || "")); return m ? Number(m[1]) * 60 + Number(m[2]) : null; };
+const fmtHM = (min) => { const m = Math.max(0, Math.round(num(min))); return `${Math.floor(m / 60)}h${String(m % 60).padStart(2, "0")}`; };
+// tira as batidas substituídas por um ajuste e os ajustes que anulam
+function batidasValidas(lista) {
+  const fora = new Set((lista || []).filter((b) => b && b.substitui).map((b) => b.substitui));
+  return (lista || []).filter((b) => b && !fora.has(b.id) && !b.anula);
+}
+const tipoNome = (t) => (TIPOS_PONTO.find((x) => x[0] === t) || [t, t])[1];
+// o que vem depois da última batida do dia
+function proximoTipo(doDia) {
+  const ult = (doDia || []).slice().sort((a, b) => (minDaHora(a.hora) || 0) - (minDaHora(b.hora) || 0)).pop();
+  if (!ult) return "entrada";
+  return { entrada: "saida_almoco", saida_almoco: "volta_almoco", volta_almoco: "saida", saida: "entrada" }[ult.tipo] || "entrada";
+}
+// horas do dia: soma os trechos abertos por entrada/volta e fechados por saída/saída para almoço
+function horasDoDia(doDia) {
+  const bs = (doDia || []).slice().sort((a, b) => (minDaHora(a.hora) || 0) - (minDaHora(b.hora) || 0));
+  let aberto = null, total = 0, incompleto = false;
+  for (const b of bs) {
+    const m = minDaHora(b.hora); if (m == null) continue;
+    if (b.tipo === "entrada" || b.tipo === "volta_almoco") { if (aberto != null) incompleto = true; aberto = m; }
+    else if (b.tipo === "saida" || b.tipo === "saida_almoco") { if (aberto == null) incompleto = true; else { total += Math.max(0, m - aberto); aberto = null; } }
+  }
+  if (aberto != null) incompleto = true;
+  return { trabalhadoMin: total, incompleto };
+}
+const jornadaDoDia = (dia, jornada) => { const j = { ...PONTO_PADRAO.jornada, ...(jornada || {}) }; const w = new Date(dia + "T12:00:00").getDay(); return w === 0 ? num(j.domingo) : w === 6 ? num(j.sabado) : num(j.semana); };
+// espelho do mês de uma pessoa: um registro por dia até hoje
+function espelhoDoMes(batidas, pessoaId, mes, jornada, hoje) {
+  const validas = batidasValidas((batidas || []).filter((b) => b.pessoaId === pessoaId && String(b.dia || "").startsWith(mes)));
+  const [a, m] = mes.split("-").map(Number); const ultimo = new Date(a, m, 0).getDate();
+  const ate = hoje && hoje.startsWith(mes) ? Number(hoje.slice(8, 10)) : ultimo;
+  const dias = [];
+  let trab = 0, extra = 0, falta = 0;
+  for (let d = 1; d <= ate; d++) {
+    const dia = `${mes}-${String(d).padStart(2, "0")}`;
+    const doDia = validas.filter((b) => b.dia === dia).sort((x, y) => (minDaHora(x.hora) || 0) - (minDaHora(y.hora) || 0));
+    const h = horasDoDia(doDia); const jor = jornadaDoDia(dia, jornada);
+    const ex = doDia.length && !h.incompleto ? Math.max(0, h.trabalhadoMin - jor) : 0;
+    const fa = !h.incompleto && dia !== hoje ? Math.max(0, jor - h.trabalhadoMin) : 0;
+    trab += h.trabalhadoMin; extra += ex; falta += fa;
+    const pega = (t) => doDia.filter((b) => b.tipo === t).map((b) => b.hora + (b.ajuste ? "*" : "")).join(" ");
+    dias.push({ dia, batidas: doDia, entrada: pega("entrada"), saidaAlmoco: pega("saida_almoco"), volta: pega("volta_almoco"), saida: pega("saida"), trabalhadoMin: h.trabalhadoMin, incompleto: h.incompleto && doDia.length > 0, jornadaMin: jor, extraMin: ex, faltaMin: fa, temAjuste: doDia.some((b) => b.ajuste), fora: doDia.some((b) => b.dentro === false) });
+  }
+  return { dias, trabalhadoMin: trab, extraMin: extra, faltaMin: falta };
+}
+// a batida foi na fazenda? dentro de um talhão do KML ou até 1,5 km dele
+function localDaBatida(kml, lat, lng) {
+  const pgs = ((kml && kml.poligonos) || []).filter((g) => g.aneis && g.aneis[0] && g.aneis[0].length >= 3);
+  if (!pgs.length || lat == null || lng == null) return { dentro: null, distM: null };
+  if (pgs.some((g) => pontoNoAnel(lng, lat, g.aneis[0]))) return { dentro: true, distM: 0 };
+  const d = Math.min(...pgs.map((g) => distanciaAoAnel(lng, lat, g.aneis[0])));
+  return { dentro: d <= 1500, distM: Math.round(d) };
+}
+function pegarGps() {
+  return new Promise((ok) => {
+    if (!navigator.geolocation) { ok(null); return; }
+    navigator.geolocation.getCurrentPosition((p) => ok({ lat: p.coords.latitude, lng: p.coords.longitude, prec: Math.round(p.coords.accuracy || 0) }), () => ok(null), { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 });
+  });
+}
+
+function SecaoPonto({ fazenda, kml, usuario, batidas, config, onBater, podeGerir, onSalvarConfig, funcionarios }) {
+  const cfg = { ...PONTO_PADRAO, ...(config || {}), jornada: { ...PONTO_PADRAO.jornada, ...((config || {}).jornada || {}) } };
+  const pessoas = (cfg.pessoas || []).filter((p) => !p.inativa);
+  const [aba, setAba] = useState("bater");
+  const chip = (ativo) => ({ flex: "1 1 22%", padding: "9px 6px", borderRadius: 10, fontWeight: 800, fontSize: 12.5, border: "none", background: ativo ? C.navy : C.fundo, color: ativo ? "#fff" : C.navyEscuro });
+  return (
+    <div>
+      <div style={{ fontWeight: 900, color: C.navy, fontSize: 17 }}>⏰ Ponto</div>
+      <div style={{ fontSize: 12, color: C.cinza, marginBottom: 10 }}>Controle de jornada interno da fazenda. A batida guarda a hora, o local{cfg.selfie ? " e uma foto" : ""}. Não substitui o ponto eletrônico oficial (REP-P).</div>
+      {podeGerir && (
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
+          <button onClick={() => setAba("bater")} style={chip(aba === "bater")}>⏰ Bater</button>
+          <button onClick={() => setAba("hoje")} style={chip(aba === "hoje")}>📋 Hoje</button>
+          <button onClick={() => setAba("espelho")} style={chip(aba === "espelho")}>📅 Espelho</button>
+          <button onClick={() => setAba("pessoas")} style={chip(aba === "pessoas")}>👥 Pessoas</button>
+        </div>
+      )}
+      {aba === "bater" && <BaterPonto fazenda={fazenda} kml={kml} usuario={usuario} pessoas={pessoas} cfg={cfg} batidas={batidas} onBater={onBater} podeGerir={podeGerir} irPessoas={() => setAba("pessoas")} />}
+      {aba === "hoje" && podeGerir && <PontoHoje pessoas={pessoas} batidas={batidas} />}
+      {aba === "espelho" && podeGerir && <EspelhoPonto fazenda={fazenda} pessoas={cfg.pessoas || []} cfg={cfg} batidas={batidas} usuario={usuario} onBater={onBater} />}
+      {aba === "pessoas" && podeGerir && <PessoasPonto cfg={cfg} funcionarios={funcionarios} onSalvar={onSalvarConfig} />}
+    </div>
+  );
+}
+
+function BaterPonto({ fazenda, kml, usuario, pessoas, cfg, batidas, onBater, podeGerir, irPessoas }) {
+  const kEu = "agrocr:ponto-eu:" + fazenda.id;
+  const [eu, setEu] = useState(() => { try { return localStorage.getItem(kEu) || ""; } catch (e) { return ""; } });
+  const [pessoaId, setPessoaId] = useState("");
+  const [pin, setPin] = useState("");
+  const [liberado, setLiberado] = useState(false);
+  const [tipo, setTipo] = useState("");
+  const [selfie, setSelfie] = useState(null);
+  const [estado, setEstado] = useState("");   // "" · gps · pronto · erro
+  const [ultima, setUltima] = useState(null);
+  const p = pessoas.find((x) => x.id === pessoaId) || null;
+  const hoje = diaLocal();
+  const doDia = p ? batidasValidas((batidas || []).filter((b) => b.pessoaId === p.id && b.dia === hoje)).sort((a, b) => (minDaHora(a.hora) || 0) - (minDaHora(b.hora) || 0)) : [];
+  const sugerido = proximoTipo(doDia);
+  const escolhido = tipo || sugerido;
+  const sair = () => { setPessoaId(""); setPin(""); setLiberado(false); setTipo(""); setSelfie(null); setEstado(""); };
+  const escolher = (id) => { const x = pessoas.find((y) => y.id === id); setPessoaId(id); setPin(""); setLiberado(!(x && x.pin)); setTipo(""); setSelfie(null); setEstado(""); };
+  const conferirPin = (v) => { setPin(v); if (p && v.length >= 4) { if (String(v) === String(p.pin)) setLiberado(true); else setEstado("pin"); } };
+  async function bater() {
+    if (cfg.selfie && !selfie) return;
+    setEstado("gps");
+    const g = await pegarGps();
+    const agora = new Date();
+    const loc = g ? localDaBatida(kml, g.lat, g.lng) : { dentro: null, distM: null };
+    const rec = { id: idNovo(), pessoaId: p.id, pessoaNome: p.nome, tipo: escolhido, dia: diaLocal(agora), hora: horaLocal(agora), em: agora.toISOString(), lat: g ? g.lat : null, lng: g ? g.lng : null, prec: g ? g.prec : null, dentro: loc.dentro, distM: loc.distM, foto: selfie || null, aparelho: eu === p.id ? "proprio" : "sede", quem: (usuario && usuario.nomeUsuario) || "" };
+    onBater(rec);
+    setUltima(rec); setEstado("pronto"); setSelfie(null); setTipo("");
+  }
+  if (!pessoas.length) return (
+    <div style={{ background: C.amareloBg, borderRadius: 12, padding: 14, fontSize: 13.5 }}>
+      Ninguém cadastrado no ponto ainda.{podeGerir ? <> <button onClick={irPessoas} style={{ background: "transparent", border: "none", color: C.navy, fontWeight: 800, textDecoration: "underline", padding: 0 }}>Cadastrar as pessoas</button></> : " Peça para o gestor cadastrar as pessoas."}
+    </div>
+  );
+  if (!p) {
+    const ordenadas = pessoas.slice().sort((a, b) => (a.id === eu ? -1 : b.id === eu ? 1 : String(a.nome).localeCompare(String(b.nome))));
+    return (
+      <div>
+        <div style={{ fontSize: 14, fontWeight: 800, color: C.navy, marginBottom: 8 }}>Quem vai bater o ponto?</div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          {ordenadas.map((x) => {
+            const ult = batidasValidas((batidas || []).filter((b) => b.pessoaId === x.id && b.dia === hoje)).sort((a, b) => (minDaHora(a.hora) || 0) - (minDaHora(b.hora) || 0)).pop();
+            return (
+              <button key={x.id} onClick={() => escolher(x.id)} style={{ background: x.id === eu ? C.verdeBg : "#fff", border: `1.5px solid ${x.id === eu ? C.verde : C.borda}`, borderRadius: 14, padding: "16px 12px", textAlign: "left", minHeight: 86 }}>
+                <div style={{ fontWeight: 900, fontSize: 16, color: C.navy }}>{x.nome}</div>
+                <div style={{ fontSize: 12, color: C.cinza }}>{x.funcao || ""}{x.id === eu ? " · este celular" : ""}</div>
+                <div style={{ fontSize: 12, color: ult ? C.verdeEscuro : C.cinza, fontWeight: 700, marginTop: 4 }}>{ult ? `${tipoNome(ult.tipo)} ${ult.hora}` : "ainda não bateu hoje"}</div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+  if (!liberado) return (
+    <div style={{ background: "#fff", border: `1.5px solid ${C.borda}`, borderRadius: 14, padding: 16, textAlign: "center" }}>
+      <div style={{ fontWeight: 900, fontSize: 18, color: C.navy }}>{p.nome}</div>
+      <div style={{ fontSize: 13, color: C.cinza, margin: "4px 0 10px" }}>Digite sua senha de 4 números</div>
+      <input type="password" inputMode="numeric" autoFocus maxLength={6} value={pin} onChange={(e) => conferirPin(e.target.value.replace(/\D/g, ""))} style={{ fontSize: 28, textAlign: "center", letterSpacing: 10, maxWidth: 200, margin: "0 auto" }} />
+      {estado === "pin" && <div style={{ color: C.vermelho, fontWeight: 800, fontSize: 13, marginTop: 6 }}>Senha não confere.</div>}
+      <button onClick={sair} style={{ marginTop: 12, background: "transparent", border: "none", color: C.cinza, fontWeight: 700 }}>← não sou eu</button>
+    </div>
+  );
+  if (estado === "pronto" && ultima) return (
+    <div style={{ background: C.verdeBg, border: `2px solid ${C.verde}`, borderRadius: 14, padding: 18, textAlign: "center" }}>
+      <div style={{ fontSize: 40 }}>✅</div>
+      <div style={{ fontWeight: 900, fontSize: 20, color: C.verdeEscuro }}>{tipoNome(ultima.tipo)} · {ultima.hora}</div>
+      <div style={{ fontSize: 13.5, color: C.navyEscuro, marginTop: 4 }}>{ultima.pessoaNome} · {fmtD(ultima.dia)}</div>
+      <div style={{ fontSize: 12.5, color: ultima.dentro === false ? C.vermelho : C.cinza, fontWeight: 700, marginTop: 4 }}>{ultima.lat == null ? "sem GPS nesta batida" : ultima.dentro === false ? `fora da fazenda (${fmtN(Math.round(ultima.distM / 100) / 10)} km)` : ultima.dentro ? "na fazenda" : "local registrado"}</div>
+      <div style={{ fontSize: 11.5, color: C.cinza, marginTop: 4 }}>{navigator.onLine ? "Guardado." : "Guardado no celular — sobe quando tiver sinal."}</div>
+      <button onClick={sair} style={{ marginTop: 14, width: "100%", padding: 14, background: C.navy, color: "#fff", border: "none", borderRadius: 12, fontWeight: 900, fontSize: 16 }}>Pronto</button>
+    </div>
+  );
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+        <div style={{ flex: 1 }}><div style={{ fontWeight: 900, fontSize: 18, color: C.navy }}>{p.nome}</div><div style={{ fontSize: 12.5, color: C.cinza }}>{fmtD(hoje)} · agora {horaLocal()}</div></div>
+        <button onClick={sair} style={{ background: "#fff", border: `1.5px solid ${C.borda}`, borderRadius: 10, padding: "8px 12px", fontWeight: 800, color: C.navy }}>Trocar</button>
+      </div>
+      {doDia.length > 0 && (
+        <div style={{ background: C.fundo, borderRadius: 12, padding: "8px 12px", marginBottom: 10, fontSize: 13.5 }}>
+          {doDia.map((b) => <div key={b.id} style={{ display: "flex", justifyContent: "space-between" }}><span>{tipoNome(b.tipo)}{b.ajuste ? " (ajuste)" : ""}</span><b>{b.hora}</b></div>)}
+          <div style={{ borderTop: `1px dashed ${C.borda}`, marginTop: 4, paddingTop: 4, fontWeight: 800, color: C.navy }}>Hoje: {fmtHM(horasDoDia(doDia).trabalhadoMin)}</div>
+        </div>
+      )}
+      <button onClick={bater} disabled={estado === "gps" || (cfg.selfie && !selfie)} style={{ width: "100%", padding: "22px 12px", background: C.verde, color: "#fff", border: "none", borderRadius: 16, fontWeight: 900, fontSize: 22, opacity: cfg.selfie && !selfie ? 0.5 : 1 }}>
+        {estado === "gps" ? "📍 Pegando o local…" : `${(TIPOS_PONTO.find((x) => x[0] === escolhido) || [])[2] || ""} ${tipoNome(escolhido)}`}
+      </button>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
+        {TIPOS_PONTO.filter(([id]) => id !== escolhido).map(([id, r]) => <button key={id} onClick={() => setTipo(id)} style={{ flex: "1 1 30%", padding: "8px 6px", background: "#fff", border: `1.5px solid ${C.borda}`, borderRadius: 10, fontWeight: 700, fontSize: 12, color: C.navy }}>{r}</button>)}
+      </div>
+      {cfg.selfie && (
+        <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 10 }}>
+          <label style={{ margin: 0, flex: 1, padding: 12, background: selfie ? C.verdeBg : C.navy, color: selfie ? C.verdeEscuro : "#fff", borderRadius: 12, fontWeight: 800, textAlign: "center", cursor: "pointer" }}>
+            {selfie ? "✓ Foto tirada · tirar outra" : "🤳 Tirar a foto (obrigatória)"}
+            <input type="file" accept="image/*" capture="user" style={{ display: "none" }} onChange={async (e) => { const f = (e.target.files || [])[0]; e.target.value = ""; if (!f) return; try { setSelfie(await comprimirFoto(f, 240, 0.5)); } catch (err) {} }} />
+          </label>
+          {selfie && <img src={selfie} alt="" style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 10 }} />}
+        </div>
+      )}
+      <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12, fontSize: 13, cursor: "pointer" }}>
+        <input type="checkbox" checked={eu === p.id} onChange={(e) => { const v = e.target.checked ? p.id : ""; setEu(v); try { if (v) localStorage.setItem(kEu, v); else localStorage.removeItem(kEu); } catch (err) {} }} style={{ width: 20, height: 20, margin: 0 }} />
+        Este celular é meu (meu nome aparece primeiro)
+      </label>
+    </div>
+  );
+}
+
+function PontoHoje({ pessoas, batidas }) {
+  const hoje = diaLocal();
+  const [foto, setFoto] = useState(null);
+  return (
+    <div>
+      {pessoas.map((p) => {
+        const doDia = batidasValidas((batidas || []).filter((b) => b.pessoaId === p.id && b.dia === hoje)).sort((a, b) => (minDaHora(a.hora) || 0) - (minDaHora(b.hora) || 0));
+        const ult = doDia[doDia.length - 1];
+        const st = !ult ? ["não bateu", C.cinza, C.fundo] : ult.tipo === "saida" ? [`saiu ${ult.hora}`, C.navy, "#EEF2F7"] : ult.tipo === "saida_almoco" ? [`no almoço desde ${ult.hora}`, "#7A5C00", C.amareloBg] : [`trabalhando desde ${(doDia.find((b) => b.tipo === "entrada") || ult).hora}`, C.verdeEscuro, C.verdeBg];
+        return (
+          <div key={p.id} style={{ background: "#fff", border: `1.5px solid ${C.borda}`, borderRadius: 12, padding: "10px 12px", marginBottom: 8 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <b style={{ flex: 1, color: C.navy }}>{p.nome}</b>
+              <span style={{ fontSize: 12, fontWeight: 800, color: st[1], background: st[2], borderRadius: 8, padding: "3px 8px" }}>{st[0]}</span>
+            </div>
+            {doDia.length > 0 && <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6, fontSize: 12.5 }}>
+              {doDia.map((b) => <span key={b.id} onClick={() => b.foto && setFoto(b.foto)} style={{ background: b.dentro === false ? "#FDECEA" : C.fundo, borderRadius: 8, padding: "3px 7px", cursor: b.foto ? "pointer" : "default" }}>{tipoNome(b.tipo)} <b>{b.hora}</b>{b.dentro === false ? " ⚠ fora" : ""}{b.foto ? " 🤳" : ""}{b.ajuste ? " *" : ""}</span>)}
+              <span style={{ fontWeight: 800, color: C.navy, padding: "3px 4px" }}>= {fmtHM(horasDoDia(doDia).trabalhadoMin)}</span>
+            </div>}
+          </div>
+        );
+      })}
+      {foto && <div onClick={() => setFoto(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.9)", zIndex: 90, display: "flex", alignItems: "center", justifyContent: "center" }}><img src={foto} alt="" style={{ maxWidth: "90%", maxHeight: "80vh", borderRadius: 10 }} /></div>}
+    </div>
+  );
+}
+
+function EspelhoPonto({ fazenda, pessoas, cfg, batidas, usuario, onBater }) {
+  const [pessoaId, setPessoaId] = useState((pessoas.find((p) => !p.inativa) || pessoas[0] || {}).id || "");
+  const [mes, setMes] = useState(diaLocal().slice(0, 7));
+  const [ajuste, setAjuste] = useState(null);   // {dia, substitui, tipo, hora, motivo, anula}
+  const folhaRef = useRef(null);
+  const p = pessoas.find((x) => x.id === pessoaId);
+  const esp = p ? espelhoDoMes(batidas, p.id, mes, cfg.jornada, diaLocal()) : null;
+  const dSem = (dia) => ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"][new Date(dia + "T12:00:00").getDay()];
+  const td = { padding: "4px 5px", borderBottom: `1px solid ${C.fundo}`, textAlign: "center", fontSize: 12 };
+  const gravarAjuste = () => {
+    onBater({ id: idNovo(), pessoaId: p.id, pessoaNome: p.nome, tipo: ajuste.tipo, dia: ajuste.dia, hora: ajuste.hora, em: new Date().toISOString(), ajuste: true, substitui: ajuste.substitui || null, anula: !!ajuste.anula, motivo: ajuste.motivo.trim(), por: (usuario && usuario.nomeUsuario) || "", lat: null, lng: null, dentro: null });
+    setAjuste(null);
+  };
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+        <select value={pessoaId} onChange={(e) => setPessoaId(e.target.value)} style={{ flex: 2, marginTop: 0 }}>{pessoas.map((x) => <option key={x.id} value={x.id}>{x.nome}{x.inativa ? " (inativo)" : ""}</option>)}</select>
+        <input type="month" value={mes} onChange={(e) => setMes(e.target.value)} style={{ flex: 1.3, marginTop: 0 }} />
+      </div>
+      {esp && (
+        <>
+          <div className="nao-imprimir" style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+            <BotaoPdfWhats nome={`ponto-${p.nome}-${mes}`} titulo={`Espelho de ponto · ${p.nome} · ${mes.slice(5)}/${mes.slice(0, 4)}`} alvo={() => folhaRef.current} estilo={{ flex: 1 }} />
+          </div>
+          <div ref={folhaRef} style={{ background: "#fff", border: `1.5px solid ${C.borda}`, borderRadius: 12, padding: 12 }}>
+            <div style={{ fontWeight: 900, color: C.navy, fontSize: 15 }}>Espelho de ponto — {p.nome}</div>
+            <div style={{ fontSize: 12, color: C.cinza, marginBottom: 6 }}>{fazenda.nome} · {mes.slice(5)}/{mes.slice(0, 4)} · jornada {fmtHM(cfg.jornada.semana)} seg–sex, {fmtHM(cfg.jornada.sabado)} sábado · controle interno</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6, marginBottom: 8 }}>
+              {[["Trabalhado", esp.trabalhadoMin, C.navy], ["Horas extras", esp.extraMin, C.verdeEscuro], ["Faltas / atrasos", esp.faltaMin, C.vermelho]].map(([r, v, c]) => <div key={r} style={{ background: C.fundo, borderRadius: 10, padding: "6px 8px", textAlign: "center" }}><div style={{ fontWeight: 900, fontSize: 17, color: c }}>{fmtHM(v)}</div><div style={{ fontSize: 11, color: C.cinza }}>{r}</div></div>)}
+            </div>
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead><tr>{["Dia", "Entrada", "Almoço", "Volta", "Saída", "Trab.", "Extra", "Falta"].map((h) => <th key={h} style={{ ...td, background: C.navy, color: "#fff", fontWeight: 800 }}>{h}</th>)}</tr></thead>
+                <tbody>
+                  {esp.dias.map((d) => (
+                    <tr key={d.dia} onClick={() => setAjuste({ dia: d.dia, batidas: d.batidas, substitui: "", tipo: "entrada", hora: "", motivo: "", anula: false })} style={{ background: d.incompleto ? "#FFF6E0" : d.fora ? "#FDECEA" : d.jornadaMin === 0 ? "#F6F7F5" : "#fff", cursor: "pointer" }}>
+                      <td style={{ ...td, textAlign: "left", fontWeight: 800 }}>{d.dia.slice(8)} {dSem(d.dia)}</td>
+                      <td style={td}>{d.entrada}</td><td style={td}>{d.saidaAlmoco}</td><td style={td}>{d.volta}</td><td style={td}>{d.saida}</td>
+                      <td style={{ ...td, fontWeight: 800 }}>{d.trabalhadoMin ? fmtHM(d.trabalhadoMin) : d.incompleto ? "?" : ""}</td>
+                      <td style={{ ...td, color: C.verdeEscuro }}>{d.extraMin ? fmtHM(d.extraMin) : ""}</td>
+                      <td style={{ ...td, color: C.vermelho }}>{d.faltaMin ? fmtHM(d.faltaMin) : ""}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div style={{ fontSize: 11, color: C.cinza, marginTop: 6 }}>* horário ajustado pelo gestor (com motivo) · amarelo: dia incompleto · vermelho: batida fora da fazenda · toque no dia para corrigir</div>
+          </div>
+        </>
+      )}
+      {ajuste && (
+        <Modal titulo={`Corrigir ${fmtD(ajuste.dia)} · ${p.nome}`} onFechar={() => setAjuste(null)}>
+          <div style={{ fontSize: 12.5, color: C.cinza }}>A batida original não é apagada: o ajuste fica registrado com o motivo e quem fez.</div>
+          <label>O que fazer</label>
+          <select value={ajuste.substitui ? (ajuste.anula ? "anular:" + ajuste.substitui : "trocar:" + ajuste.substitui) : "novo"} onChange={(e) => { const v = e.target.value; if (v === "novo") setAjuste({ ...ajuste, substitui: "", anula: false }); else { const [acao, id] = v.split(":"); const b = ajuste.batidas.find((x) => x.id === id); setAjuste({ ...ajuste, substitui: id, anula: acao === "anular", tipo: b ? b.tipo : ajuste.tipo, hora: b ? b.hora.replace("*", "") : ajuste.hora }); } }}>
+            <option value="novo">Acrescentar batida que faltou</option>
+            {ajuste.batidas.map((b) => <option key={"t" + b.id} value={"trocar:" + b.id}>Corrigir: {tipoNome(b.tipo)} {b.hora}</option>)}
+            {ajuste.batidas.map((b) => <option key={"a" + b.id} value={"anular:" + b.id}>Desconsiderar: {tipoNome(b.tipo)} {b.hora}</option>)}
+          </select>
+          {!ajuste.anula && (
+            <div style={{ display: "flex", gap: 8 }}>
+              <div style={{ flex: 1.4 }}><label>Batida</label><select value={ajuste.tipo} onChange={(e) => setAjuste({ ...ajuste, tipo: e.target.value })}>{TIPOS_PONTO.map(([id, r]) => <option key={id} value={id}>{r}</option>)}</select></div>
+              <div style={{ flex: 1 }}><label>Hora</label><input type="time" value={ajuste.hora} onChange={(e) => setAjuste({ ...ajuste, hora: e.target.value })} /></div>
+            </div>
+          )}
+          <label>Motivo (obrigatório)</label>
+          <input value={ajuste.motivo} onChange={(e) => setAjuste({ ...ajuste, motivo: e.target.value })} placeholder="Ex.: esqueceu de bater a volta do almoço" />
+          <BotaoSalvar disabled={!ajuste.motivo.trim() || (!ajuste.anula && !minDaHora(ajuste.hora) && ajuste.hora !== "00:00")} texto="Gravar ajuste" onClick={gravarAjuste} />
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+function PessoasPonto({ cfg, funcionarios, onSalvar }) {
+  const [form, setForm] = useState(null);
+  const [jornada, setJornada] = useState({ semana: String(num(cfg.jornada.semana) / 60), sabado: String(num(cfg.jornada.sabado) / 60), domingo: String(num(cfg.jornada.domingo) / 60) });
+  const pessoas = cfg.pessoas || [];
+  const salvar = (mud) => onSalvar && onSalvar({ ...cfg, ...mud });
+  const faltam = (funcionarios || []).filter((f) => f.nome && !pessoas.some((p) => p.funcionarioId === f.id || String(p.nome).trim().toLowerCase() === String(f.nome).trim().toLowerCase()));
+  return (
+    <div>
+      {!form && <button onClick={() => setForm({ nome: "", funcao: "", pin: "" })} style={{ width: "100%", padding: 12, background: C.navy, color: "#fff", border: "none", borderRadius: 12, fontWeight: 800, fontSize: 14, marginBottom: 8 }}>➕ Cadastrar pessoa</button>}
+      {!form && faltam.length > 0 && <button onClick={() => salvar({ pessoas: [...pessoas, ...faltam.map((f) => ({ id: idNovo(), nome: f.nome, funcao: f.cargo || "", pin: "", funcionarioId: f.id }))] })} style={{ width: "100%", padding: 10, background: C.verdeBg, color: C.verdeEscuro, border: "none", borderRadius: 12, fontWeight: 800, fontSize: 13, marginBottom: 8 }}>👷 Trazer {faltam.length} da lista de Funcionários</button>}
+      {form && (
+        <div style={{ background: "#fff", border: `1.5px solid ${C.navy}`, borderRadius: 12, padding: 12, marginBottom: 10 }}>
+          <label style={{ marginTop: 0 }}>Nome</label><input value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} />
+          <div style={{ display: "flex", gap: 8 }}>
+            <div style={{ flex: 1.3 }}><label>Função</label><input value={form.funcao} onChange={(e) => setForm({ ...form, funcao: e.target.value })} placeholder="Ex.: operador" /></div>
+            <div style={{ flex: 1 }}><label>Senha (4 números)</label><input inputMode="numeric" maxLength={6} value={form.pin} onChange={(e) => setForm({ ...form, pin: e.target.value.replace(/\D/g, "") })} placeholder="ex.: 1234" /></div>
+          </div>
+          <div style={{ fontSize: 11.5, color: C.cinza, marginTop: 4 }}>Sem senha, qualquer um bate por ele. A senha é simples, só para evitar engano.</div>
+          <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+            {form.id && <button onClick={() => { if (confirm(`Tirar ${form.nome} do ponto? As batidas dele continuam guardadas.`)) { salvar({ pessoas: pessoas.map((p) => (p.id === form.id ? { ...p, inativa: true } : p)) }); setForm(null); } }} style={{ padding: 10, background: "#fff", color: C.vermelho, border: `1.5px solid ${C.borda}`, borderRadius: 10, fontWeight: 800 }}>Tirar</button>}
+            <button onClick={() => setForm(null)} style={{ flex: 1, padding: 10, background: "#fff", border: `1.5px solid ${C.borda}`, borderRadius: 10, fontWeight: 800, color: C.navy }}>Cancelar</button>
+            <button disabled={!form.nome.trim()} onClick={() => { const dados = { nome: form.nome.trim(), funcao: form.funcao.trim(), pin: form.pin }; salvar({ pessoas: form.id ? pessoas.map((p) => (p.id === form.id ? { ...p, ...dados } : p)) : [...pessoas, { id: idNovo(), ...dados }] }); setForm(null); }} style={{ flex: 2, padding: 10, background: C.verde, color: "#fff", border: "none", borderRadius: 10, fontWeight: 800, opacity: form.nome.trim() ? 1 : 0.5 }}>Salvar</button>
+          </div>
+        </div>
+      )}
+      {pessoas.filter((p) => !p.inativa).map((p) => (
+        <button key={p.id} onClick={() => setForm({ id: p.id, nome: p.nome || "", funcao: p.funcao || "", pin: p.pin || "" })} style={{ width: "100%", textAlign: "left", background: "#fff", border: `1.5px solid ${C.borda}`, borderRadius: 12, padding: "9px 12px", marginBottom: 6, display: "flex", gap: 8 }}>
+          <b style={{ flex: 1, color: C.navy }}>{p.nome}<span style={{ fontWeight: 500, color: C.cinza }}>{p.funcao ? ` · ${p.funcao}` : ""}</span></b>
+          <span style={{ fontSize: 12, color: p.pin ? C.verdeEscuro : C.amarelo, fontWeight: 800 }}>{p.pin ? "🔒 com senha" : "sem senha"}</span>
+        </button>
+      ))}
+      <div style={{ background: "#fff", border: `1.5px solid ${C.borda}`, borderRadius: 12, padding: 12, marginTop: 10 }}>
+        <div style={{ fontWeight: 900, color: C.navy, fontSize: 14 }}>Regras</div>
+        <div style={{ display: "flex", gap: 8 }}>
+          {[["semana", "Seg a sex (h)"], ["sabado", "Sábado (h)"], ["domingo", "Domingo (h)"]].map(([k, r]) => <div key={k} style={{ flex: 1 }}><label>{r}</label><input type="number" inputMode="decimal" value={jornada[k]} onChange={(e) => setJornada({ ...jornada, [k]: e.target.value })} /></div>)}
+        </div>
+        <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+          <input type="checkbox" checked={!!cfg.selfie} onChange={(e) => salvar({ selfie: e.target.checked })} style={{ width: 20, height: 20, margin: 0 }} />
+          Exigir selfie em cada batida
+        </label>
+        <button onClick={() => salvar({ jornada: { semana: Math.round(num(jornada.semana) * 60), sabado: Math.round(num(jornada.sabado) * 60), domingo: Math.round(num(jornada.domingo) * 60) } })} style={{ marginTop: 10, width: "100%", padding: 10, background: C.navy, color: "#fff", border: "none", borderRadius: 10, fontWeight: 800 }}>Salvar jornada</button>
+      </div>
+    </div>
+  );
+}
 
 // =========================== COTAÇÃO DE PEÇAS, DIESEL E SERVIÇOS ===========================
 // O pedido sai pelo WhatsApp para várias empresas de uma vez (um botão por empresa — o celular

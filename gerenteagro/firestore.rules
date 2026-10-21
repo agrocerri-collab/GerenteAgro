@@ -341,6 +341,15 @@ service cloud.firestore {
         allow delete: if consultorNaFazenda(fazendaId) || fazendaPodeApagar(fazendaId);
       }
       // mapa KML, imagens do mapa e documentos da fazenda
+      // configuração do ponto (pessoas, senhas e jornada): a consultoria (regra de baixo) ou o produtor
+      match /arquivos/pontoConfig { allow write: if ehProdutorNa(fazendaId); }
+      // batidas de ponto: quem tem acesso à fazenda bate; ninguém edita (correção é ajuste novo);
+      // apagar só o administrador da consultoria (dados de teste)
+      match /ponto/{doc} {
+        allow read, create: if temAcessoAFazenda(fazendaId);
+        allow update: if temAcessoAFazenda(fazendaId) && reenvioIgual();
+        allow delete: if consultorNaFazenda(fazendaId) && ehAdmin();
+      }
       match /arquivos/{doc}     { allow read: if temAcessoAFazenda(fazendaId);
                                   allow write: if consultorNaFazenda(fazendaId); }
 
