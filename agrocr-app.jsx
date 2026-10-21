@@ -197,6 +197,7 @@ const kMaq = (f) => `agrocr:maq:${f}`;
 const kSolo = (f) => `agrocr:solo:${f}`;   // análises de solo e pontos de coleta: da fazenda, atravessam as safras
 const kComb = (f) => `agrocr:comb:${f}`;     // diesel: entradas e abastecimentos (contínuo, sem safra)
 const kManut = (f) => `agrocr:manut:${f}`;
+const kCotPecas = (f) => `agrocr:cotpec:${f}`;   // cotações de peças, diesel e serviços (WhatsApp)
 const kAlmox = (f) => `agrocr:almox:${f}`;   // almoxarifado: entradas, retiradas por máquina, ajustes e mínimos   // manutenções das máquinas
 const kFunc = (f) => `agrocr:func:${f}`;
 const kNotas = (f, s) => `agrocr:notas:${f}:${s}`;  // notas fiscais da safra, destinadas a custo/compra     // quadro de funcionários (salários e comissões)
@@ -424,7 +425,7 @@ const ICONE_DE = {
   panorama: "panorama", geral: "resumo", dados: "fazenda", lavoura: "lavoura", apl: "trator", fungicidas: "escudo", estoque: "caixa", mapa: "sat", chuva: "chuva", previsao: "previsao",
   colheita: "colheita", visitas: "visita", cotacoes: "cotacoes", fin: "carteira", diesel: "diesel", rel: "relatorio", comunidade: "comunidade", suporte: "suporte", guia: "guia",
   doc: "documentos", documentos: "documentos", safras: "safras",
-  planocompras: "lista", cotacao: "cotacao", prog: "carrinho", notas: "nota", func: "pessoas", maq: "ferramenta", custos: "cifrao", caixa: "caixaFluxo", vendas: "vendas", dre: "dre", plano: "plano", relfin: "relatorio",
+  planocompras: "lista", cotacao: "cotacao", prog: "carrinho", notas: "nota", func: "pessoas", maq: "ferramenta", cotpecas: "cotacao", custos: "cifrao", caixa: "caixaFluxo", vendas: "vendas", dre: "dre", plano: "plano", relfin: "relatorio",
 };
 const ICONE_VERDE = ["lavoura", "colheita", "panorama"];
 function Icone({ nome, tam = 26, cor, grosso, style }) {
@@ -464,7 +465,7 @@ const CLASSE_DO_CARTAO = {
   panorama: "campo", dados: "campo", lavoura: "campo", solo: "campo", apl: "campo", fungicidas: "campo", mapa: "campo", visitas: "campo",
   chuva: "agua", previsao: "agua",
   diesel: "maquinas", colheita: "maquinas", maq: "maquinas",
-  estoque: "insumos", prog: "insumos", planocompras: "insumos", cotacao: "insumos",
+  estoque: "insumos", prog: "insumos", planocompras: "insumos", cotacao: "insumos", cotpecas: "maquinas",
   fin: "dinheiro", geral: "dinheiro", cotacoes: "dinheiro", custos: "dinheiro", caixa: "dinheiro", vendas: "dinheiro", dre: "dinheiro", notas: "dinheiro", plano: "dinheiro", func: "dinheiro",
   rel: "apoio", relfin: "apoio", comunidade: "apoio", suporte: "apoio", guia: "apoio", doc: "apoio", documentos: "apoio", safras: "apoio",
 };
@@ -5563,6 +5564,7 @@ function TelaFazenda({ fazenda, fazendas, grupos, papel, usuario, naNuvem, equip
   const [combustivel, setCombustivel] = useState([]);
   const [manutencoes, setManutencoes] = useState([]);
   const [almox, setAlmox] = useState([]);
+  const [cotPecas, setCotPecas] = useState([]);
   const SECAO_PERMISSAO = { panorama: "panorama", dados: "dadosfazenda", lavoura: "lavoura", solo: "solo", apl: "operacoes", fungicidas: "fungicidas", estoque: "estoque", mapa: "ndvi", chuva: "pluviometria", previsao: "previsao", colheita: "colheita", visitas: "visitas", diesel: "diesel", rel: "relatorios", doc: "documentos", comunidade: "comunidade", suporte: "suporte", cotacoes: "cotacoes", guia: "guia" };
   const almoxPendRef = useRef("");
   const [funcionarios, setFuncionarios] = useState([]);
@@ -5598,6 +5600,7 @@ function TelaFazenda({ fazenda, fazendas, grupos, papel, usuario, naNuvem, equip
       NuvemDados.observarColecao(f, "combustivel", null, setCombustivel),
       NuvemDados.observarColecao(f, "manutencoes", null, setManutencoes),
       NuvemDados.observarColecao(f, "almoxarifado", null, setAlmox),
+      NuvemDados.observarColecao(f, "cotacoesPecas", null, setCotPecas),
       // dinheiro: só quem pode ver assina a lista
       ...(veCustos ? [NuvemDados.observarColecao(f, "funcionarios", null, setFuncionarios)] : []),
       ...(veCustos ? [NuvemDados.observarColecao(f, "notas", safra, setNotas)] : []),
@@ -5641,6 +5644,7 @@ function TelaFazenda({ fazenda, fazendas, grupos, papel, usuario, naNuvem, equip
         sGet(kComb(fazenda.id), []).then(setCombustivel),
         sGet(kManut(fazenda.id), []).then(setManutencoes),
         sGet(kAlmox(fazenda.id), []).then(setAlmox),
+        sGet(kCotPecas(fazenda.id), []).then(setCotPecas),
         sGet(kFunc(fazenda.id), []).then(setFuncionarios),
         sGet(kNotas(fazenda.id, safra), []).then(setNotas),
         sGet(kColh(fazenda.id, safra), []).then(setColheitas),
@@ -5720,7 +5724,7 @@ function TelaFazenda({ fazenda, fazendas, grupos, papel, usuario, naNuvem, equip
   const DESTINOS = {
     prog: ["col", "compras"], apl: ["rec", null], vis: ["col", "visitas"],
     aju: ["col", "ajustes"], chuva: ["col", "chuvas"], colheita: ["col", "colheita"], lavoura: ["col", "lavoura"], ent: ["col", "entregas"], custo: ["col", "custos"], maq: ["colperm", "maquinas"],
-    solo: ["colperm", "solo"], comb: ["colperm", "combustivel"], manut: ["colperm", "manutencoes"], almox: ["colperm", "almoxarifado"], func: ["colperm", "funcionarios"], notas: ["col", "notas"],
+    solo: ["colperm", "solo"], comb: ["colperm", "combustivel"], manut: ["colperm", "manutencoes"], almox: ["colperm", "almoxarifado"], cotpec: ["colperm", "cotacoesPecas"], func: ["colperm", "funcionarios"], notas: ["col", "notas"],
     log: ["col", "historico"], kml: ["doc", "kml"], fotomapa: ["doc", "fotosMapa"], doc: ["doc", "documentos"], programas: ["doc", "programas"],
   };
 
@@ -5889,6 +5893,7 @@ function TelaFazenda({ fazenda, fazendas, grupos, papel, usuario, naNuvem, equip
     ] : []),
     ["prog", "🛒", "Compras de insumos", `${prog.length} itens comprados`],
     ["maq", "🛠️", "Inventário de máquinas", `${(maquinas || []).length} cadastradas`],
+    ["cotpecas", "📲", "Cotação de peças e diesel", (() => { const a = (cotPecas || []).filter((c) => c.status !== "fechada").length; return a ? `${a} em aberto · WhatsApp para várias empresas` : "Peças, diesel, óleo, pneus · WhatsApp e manuais das máquinas"; })()],
     ...(mostrar("cotacoes") ? [["cotacoes", "💹", "Cotações do mercado", "Dólar, Chicago e preços da região"]] : []),
     ...(veCustos ? [["relfin", "📊", "Relatórios", "Cotação de compras, custos e vendas em PDF"]] : []),
   ];
@@ -6182,6 +6187,10 @@ function TelaFazenda({ fazenda, fazendas, grupos, papel, usuario, naNuvem, equip
           }} />
       )}
 
+      {secao === "fin" && veFinanceiro && abaFin === "cotpecas" && (
+        <SecaoCotacaoPecas fazenda={fazenda} usuario={usuario} maquinas={maquinas} fornecedores={fornecedores} onSalvarFornecedores={onSalvarFornecedores} registrar={registrar} podeApagar={podeApagar || consultor}
+          cotacoes={cotPecas} onSalvar={(v) => gravar(kCotPecas(fazenda.id), v, setCotPecas, cotPecas)} onSalvarMaquinas={(v) => gravar(kMaq(fazenda.id), v, setMaquinas, maquinas)} />
+      )}
       {secao === "fin" && veFinanceiro && abaFin === "maq" && (
         <GerirMaquinas maquinas={maquinas} registrar={registrar} abertoInicial={true}
           grupoIrmas={fazendas.filter((f) => saoIrmas(fazenda, f)).length}
@@ -20344,6 +20353,305 @@ function SeloLavoura({ l, nome }) {
 // Pasta da fazenda: mapa de precisão, pedido de compra, contrato, laudo.
 // Fica no aparelho para abrir no talhão, onde não há sinal.
 const LIMITE_DOC_KB = 1200;
+
+// =========================== COTAÇÃO DE PEÇAS, DIESEL E SERVIÇOS ===========================
+// O pedido sai pelo WhatsApp para várias empresas de uma vez (um botão por empresa — o celular
+// não deixa abrir várias conversas sozinho). As empresas são o mesmo cadastro de fornecedores,
+// com categorias. Cada máquina guarda os links dos seus manuais (peças, operador).
+const TIPOS_COTACAO = [["diesel", "⛽", "Diesel"], ["oleo", "🛢", "Óleo e lubrificante"], ["peca", "⚙️", "Peças"], ["pneu", "🛞", "Pneus"], ["servico", "🔧", "Oficina / serviço"], ["insumo", "🌱", "Insumos"], ["outro", "📦", "Outros"]];
+const UNIDADES_COTACAO = ["un", "L", "kg", "jogo", "m", "cx", "galão", "balde"];
+const zapLimpo = (n) => { const d = String(n || "").replace(/\D/g, "").replace(/^0+/, ""); return d ? (d.length <= 11 ? "55" + d : d) : ""; };
+const nomeMaquina = (m) => (m ? [m.nome, m.marca, m.ano].filter(Boolean).join(" · ") : "");
+// mensagem do pedido (texto do WhatsApp)
+function textoCotacao(cot, fazenda, quem) {
+  const t = TIPOS_COTACAO.find((x) => x[0] === cot.tipo) || TIPOS_COTACAO[TIPOS_COTACAO.length - 1];
+  const linhas = [`*Pedido de cotação — ${t[2]}*`, `${(fazenda && fazenda.nome) || ""}${fazenda && fazenda.municipio ? ` · ${fazenda.municipio}` : ""}`];
+  if (cot.maquina) linhas.push(`Máquina: ${cot.maquina}${cot.chassi ? ` · série/chassi ${cot.chassi}` : ""}`);
+  linhas.push("", "*Itens:*");
+  for (const it of cot.itens || []) if (it.descricao) linhas.push(`• ${num(it.qtd) > 0 ? `${fmtN(num(it.qtd))} ${it.unidade || "un"} — ` : ""}${it.descricao}${it.codigo ? ` (cód. ${it.codigo})` : ""}`);
+  linhas.push("");
+  if (cot.entrega) linhas.push(`Entrega: ${cot.entrega === "fazenda" ? "na fazenda" : "retiro na loja"}`);
+  if (cot.prazo) linhas.push(`Preciso até: ${fmtD(cot.prazo)}`);
+  if (cot.obs) linhas.push(`Obs.: ${cot.obs}`);
+  linhas.push("", "Por favor, envie o preço, a forma de pagamento e o prazo de entrega. Obrigado!");
+  if (quem) linhas.push(quem);
+  return linhas.join("\n");
+}
+// menor valor entre as respostas (para destacar)
+const melhorResposta = (cot) => { let melhor = null; for (const d of cot.destinos || []) if (num(d.valor) > 0 && (!melhor || num(d.valor) < num(melhor.valor))) melhor = d; return melhor; };
+// buscas prontas para achar o manual na internet
+const buscasManual = (m) => {
+  const base = [m.marca, m.nome, m.ano].filter(Boolean).join(" ");
+  const g = (q) => `https://www.google.com/search?q=${encodeURIComponent(q)}`;
+  const l = [["📕 Catálogo de peças", g(`catálogo de peças ${base} pdf`)], ["📗 Manual do operador", g(`manual do operador ${base} pdf`)], ["🔧 Manual de serviço", g(`manual de serviço oficina ${base}`)]];
+  if (/john\s*deere|\bjd\b/i.test(base)) l.unshift(["🟢 Catálogo John Deere", "https://partscatalog.deere.com/"]);
+  return l;
+};
+
+function SecaoCotacaoPecas({ fazenda, usuario, maquinas, fornecedores, onSalvarFornecedores, cotacoes, onSalvar, onSalvarMaquinas, registrar, podeApagar }) {
+  const [aba, setAba] = useState("nova");   // nova · enviadas · empresas · manuais
+  const [aberta, setAberta] = useState(null);
+  const quem = (usuario && usuario.nomeUsuario) || "";
+  const lista = (cotacoes || []).slice().sort((a, b) => String(b.data || "").localeCompare(String(a.data || "")));
+  const chip = (ativo) => ({ flex: "1 1 22%", padding: "9px 6px", borderRadius: 10, fontWeight: 800, fontSize: 12.5, border: "none", background: ativo ? C.navy : C.fundo, color: ativo ? "#fff" : C.navyEscuro });
+  const cot = aberta ? (cotacoes || []).find((c) => c.id === aberta) : null;
+  const salvarCot = (nova) => onSalvar((cotacoes || []).some((c) => c.id === nova.id) ? (cotacoes || []).map((c) => (c.id === nova.id ? nova : c)) : [...(cotacoes || []), nova]);
+  if (cot) return <DetalheCotacao cot={cot} fazenda={fazenda} quem={quem} maquinas={maquinas} podeApagar={podeApagar} onVoltar={() => setAberta(null)} onSalvar={salvarCot}
+    onApagar={() => { if (confirm("Apagar esta cotação?")) { onSalvar((cotacoes || []).filter((c) => c.id !== cot.id)); setAberta(null); } }} />;
+  const abertas = lista.filter((c) => c.status !== "fechada").length;
+  return (
+    <div>
+      <div style={{ fontWeight: 900, color: C.navy, fontSize: 17 }}>📲 Cotação de peças, diesel e serviços</div>
+      <div style={{ fontSize: 12.5, color: C.cinza, marginBottom: 10 }}>Monte o pedido, escolha as empresas e mande pelo WhatsApp. Depois anote o preço de cada uma e compare.</div>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
+        <button onClick={() => setAba("nova")} style={chip(aba === "nova")}>➕ Nova</button>
+        <button onClick={() => setAba("enviadas")} style={chip(aba === "enviadas")}>📋 Enviadas{abertas ? ` (${abertas})` : ""}</button>
+        <button onClick={() => setAba("empresas")} style={chip(aba === "empresas")}>🏪 Empresas</button>
+        <button onClick={() => setAba("manuais")} style={chip(aba === "manuais")}>📘 Manuais</button>
+      </div>
+      {aba === "nova" && <NovaCotacao fazenda={fazenda} quem={quem} maquinas={maquinas} fornecedores={fornecedores} irEmpresas={() => setAba("empresas")}
+        onCriar={(nova) => { salvarCot(nova); registrar && registrar("Cotação criada", `${(TIPOS_COTACAO.find((x) => x[0] === nova.tipo) || [])[2] || ""} · ${nova.destinos.length} empresa(s)`); setAberta(nova.id); }} />}
+      {aba === "enviadas" && (
+        <>
+          {lista.length === 0 && <Vazio icone="cotacao" titulo="Nenhuma cotação ainda" texto="Monte a primeira em ➕ Nova." />}
+          {lista.map((c) => {
+            const t = TIPOS_COTACAO.find((x) => x[0] === c.tipo) || ["", "📦", "Outros"]; const m = melhorResposta(c);
+            const resp = (c.destinos || []).filter((d) => num(d.valor) > 0).length, env = (c.destinos || []).filter((d) => d.enviado).length;
+            return (
+              <button key={c.id} onClick={() => setAberta(c.id)} style={{ width: "100%", textAlign: "left", background: "#fff", border: `1.5px solid ${C.borda}`, borderLeft: `6px solid ${c.status === "fechada" ? C.verde : C.amarelo}`, borderRadius: 12, padding: "10px 12px", marginBottom: 8 }}>
+                <div style={{ fontWeight: 900, color: C.navy }}>{t[1]} {t[2]} · {fmtD(String(c.data || "").slice(0, 10))}{c.maquina ? <span style={{ fontWeight: 600, color: C.cinza }}> · {c.maquina}</span> : null}</div>
+                <div style={{ fontSize: 12.5, color: C.cinza }}>{(c.itens || []).filter((i) => i.descricao).map((i) => i.descricao).join(", ").slice(0, 90)}</div>
+                <div style={{ fontSize: 12.5, color: C.navyEscuro, fontWeight: 700, marginTop: 2 }}>{env}/{(c.destinos || []).length} enviadas · {resp} responderam{m ? ` · menor: ${fmtMoeda(num(m.valor))} (${m.nome})` : ""}{c.status === "fechada" ? " · ✓ fechada" : ""}</div>
+              </button>
+            );
+          })}
+        </>
+      )}
+      {aba === "empresas" && <EmpresasCotacao fornecedores={fornecedores} onSalvar={onSalvarFornecedores} />}
+      {aba === "manuais" && <ManuaisMaquinas maquinas={maquinas} onSalvarMaquinas={onSalvarMaquinas} />}
+    </div>
+  );
+}
+
+function NovaCotacao({ fazenda, quem, maquinas, fornecedores, onCriar, irEmpresas }) {
+  const [tipo, setTipo] = useState("peca");
+  const [maqId, setMaqId] = useState("");
+  const [chassi, setChassi] = useState("");
+  const [itens, setItens] = useState([{ descricao: "", codigo: "", qtd: "1", unidade: "un" }]);
+  const [entrega, setEntrega] = useState("fazenda");
+  const [prazo, setPrazo] = useState("");
+  const [obs, setObs] = useState("");
+  const [sel, setSel] = useState({});
+  const [todas, setTodas] = useState(false);
+  const maq = (maquinas || []).find((m) => m.id === maqId) || null;
+  const comZap = (fornecedores || []).filter((f) => zapLimpo(f.whats));
+  const daCategoria = comZap.filter((f) => todas || !(f.categorias || []).length || (f.categorias || []).includes(tipo));
+  const mudaItem = (i, campo, v) => setItens(itens.map((x, j) => (j === i ? { ...x, [campo]: v } : x)));
+  const trocaTipo = (t) => { setTipo(t); if (t === "diesel" && itens.length === 1 && !itens[0].descricao) setItens([{ descricao: "Diesel S10", codigo: "", qtd: "", unidade: "L" }]); };
+  const prontos = itens.filter((i) => i.descricao.trim());
+  const escolhidas = daCategoria.filter((f) => sel[f.id]);
+  const rascunho = { tipo, maquina: maq ? nomeMaquina(maq) : "", maquinaId: maqId || null, chassi: chassi.trim(), itens: prontos.map((i) => ({ ...i, descricao: i.descricao.trim(), codigo: i.codigo.trim() })), entrega, prazo, obs: obs.trim() };
+  const ok = prontos.length > 0 && escolhidas.length > 0;
+  return (
+    <div>
+      <label style={{ marginTop: 0 }}>O que vai cotar</label>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+        {TIPOS_COTACAO.map(([id, e, r]) => <button key={id} onClick={() => trocaTipo(id)} style={{ padding: "8px 10px", borderRadius: 10, fontWeight: 800, fontSize: 12.5, border: "none", background: tipo === id ? C.navy : C.fundo, color: tipo === id ? "#fff" : C.navyEscuro }}>{e} {r}</button>)}
+      </div>
+      {["peca", "oleo", "pneu", "servico"].includes(tipo) && (maquinas || []).length > 0 && (
+        <>
+          <label>Para qual máquina (opcional)</label>
+          <select value={maqId} onChange={(e) => setMaqId(e.target.value)}>
+            <option value="">— nenhuma —</option>
+            {(maquinas || []).map((m) => <option key={m.id} value={m.id}>{nomeMaquina(m)}</option>)}
+          </select>
+          {maq && (
+            <>
+              <input value={chassi} onChange={(e) => setChassi(e.target.value)} placeholder="Nº de série / chassi (ajuda a loja achar a peça certa)" style={{ marginTop: 6 }} />
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
+                {(maq.manuais || []).map((mn) => <a key={mn.id} href={mn.url} target="_blank" rel="noreferrer" style={{ padding: "6px 10px", borderRadius: 8, background: C.verdeBg, color: C.verdeEscuro, fontWeight: 800, fontSize: 12, textDecoration: "none" }}>📘 {mn.nome}</a>)}
+                {buscasManual(maq).slice(0, 2).map(([r, u]) => <a key={r} href={u} target="_blank" rel="noreferrer" style={{ padding: "6px 10px", borderRadius: 8, background: C.fundo, color: C.navy, fontWeight: 800, fontSize: 12, textDecoration: "none" }}>{r}</a>)}
+              </div>
+            </>
+          )}
+        </>
+      )}
+      <label>Itens</label>
+      {itens.map((it, i) => (
+        <div key={i} style={{ background: C.fundo, borderRadius: 10, padding: "8px 10px", marginBottom: 6 }}>
+          <div style={{ display: "flex", gap: 6 }}>
+            <input value={it.descricao} onChange={(e) => mudaItem(i, "descricao", e.target.value)} placeholder={tipo === "diesel" ? "Ex.: Diesel S10" : tipo === "oleo" ? "Ex.: Óleo 15W40 motor" : tipo === "servico" ? "Ex.: Revisão da bomba injetora" : "Ex.: Filtro de óleo do motor"} style={{ flex: 1, marginTop: 0 }} />
+            {itens.length > 1 && <button onClick={() => setItens(itens.filter((_, j) => j !== i))} style={{ background: "transparent", border: "none", color: C.vermelho, fontWeight: 900, fontSize: 16 }}>✕</button>}
+          </div>
+          <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+            {!["diesel", "servico"].includes(tipo) && <input value={it.codigo} onChange={(e) => mudaItem(i, "codigo", e.target.value)} placeholder="código da peça (opcional)" style={{ flex: 1.4, marginTop: 0 }} />}
+            <input type="number" inputMode="decimal" value={it.qtd} onChange={(e) => mudaItem(i, "qtd", e.target.value)} placeholder="qtd" style={{ flex: 0.7, marginTop: 0 }} />
+            <select value={it.unidade} onChange={(e) => mudaItem(i, "unidade", e.target.value)} style={{ flex: 0.8, marginTop: 0 }}>{UNIDADES_COTACAO.map((u) => <option key={u}>{u}</option>)}</select>
+          </div>
+        </div>
+      ))}
+      <button onClick={() => setItens([...itens, { descricao: "", codigo: "", qtd: "1", unidade: tipo === "diesel" || tipo === "oleo" ? "L" : "un" }])} style={{ padding: "8px 12px", background: C.verdeBg, color: C.verdeEscuro, border: "none", borderRadius: 10, fontWeight: 800, fontSize: 13 }}>+ item</button>
+      <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ flex: 1 }}><label>Entrega</label><select value={entrega} onChange={(e) => setEntrega(e.target.value)}><option value="fazenda">Na fazenda</option><option value="loja">Retiro na loja</option></select></div>
+        <div style={{ flex: 1 }}><label>Preciso até</label><input type="date" value={prazo} onChange={(e) => setPrazo(e.target.value)} /></div>
+      </div>
+      <label>Observação (opcional)</label>
+      <input value={obs} onChange={(e) => setObs(e.target.value)} placeholder="Ex.: pagamento em 30 dias; marca original ou similar" />
+      <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <span>Mandar para quais empresas</span>
+        <span style={{ display: "flex", gap: 6 }}>
+          {daCategoria.length > 0 && <button onClick={() => setSel(Object.fromEntries(daCategoria.map((f) => [f.id, !escolhidas.length || escolhidas.length < daCategoria.length])))} style={{ background: "transparent", border: "none", color: C.navy, fontWeight: 800, fontSize: 12, textDecoration: "underline" }}>{escolhidas.length === daCategoria.length ? "desmarcar" : "marcar todas"}</button>}
+          <button onClick={() => setTodas(!todas)} style={{ background: "transparent", border: "none", color: C.navy, fontWeight: 800, fontSize: 12, textDecoration: "underline" }}>{todas ? "só desta categoria" : "ver todas"}</button>
+        </span>
+      </label>
+      {comZap.length === 0 && <div style={{ background: C.amareloBg, borderRadius: 10, padding: "8px 12px", fontSize: 13 }}>Nenhuma empresa com WhatsApp cadastrada. <button onClick={irEmpresas} style={{ background: "transparent", border: "none", color: C.navy, fontWeight: 800, textDecoration: "underline", padding: 0 }}>Cadastrar empresas</button></div>}
+      {comZap.length > 0 && daCategoria.length === 0 && <div style={{ fontSize: 12.5, color: C.cinza }}>Nenhuma empresa marcada com esta categoria — toque em "ver todas" ou ajuste em 🏪 Empresas.</div>}
+      {daCategoria.map((f) => (
+        <label key={f.id} style={{ display: "flex", alignItems: "center", gap: 8, background: sel[f.id] ? C.verdeBg : "#fff", border: `1.5px solid ${sel[f.id] ? C.verde : C.borda}`, borderRadius: 10, padding: "8px 10px", margin: "0 0 6px", cursor: "pointer", fontWeight: 700 }}>
+          <input type="checkbox" checked={!!sel[f.id]} onChange={(e) => setSel({ ...sel, [f.id]: e.target.checked })} style={{ width: 20, height: 20, margin: 0 }} />
+          <span style={{ flex: 1 }}>{f.nome}{f.cidade ? <span style={{ fontWeight: 500, color: C.cinza }}> · {f.cidade}</span> : null}</span>
+          <span style={{ fontSize: 11.5, color: C.cinza }}>{(f.categorias || []).map((c) => (TIPOS_COTACAO.find((x) => x[0] === c) || [])[1]).join(" ")}</span>
+        </label>
+      ))}
+      {prontos.length > 0 && (
+        <details style={{ marginTop: 8 }}>
+          <summary style={{ fontSize: 12.5, fontWeight: 800, color: C.navy, cursor: "pointer" }}>Ver a mensagem</summary>
+          <pre style={{ whiteSpace: "pre-wrap", fontFamily: "inherit", fontSize: 12.5, background: C.fundo, borderRadius: 10, padding: 10, marginTop: 6 }}>{textoCotacao(rascunho, fazenda, quem)}</pre>
+        </details>
+      )}
+      <BotaoSalvar disabled={!ok} texto={ok ? `Salvar e enviar para ${escolhidas.length} empresa${escolhidas.length === 1 ? "" : "s"}` : "Escolha itens e empresas"} onClick={() => onCriar({ id: idNovo(), data: new Date().toISOString(), quem, status: "aberta", ...rascunho, destinos: escolhidas.map((f) => ({ fornId: f.id, nome: f.nome, whats: zapLimpo(f.whats), enviado: false, valor: null, prazo: "", obs: "" })) })} />
+    </div>
+  );
+}
+
+function DetalheCotacao({ cot, fazenda, quem, podeApagar, onVoltar, onSalvar, onApagar }) {
+  const t = TIPOS_COTACAO.find((x) => x[0] === cot.tipo) || ["", "📦", "Outros"];
+  const texto = textoCotacao(cot, fazenda, cot.quem || quem);
+  const melhor = melhorResposta(cot);
+  const muda = (fornId, campo, v) => onSalvar({ ...cot, destinos: (cot.destinos || []).map((d) => (d.fornId === fornId ? { ...d, [campo]: v } : d)) });
+  return (
+    <div>
+      <div className="nao-imprimir" style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+        <button onClick={onVoltar} style={{ padding: "9px 14px", background: "#fff", border: `1.5px solid ${C.borda}`, borderRadius: 10, fontWeight: 800, color: C.navy }}>← Cotações</button>
+        <div style={{ flex: 1, fontWeight: 900, fontSize: 15, color: C.navy, alignSelf: "center" }}>{t[1]} {t[2]} · {fmtD(String(cot.data || "").slice(0, 10))}</div>
+      </div>
+      <pre style={{ whiteSpace: "pre-wrap", fontFamily: "inherit", fontSize: 12.5, background: C.fundo, borderRadius: 10, padding: 10, margin: "0 0 10px" }}>{texto}</pre>
+      <div style={{ fontWeight: 900, color: C.navy, fontSize: 13.5, marginBottom: 4 }}>Empresas</div>
+      <div style={{ fontSize: 12, color: C.cinza, marginBottom: 6 }}>Toque em "Enviar" em cada uma (abre a conversa com o pedido pronto). Quando responderem, anote o valor e o prazo.</div>
+      {(cot.destinos || []).map((d) => (
+        <div key={d.fornId} style={{ background: melhor && melhor.fornId === d.fornId ? C.verdeBg : "#fff", border: `1.5px solid ${cot.escolhida === d.fornId ? C.verde : C.borda}`, borderRadius: 12, padding: "8px 10px", marginBottom: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <b style={{ flex: 1, color: C.navy }}>{d.nome}{melhor && melhor.fornId === d.fornId ? <span style={{ color: C.verdeEscuro, fontSize: 12 }}> · menor preço</span> : null}{cot.escolhida === d.fornId ? <span style={{ color: C.verdeEscuro, fontSize: 12 }}> · ✓ escolhida</span> : null}</b>
+            {d.whats
+              ? <a href={`https://wa.me/${d.whats}?text=${encodeURIComponent(texto)}`} target="_blank" rel="noreferrer" onClick={() => !d.enviado && muda(d.fornId, "enviado", true)} style={{ padding: "7px 10px", borderRadius: 8, background: d.enviado ? "#fff" : "#25D366", color: d.enviado ? "#128C7E" : "#fff", border: "1.5px solid #25D366", fontWeight: 800, fontSize: 12.5, textDecoration: "none" }}>{d.enviado ? "✓ enviado · reenviar" : "💬 Enviar"}</a>
+              : <span style={{ fontSize: 12, color: C.vermelho }}>sem WhatsApp</span>}
+          </div>
+          <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+            <input type="number" inputMode="decimal" value={d.valor == null ? "" : d.valor} onChange={(e) => muda(d.fornId, "valor", e.target.value === "" ? null : num(e.target.value))} placeholder="valor total R$" style={{ flex: 1, marginTop: 0 }} />
+            <input value={d.prazo || ""} onChange={(e) => muda(d.fornId, "prazo", e.target.value)} placeholder="prazo / pagamento" style={{ flex: 1.2, marginTop: 0 }} />
+          </div>
+          {num(d.valor) > 0 && cot.escolhida !== d.fornId && <button onClick={() => onSalvar({ ...cot, escolhida: d.fornId, status: "fechada" })} style={{ marginTop: 6, padding: "6px 10px", background: C.navy, color: "#fff", border: "none", borderRadius: 8, fontWeight: 800, fontSize: 12 }}>✓ Fechar com esta</button>}
+        </div>
+      ))}
+      <div style={{ display: "flex", gap: 8, marginTop: 6, flexWrap: "wrap" }}>
+        {cot.status === "fechada" && <button onClick={() => onSalvar({ ...cot, status: "aberta", escolhida: null })} style={{ padding: "8px 12px", background: "#fff", color: C.navy, border: `1.5px solid ${C.borda}`, borderRadius: 10, fontWeight: 800, fontSize: 12.5 }}>Reabrir</button>}
+        {podeApagar && <button onClick={onApagar} style={{ padding: "8px 12px", background: "#fff", color: C.vermelho, border: `1.5px solid ${C.borda}`, borderRadius: 10, fontWeight: 800, fontSize: 12.5, marginLeft: "auto" }}>🗑 Apagar</button>}
+      </div>
+    </div>
+  );
+}
+
+function EmpresasCotacao({ fornecedores, onSalvar }) {
+  const [form, setForm] = useState(null);   // {id?, nome, whats, cidade, categorias}
+  const [busca, setBusca] = useState("");
+  const lista = (fornecedores || []).filter((f) => !busca || semAcento(f.nome || "").toLowerCase().includes(semAcento(busca).toLowerCase())).slice().sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || "")));
+  const salvar = () => {
+    const limpo = { nome: form.nome.trim(), whats: String(form.whats || "").replace(/\D/g, ""), cidade: (form.cidade || "").trim(), categorias: form.categorias || [] };
+    if (form.id) onSalvar((fornecedores || []).map((f) => (f.id === form.id ? { ...f, ...limpo } : f)));
+    else onSalvar([...(fornecedores || []), { id: idNovo(), ...limpo }]);
+    setForm(null);
+  };
+  const toggleCat = (c) => setForm({ ...form, categorias: (form.categorias || []).includes(c) ? form.categorias.filter((x) => x !== c) : [...(form.categorias || []), c] });
+  return (
+    <div>
+      <div style={{ fontSize: 12.5, color: C.cinza, marginBottom: 8 }}>Mesmo cadastro dos fornecedores de insumos. Marque o que cada empresa vende para ela aparecer na cotação certa.</div>
+      {!form && <button onClick={() => setForm({ nome: "", whats: "", cidade: "", categorias: [] })} style={{ width: "100%", padding: 12, background: C.navy, color: "#fff", border: "none", borderRadius: 12, fontWeight: 800, fontSize: 14, marginBottom: 10 }}>➕ Cadastrar empresa</button>}
+      {form && (
+        <div style={{ background: "#fff", border: `1.5px solid ${C.navy}`, borderRadius: 12, padding: 12, marginBottom: 10 }}>
+          <label style={{ marginTop: 0 }}>Nome da empresa</label>
+          <input value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} placeholder="Ex.: Auto Peças Tocantins" />
+          <div style={{ display: "flex", gap: 8 }}>
+            <div style={{ flex: 1 }}><label>WhatsApp</label><input inputMode="tel" value={form.whats} onChange={(e) => setForm({ ...form, whats: e.target.value })} placeholder="63 99999-9999" /></div>
+            <div style={{ flex: 1 }}><label>Cidade (opcional)</label><input value={form.cidade} onChange={(e) => setForm({ ...form, cidade: e.target.value })} placeholder="Ex.: Palmas" /></div>
+          </div>
+          <label>Vende</label>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {TIPOS_COTACAO.map(([id, e, r]) => <button key={id} onClick={() => toggleCat(id)} style={{ padding: "7px 9px", borderRadius: 10, fontWeight: 800, fontSize: 12, border: "none", background: (form.categorias || []).includes(id) ? C.verde : C.fundo, color: (form.categorias || []).includes(id) ? "#fff" : C.navyEscuro }}>{e} {r}</button>)}
+          </div>
+          <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+            <button onClick={() => setForm(null)} style={{ flex: 1, padding: 10, background: "#fff", border: `1.5px solid ${C.borda}`, borderRadius: 10, fontWeight: 800, color: C.navy }}>Cancelar</button>
+            <button disabled={!form.nome.trim()} onClick={salvar} style={{ flex: 2, padding: 10, background: C.verde, color: "#fff", border: "none", borderRadius: 10, fontWeight: 800, opacity: form.nome.trim() ? 1 : 0.5 }}>Salvar</button>
+          </div>
+        </div>
+      )}
+      {(fornecedores || []).length > 6 && <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="🔎 Buscar empresa" style={{ marginBottom: 8 }} />}
+      {lista.map((f) => (
+        <button key={f.id} onClick={() => setForm({ id: f.id, nome: f.nome || "", whats: f.whats || "", cidade: f.cidade || "", categorias: f.categorias || [] })} style={{ width: "100%", textAlign: "left", background: "#fff", border: `1.5px solid ${C.borda}`, borderRadius: 12, padding: "9px 12px", marginBottom: 6, display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ flex: 1, minWidth: 0 }}>
+            <b style={{ color: C.navy }}>{f.nome}</b>{f.cidade ? <span style={{ color: C.cinza, fontSize: 12.5 }}> · {f.cidade}</span> : null}
+            <span style={{ display: "block", fontSize: 12, color: zapLimpo(f.whats) ? C.cinza : C.vermelho }}>{zapLimpo(f.whats) ? `💬 ${f.whats}` : "sem WhatsApp — toque para completar"}</span>
+          </span>
+          <span style={{ fontSize: 13 }}>{(f.categorias || []).map((c) => (TIPOS_COTACAO.find((x) => x[0] === c) || [])[1]).join(" ")}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function ManuaisMaquinas({ maquinas, onSalvarMaquinas }) {
+  const [aberto, setAberto] = useState(null);
+  const [novo, setNovo] = useState({ nome: "Catálogo de peças", url: "" });
+  const lista = (maquinas || []).slice().sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || "")));
+  const salvarManuais = (m, manuais) => onSalvarMaquinas && onSalvarMaquinas((maquinas || []).map((x) => (x.id === m.id ? { ...x, manuais } : x)));
+  if (!lista.length) return <Vazio icone="ferramenta" titulo="Nenhuma máquina cadastrada" texto="Cadastre as máquinas em Financeiro → Inventário de máquinas (ou Máquinas e diesel) e os manuais aparecem aqui." />;
+  return (
+    <div>
+      <div style={{ fontSize: 12.5, color: C.cinza, marginBottom: 8 }}>Guarde o link do manual de cada máquina (PDF no Google Drive, site do fabricante). As buscas prontas ajudam a achar o catálogo de peças pela marca e modelo.</div>
+      {lista.map((m) => {
+        const ab = aberto === m.id;
+        return (
+          <div key={m.id} style={{ background: "#fff", border: `1.5px solid ${ab ? C.navy : C.borda}`, borderRadius: 12, padding: "10px 12px", marginBottom: 8 }}>
+            <button onClick={() => { setAberto(ab ? null : m.id); setNovo({ nome: "Catálogo de peças", url: "" }); }} style={{ width: "100%", textAlign: "left", background: "transparent", border: "none", padding: 0, display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ flex: 1 }}><b style={{ color: C.navy }}>{m.nome}</b><span style={{ color: C.cinza, fontSize: 12.5 }}>{[m.tipo, m.marca, m.ano].filter(Boolean).length ? ` · ${[m.tipo, m.marca, m.ano].filter(Boolean).join(" · ")}` : ""}</span></span>
+              <span style={{ fontSize: 12, fontWeight: 800, color: (m.manuais || []).length ? C.verdeEscuro : C.cinza }}>{(m.manuais || []).length ? `📘 ${(m.manuais || []).length}` : "sem manual"} {ab ? "▴" : "▾"}</span>
+            </button>
+            {ab && (
+              <div style={{ marginTop: 8 }}>
+                {(m.manuais || []).map((mn) => (
+                  <div key={mn.id} style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 6 }}>
+                    <a href={mn.url} target="_blank" rel="noreferrer" style={{ flex: 1, padding: "8px 10px", borderRadius: 8, background: C.verdeBg, color: C.verdeEscuro, fontWeight: 800, fontSize: 13, textDecoration: "none" }}>📘 {mn.nome}</a>
+                    <button onClick={() => { if (confirm(`Tirar "${mn.nome}"?`)) salvarManuais(m, (m.manuais || []).filter((x) => x.id !== mn.id)); }} style={{ background: "transparent", border: "none", color: C.vermelho, fontWeight: 900 }}>✕</button>
+                  </div>
+                ))}
+                <div style={{ background: C.fundo, borderRadius: 10, padding: 8 }}>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <select value={novo.nome} onChange={(e) => setNovo({ ...novo, nome: e.target.value })} style={{ flex: 1, marginTop: 0 }}>{["Catálogo de peças", "Manual do operador", "Manual de serviço", "Tabela de lubrificação", "Outro"].map((n) => <option key={n}>{n}</option>)}</select>
+                  </div>
+                  <input value={novo.url} onChange={(e) => setNovo({ ...novo, url: e.target.value })} placeholder="cole aqui o link (https://…)" style={{ marginTop: 6 }} />
+                  <button disabled={!/^https?:\/\//i.test(novo.url.trim())} onClick={() => { salvarManuais(m, [...(m.manuais || []), { id: idNovo(), nome: novo.nome, url: novo.url.trim() }]); setNovo({ nome: "Catálogo de peças", url: "" }); }} style={{ marginTop: 6, width: "100%", padding: 9, background: C.navy, color: "#fff", border: "none", borderRadius: 8, fontWeight: 800, fontSize: 13, opacity: /^https?:\/\//i.test(novo.url.trim()) ? 1 : 0.5 }}>Guardar link</button>
+                </div>
+                <div style={{ fontSize: 11.5, color: C.cinza, margin: "8px 0 4px" }}>Procurar na internet:</div>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {buscasManual(m).map(([r, u]) => <a key={r} href={u} target="_blank" rel="noreferrer" style={{ padding: "6px 10px", borderRadius: 8, background: C.fundo, color: C.navy, fontWeight: 800, fontSize: 12, textDecoration: "none" }}>{r}</a>)}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 function SecaoDocumentos({ documentos, consultor, registrar, onSalvar }) {
   const [msg, setMsg] = useState("");

@@ -385,6 +385,11 @@ service cloud.firestore {
       }
       // almoxarifado (peças, filtros, óleo): o campo dá entrada e retira para a máquina;
       // apagar movimento é da consultoria
+      // cotações de peças, diesel e serviços (pedido pelo WhatsApp e respostas das empresas)
+      match /cotacoesPecas/{doc} {
+        allow read, create, update: if temAcessoAFazenda(fazendaId);
+        allow delete: if consultorNaFazenda(fazendaId) || fazendaPodeApagar(fazendaId);
+      }
       match /almoxarifado/{doc} {
         allow read, create, update: if temAcessoAFazenda(fazendaId);
         allow delete: if consultorNaFazenda(fazendaId) || fazendaPodeApagar(fazendaId);
