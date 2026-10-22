@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AgroCR — preparar arquivo do celular</title>
+<script src="vendor/babel.js"></script>
+<style>
+  body { margin: 0; background: #17335F; color: #fff; font-family: system-ui, "Segoe UI", sans-serif;
+         display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+  .caixa { background: #fff; color: #0E2242; border-radius: 18px; padding: 28px 30px; max-width: 520px; width: 92%; }
+  h1 { font-size: 20px; margin: 0 0 6px; color: #17335F; }
+  p { font-size: 14px; color: #5B6675; line-height: 1.5; }
+  #estado { font-size: 16px; font-weight: 800; margin-top: 16px; }
+  .ok { color: #2E7D32; } .erro { color: #B3402A; } .indo { color: #5B6675; }
+  ul { font-size: 14px; color: #0E2242; padding-left: 20px; }
+</style>
+</head>
+<body>
+<div class="caixa">
+  <h1>Preparando o arquivo do celular</h1>
+  <p>Esta página traduz o aplicativo para o formato que o celular entende, sem precisar
+     carregar o compilador junto. O arquivo final fica cerca de <b>10 vezes menor</b> e abre na hora.</p>
+  <div id="estado" class="indo">Começando…</div>
+  <ul id="passos"></ul>
+</div>
+
+<script>
+const estado = document.getElementById("estado");
+const passos = document.getElementById("passos");
+function passo(t) { const li = document.createElement("li"); li.textContent = t; passos.appendChild(li); }
+
+(async function () {
+  try {
+    estado.textContent = "Lendo o aplicativo…";
+    const jsx = await (await fetch("fonte.jsx", { cache: "no-store" })).text();
+    passo("Aplicativo lido: " + Math.round(jsx.length / 1024) + " KB");
+
+    // mesmas trocas que o build.ps1 faz: sem import e sem export default
+    const fonte = jsx
+      .replace(/import\s*\{[^}]*\}\s*from\s*"react";\s*/, "")
+      .replace(/export default function App/, "function App");
+
+    estado.textContent = "Traduzindo (isto leva alguns segundos)…";
+    await new Promise((r) => setTimeout(r, 50));
+    const saida = Babel.transform(fonte, { presets: ["react"], compact: false }).code;
+    passo("Traduzido: " + Math.round(saida.length / 1024) + " KB de JavaScript puro");
+
+    const completo =
+      'const { useState, useEffect, useRef } = React;\n' +
+      saida +
+      '\nReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App));\n';
+
+    estado.textContent = "Gravando…";
+    const resp = await fetch("compilado", { method: "POST", headers: { "Content-Type": "text/plain;charset=UTF-8" }, body: completo });
+    if (!resp.ok) throw new Error("o servidor recusou (" + resp.status + ")");
+    passo("Gravado em web\\app-compilado.js");
+
+    estado.className = "ok";
+    estado.textContent = "Pronto ✓ — pode fechar esta aba.";
+  } catch (e) {
+    estado.className = "erro";
+    estado.textContent = "Deu erro: " + (e && e.message ? e.message : e);
+    passo("Confira se a janela preta do servidor está aberta.");
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,118 @@
+====================================================================
+GERENTEAGRO — CÓDIGO-FONTE DO PROJETO
+Versão do pacote: 2026-09-06 (build 895de3e060)
+====================================================================
+
+O GerenteAgro e o AgroCR Campo nascem do MESMO código-fonte: um
+gerador troca a marca, a configuração do Firebase e as regras.
+Toda melhoria feita no fonte vale para os dois aplicativos.
+
+O QUE O PROGRAMA FAZ (resumo)
+-----------------------------
+Aplicativo web progressivo (PWA, funciona offline e sincroniza quando
+há sinal) para gestão de fazendas de grãos, ligando a consultoria
+agronômica ao produtor. Módulos: cadastro de fazendas, talhões e mapa
+(KML/NDVI); dados da lavoura (cultura, plantio, emergência, DAE);
+recomendações e execuções de pulverização, semeadura e adubação;
+estoque de insumos calculado (comprado − aplicado ± ajustes), separado
+por ciclo (safra/safrinha); pluviometria com vários pluviômetros,
+mapa de chuva, importação por planilha e períodos (ano-safra jun→mai);
+colheita por carga/romaneio com perdas de umidade e impureza; diesel,
+máquinas e manutenção; financeiro (compras de insumos, custos por
+categoria e talhão, custo em sacas por cultura, venda e travamento por
+cultura, barter, planejamento de insumos, DRE por cultura, quadro de
+funcionários com custo real de encargos/INSS/IR e comissão anual,
+notas fiscais com destino por categoria, forma de pagamento e
+vencimentos, busca automática de NF-e na SEFAZ com certificado
+digital); cotações; relatórios em PDF; visita técnica por voz com
+resumo por IA; assistente de IA da fazenda; suporte técnico; grupos de
+fazendas com visão consolidada e panorama; licenças e multi-conta na
+versão de venda.
+
+ESTRUTURA
+---------
+agrocr-app.jsx ............. O APLICATIVO INTEIRO (React, arquivo único).
+                             A chave `const MARCA_VENDA = false` controla o
+                             que é exclusivo da versão de venda (GerenteAgro);
+                             o gerador troca para true.
+web/nuvem.js ............... Camada de nuvem (Firestore, login, licenças,
+                             multi-conta, fazenda modelo, leitura de nota por
+                             IA, transcrição de voz, SEFAZ).
+web/build.ps1 .............. Gera a página local de testes (web/AgroCR.html)
+                             e, com -Publicar, a pasta publicar/ completa
+                             (service worker, ícones, versão).
+ferramentas/traduzir.js .... Compila o JSX (esbuild) em publicar/app-compilado.js.
+ferramentas/gerar-gerenteagro.js
+                             Gera gerenteagro/publicar a partir de publicar/:
+                             troca marca, logo, admins, firebase-config,
+                             regras (liga licença + multi-conta), ícones.
+ferramentas/gerar-agrofit.js Monta o catálogo de insumos (Agrofit) usado
+                             pelo app.
+firestore.rules ............ Regras de segurança (fonte). No GerenteAgro o
+                             gerador liga licencaOk() e multiConta().
+funcoes/index.js ........... Funções na nuvem (projeto agrocr-campo, plano
+                             Blaze): avisos push, lembretes diários,
+                             cotações online, leitura de nota/talhões/voz/
+                             romaneio/máquinas por IA (lernota), transcrição
+                             de áudio (transcrever, Google Speech-to-Text),
+                             limite diário de uso por usuário.
+funcoes/sefaz.js ........... Integração com a SEFAZ (NFeDistribuicaoDFe e
+                             Manifestação do Destinatário): guarda o
+                             certificado digital do produtor cifrado
+                             (AES-256-GCM, chave no Secret Manager), busca
+                             as NF-e do CPF/CNPJ, dá ciência da operação
+                             (evento assinado XML-DSig) e distribui as notas
+                             por fazenda pela inscrição estadual. Busca
+                             automática a cada 3 horas.
+funcoes/package.json ....... Dependências das funções (firebase-admin,
+                             firebase-functions, @anthropic-ai/sdk,
+                             @google-cloud/speech, node-forge, xml-crypto).
+                             Segredos (ANTHROPIC_API_KEY, CERT_KEY) ficam no
+                             Secret Manager, nunca no código.
+gerenteagro/ ............... O produto de venda:
+  firebase.json              deploy (hosting + regras + índices)
+  firestore.rules            regras GERADAS (não editar à mão)
+  firestore.indexes.json     índices compostos do multi-conta
+  conheca.html               página de vendas (link da bio)
+  filme.html                 animação de divulgação (9:16)
+  publicar/                  o site pronto que vai ao ar
+
+COMO GERAR E PUBLICAR
+---------------------
+1) Compilar e montar a pasta de publicação (a partir da raiz):
+   ferramentas\node\node.exe ferramentas\traduzir.js
+   powershell -ExecutionPolicy Bypass -File web\build.ps1 -Publicar
+2) Gerar o GerenteAgro:
+   ferramentas\node\node.exe ferramentas\gerar-gerenteagro.js
+3) Publicar (precisa do firebase-tools logado na conta dona):
+   AgroCR:      firebase deploy --only firestore:rules,hosting --project agrocr-campo
+   GerenteAgro: (dentro de gerenteagro\) firebase deploy --only firestore:rules,hosting --project gerenteagro
+   Funções:     firebase deploy --only functions --project agrocr-campo
+                (FUNCTIONS_DISCOVERY_TIMEOUT=120 e o node do projeto no PATH)
+
+PROJETOS FIREBASE
+-----------------
+agrocr-campo  → AgroCR Campo (https://agrocr-campo.web.app) + funções
+gerenteagro   → GerenteAgro (https://gerenteagro.web.app)
+As chaves de API do Firebase que aparecem no código são públicas por
+natureza — a segurança de verdade está nas regras do Firestore.
+Backups diários e recuperação pontual (PITR) ativados; App Check em
+modo de observação.
+
+MODELO DE VENDA (GerenteAgro)
+-----------------------------
+Pré-cadastro self-service · 7 dias grátis (licença teste7) · fazenda
+modelo automática para conhecer o app · licenças por e-mail em
+/licencas · multi-conta (campo `conta` isola cada comprador) ·
+titular R$ 149,99/mês (cartão em até 12x) ou R$ 1.200/ano no Pix,
+com 1 acesso extra incluso · acesso adicional R$ 80/mês ou R$ 800/ano ·
+painel do dono em 🔑 Licenças e Financeiro do dono.
+
+TECNOLOGIA
+----------
+JavaScript (React 18, JSX) compilado com esbuild; PWA com service
+worker; Firebase (Hosting, Authentication, Firestore, Cloud Functions
+Node.js 22, Cloud Messaging, App Check); IA generativa (Anthropic
+Claude) para leitura de documentos e assistente; Google Speech-to-Text;
+Open-Meteo (previsão); serviços da SEFAZ (NF-e). Interface em
+português do Brasil, feita para celular Android de campo.

@@ -1,0 +1,480 @@
+rules_version = '2';
+
+// ============================================================
+// AgroCR Campo — regras de segurança do Firestore
+//
+// Estas regras rodam NO SERVIDOR. É aqui que a separação por
+// fazenda passa a ser real: nenhum aparelho consegue burlar,
+// nem alterando o aplicativo.
+//
+// Como colocar no ar:
+//   Console do Firebase > Firestore Database > aba "Regras"
+//   Apague o que estiver lá, cole tudo isto e clique em Publicar.
+// ============================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---- quem é quem ----
+    // Cada pessoa tem um documento em /usuarios/{uid} dizendo se é da
+    // consultoria e a quais fazendas ela tem acesso. Só a consultoria
+    // escreve nesses documentos.
+    function logado() {
+      return request.auth != null;
+    }
+
+    // Donos do sistema, definidos pelo e-mail. Existem para resolver o
+    // problema do ovo e da galinha: sem isto, o primeiro usuário nunca
+    // poderia ser criado, porque criar exigiria já ser consultoria.
+    // Para incluir alguém aqui, é preciso editar as regras no console.
+    function ehDono() {
+      return logado() && request.auth.token.email in [
+        'administrativo@gerenteagro.com',
+        'agrocerri@gmail.com'
+      ];
+    }
+
+    // Licença de uso: no AgroCR é sempre liberada. A versão de venda
+    // (GerenteAgro) troca ESTA função para exigir assinatura válida por
+    // e-mail — todo acesso a dados passa por temPerfil(), então venceu a
+    // licença, fecha a porteira no servidor inteiro.
+    function licencaOk() {
+      return ehDono() ||
+        (exists(/databases/$(database)/documents/licencas/$(request.auth.token.email)) &&
+         get(/databases/$(database)/documents/licencas/$(request.auth.token.email)).data.validaAte > request.time);
+    }
+
+    function temPerfil() {
+      return logado() &&
+        exists(/databases/$(database)/documents/usuarios/$(request.auth.uid)) &&
+        licencaOk();
+    }
+    function meuPerfil() {
+      return get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data;
+    }
+    // Conta (multi-inquilino): na versão de venda cada comprador é uma
+    // "conta" e só enxerga o que é dele — fazendas, acessos e listas. No
+    // AgroCR há uma conta única e esta chave fica desligada: tudo se
+    // comporta exatamente como sempre. O gerador do GerenteAgro liga.
+    function multiConta() {
+      return true;
+    }
+    function minhaConta() {
+      return meuPerfil().get('conta', null);
+    }
+    // o documento (usuário, ou fazenda ao criar/excluir) é da minha conta?
+    // Campo direto (sem .get) de propósito: é a forma que as CONSULTAS em
+    // lista conseguem provar contra o filtro where('conta'...).
+    function mesmaConta(dados) {
+      return !multiConta() || ehDono() || dados.conta == minhaConta();
+    }
+    // a fazenda deste caminho pertence à minha conta? (faz um get no
+    // documento da fazenda — serve para as SUBcoleções, onde a fazenda é
+    // outra peça do caminho; nunca usar em consulta de lista de fazendas)
+    function fazendaDaMinhaConta(fazendaId) {
+      return !multiConta() || ehDono() ||
+        (exists(/databases/$(database)/documents/fazendas/$(fazendaId)) &&
+         get(/databases/$(database)/documents/fazendas/$(fazendaId)).data.get('conta', null) == minhaConta());
+    }
+    // conferência de conta NO PRÓPRIO documento aberto (resource): é a que
+    // as consultas de lista de fazendas aceitam
+    function minhaContaNoDoc() {
+      return !multiConta() || ehDono() || resource.data.conta == minhaConta();
+    }
+    function ehConsultoria() {
+      return ehDono() || (temPerfil() && meuPerfil().get('papel', '') == 'consultoria');
+    }
+    // Administrador: o dono, ou quem tiver a marca "admin" no cadastro.
+    // Só ele exclui fazendas e mexe nos acessos da consultoria.
+    function ehAdmin() {
+      return ehDono() || (temPerfil() && meuPerfil().get('admin', false) == true);
+    }
+    // Permissão fina de cada pessoa da consultoria. Sem a marca no cadastro,
+    // vale "pode" — restringir é decisão explícita do administrador.
+    function podeC(chave) {
+      return ehAdmin() || (temPerfil() && meuPerfil().get('papel', '') == 'consultoria' &&
+        meuPerfil().get('permissoes', {}).get(chave, true) == true);
+    }
+    // Consultor pode ser limitado a certas fazendas (fazendasLimitadas).
+    // Sem a marca, enxerga todas — o administrador sempre enxerga todas.
+    // liberação SEM a conferência de conta — cada uso combina com a
+    // conferência certa (get do pai nas subcoleções; resource na fazenda)
+    function consultorLiberado(fazendaId) {
+      return ehAdmin() || (temPerfil() && meuPerfil().get('papel', '') == 'consultoria' &&
+        (meuPerfil().get('fazendasLimitadas', null) == null ||
+         fazendaId in meuPerfil().get('fazendasLimitadas', []) ||
+         // a fazenda que ELE cadastrou é dele desde o primeiro segundo — a lista
+         // de limitação recebe o id logo depois (função aoCriarFazenda)
+         criouAFazenda(fazendaId)));
+    }
+    function criouAFazenda(fazendaId) {
+      return exists(/databases/$(database)/documents/fazendas/$(fazendaId)) &&
+        get(/databases/$(database)/documents/fazendas/$(fazendaId)).data.get('criadoPor', '') == request.auth.uid;
+    }
+    function acessoFazendaLiberado(fazendaId) {
+      return temPerfil() &&
+        fazendaId in meuPerfil().get('fazendas', []);
+    }
+    function consultorNaFazenda(fazendaId) {
+      return consultorLiberado(fazendaId) && fazendaDaMinhaConta(fazendaId);
+    }
+    // o que está chegando é exatamente o que já está gravado?
+    function reenvioIgual() {
+      return request.resource.data == resource.data;
+    }
+    // Pessoa DA FAZENDA com um lançamento liberado pela consultoria no acesso dela
+    // (permissoes.recomendacoes / permissoes.pedidos). Sem a marca, não pode.
+    function fazendaPode(fazendaId, chave) {
+      return temPerfil() && meuPerfil().get('papel', '') == 'fazenda' &&
+        meuPerfil().get('permissoes', {}).get(chave, false) == true &&
+        fazendaId in meuPerfil().get('fazendas', []) && fazendaDaMinhaConta(fazendaId);
+    }
+    // Pessoa DA FAZENDA que pode apagar lançamentos errados: a chave "apagar" do acesso;
+    // sem marca, Produtor e Gerente podem (mesma regra do app)
+    function fazendaPodeApagar(fazendaId) {
+      return temPerfil() && meuPerfil().get('papel', '') == 'fazenda' &&
+        meuPerfil().get('permissoes', {}).get('apagar',
+          meuPerfil().get('funcao', '') in ['Produtor', 'Gerente']) == true &&
+        fazendaId in meuPerfil().get('fazendas', []) && fazendaDaMinhaConta(fazendaId);
+    }
+    function temAcessoAFazenda(fazendaId) {
+      return consultorNaFazenda(fazendaId) ||
+        (acessoFazendaLiberado(fazendaId) && fazendaDaMinhaConta(fazendaId));
+    }
+    // Do lado da fazenda, o Financeiro (custos em R$) é do PRODUTOR e do
+    // GERENTE — a função é marcada pela consultoria ao criar o acesso.
+    // dinheiro do lado da fazenda: vale o que a consultoria marcou para a
+    // pessoa em permissoes.financeiro; sem marcação, produtor e gerente veem
+    function produtorLiberado(fazendaId) {
+      return temPerfil() && meuPerfil().get('papel', '') == 'fazenda' &&
+        meuPerfil().get('permissoes', {}).get('financeiro',
+          meuPerfil().get('funcao', '') in ['Produtor', 'Gerente']) == true &&
+        fazendaId in meuPerfil().get('fazendas', []);
+    }
+    function ehProdutorNa(fazendaId) {
+      return produtorLiberado(fazendaId) && fazendaDaMinhaConta(fazendaId);
+    }
+
+    match /usuarios/{uid} {
+      // a pessoa lê o próprio cadastro; a consultoria lê todos (na versão
+      // de venda: só os da própria conta)
+      allow read: if logado() && (request.auth.uid == uid ||
+        (ehConsultoria() && mesmaConta(resource.data)));
+      // a consultoria cria e remove acessos DE FAZENDA; acessos da própria
+      // consultoria, só o administrador — senão qualquer consultor poderia
+      // criar (ou apagar) um acesso com poder total
+      allow create, update: if ((ehAdmin() ||
+        (podeC('acessos') && request.resource.data.papel == 'fazenda')) &&
+        mesmaConta(request.resource.data)) ||
+        // versão de venda: pré-cadastro — a própria pessoa cria a conta e
+        // nasce administradora DA PRÓPRIA conta. Sem licença paga ela não
+        // passa em licencaOk(), então nada abre até o pagamento.
+        (multiConta() && request.auth.uid == uid && resource == null &&
+         request.resource.data.papel == 'consultoria' &&
+         request.resource.data.get('conta', '') == request.auth.uid) ||
+        // a própria pessoa consome um convite (o login já existia sem cadastro): nasce igual ao convite
+        (request.auth.uid == uid && resource == null &&
+         exists(/databases/$(database)/documents/convites/$(request.auth.token.email)) &&
+         request.resource.data.get('conta', '') == get(/databases/$(database)/documents/convites/$(request.auth.token.email)).data.get('conta', '') &&
+         request.resource.data.get('papel', '') == get(/databases/$(database)/documents/convites/$(request.auth.token.email)).data.get('papel', '')) ||
+        // a própria pessoa só pode gravar o endereço de avisos, a marca do
+        // aparelho ativo e o PRÓPRIO NOME — nenhum outro campo, senão ela trocaria o papel
+        (request.auth.uid == uid && resource != null &&
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fcmTokens', 'aparelhoAtivo', 'ultimoAcesso', 'nome']) &&
+         (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['nome']) || (request.resource.data.nome is string && request.resource.data.nome.size() <= 80)));
+      allow delete: if (ehAdmin() ||
+        (podeC('acessos') && resource.data.papel == 'fazenda')) &&
+        mesmaConta(resource.data);
+
+      // pedido de "teste de aviso": a própria pessoa cria, o servidor consome
+      match /testes/{doc} {
+        allow create: if logado() && request.auth.uid == uid;
+        allow read, update, delete: if false;
+      }
+    }
+
+    // ---- licenças (versão de venda): cada e-mail é um acesso pago ----
+    // A pessoa lê a própria licença (para a tela de assinatura); criar e
+    // renovar é só do dono do sistema.
+    // convite: cadastro pronto para um e-mail que já tem login; quem cria acessos grava, a própria pessoa lê
+    // ao entrar e apaga depois de consumir
+    match /convites/{email} {
+      allow read: if logado() && (request.auth.token.email == email || ehAdmin() || podeC('acessos') || ehDono());
+      allow create, update: if ehDono() || ((ehAdmin() || podeC('acessos')) && mesmaConta(request.resource.data));
+      allow delete: if ehDono() || ehAdmin() || podeC('acessos') || (logado() && request.auth.token.email == email);
+    }
+
+    match /licencas/{email} {
+      // a pessoa lê a própria; na versão de venda o ADMINISTRADOR da conta
+      // lê SÓ as licenças carimbadas com a conta dele (os acessos que ele
+      // paga) — nunca as dos outros compradores. Todas, só o dono.
+      allow read: if ehDono() || (logado() && request.auth.token.email == email) ||
+        (multiConta() && temPerfil() && meuPerfil().get('admin', false) == true &&
+         resource.data.conta == minhaConta());
+      // versão de venda: o pré-cadastro ganha 7 dias grátis UMA única vez —
+      // só a CRIAÇÃO da licença (nunca a renovação), só para o próprio
+      // e-mail, marcada como teste e com no máximo 7 dias de validade.
+      // Vencido o teste sem pagamento, o servidor fecha sozinho.
+      allow create: if ehDono() || (multiConta() && logado() &&
+        request.auth.token.email == email &&
+        request.resource.data.plano == 'teste7' &&
+        request.resource.data.get('conta', '') == request.auth.uid &&
+        request.resource.data.validaAte is timestamp &&
+        request.resource.data.validaAte <= request.time + duration.value(8, 'd')) ||
+        // ...e o administrador da conta estende o teste aos acessos que ele
+        // cria (o app limita a 2) — também só criação, nunca renovação
+        (multiConta() && temPerfil() && meuPerfil().get('admin', false) == true &&
+         request.resource.data.plano == 'teste7' &&
+         request.resource.data.get('conta', '') == minhaConta() &&
+         request.resource.data.validaAte is timestamp &&
+         request.resource.data.validaAte <= request.time + duration.value(8, 'd')) ||
+        // ...e o titular PAGANDO cria a licença do 1º acesso extra (incluso no plano): só para o e-mail
+        // que ele marcou na própria licença (inclusoEmail), vencendo junto com a dele — só criação
+        (multiConta() && temPerfil() && meuPerfil().get('admin', false) == true &&
+         request.resource.data.plano == 'incluso' &&
+         request.resource.data.get('conta', '') == minhaConta() &&
+         exists(/databases/$(database)/documents/licencas/$(request.auth.token.email)) &&
+         get(/databases/$(database)/documents/licencas/$(request.auth.token.email)).data.get('inclusoEmail', '') == email &&
+         request.resource.data.validaAte is timestamp &&
+         request.resource.data.validaAte <= get(/databases/$(database)/documents/licencas/$(request.auth.token.email)).data.validaAte);
+      // o titular marca na PRÓPRIA licença qual e-mail recebe o acesso incluso — uma vez só, nada mais muda
+      allow update: if ehDono() ||
+        (multiConta() && temPerfil() && meuPerfil().get('admin', false) == true &&
+         request.auth.token.email == email &&
+         !('inclusoEmail' in resource.data) &&
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['inclusoEmail']));
+      allow delete: if ehDono();
+    }
+
+    // ---- cotações regionais: todo mundo lê, só a consultoria lança ----
+    // (na versão de venda cada conta escreve só no SEU quadro: regional__conta)
+    match /cotacoes/{doc} {
+      allow read: if logado();
+      allow write: if ehConsultoria() &&
+        (!multiConta() || ehDono() || doc == 'regional__' + minhaConta());
+    }
+
+    // ---- listas da consultoria (grupos de fazendas, nomes da equipe) ----
+    // (na versão de venda cada conta usa documentos com o sufixo dela:
+    //  equipe__conta, grupos__conta etc.)
+    match /config/{doc} {
+      allow read, write: if ehConsultoria() &&
+        (!multiConta() || ehDono() || doc.matches('.*__' + minhaConta()));
+      // fornecedores e catálogo de produtos: quem é da fazenda com "pedidos" liberado
+      // também lê e grava (lança compra com fornecedor e produto novos)
+      allow read, write: if temPerfil() && meuPerfil().get('papel', '') == 'fazenda' &&
+        meuPerfil().get('permissoes', {}).get('pedidos', false) == true &&
+        (multiConta() ? doc.matches('(fornecedores|produtos)__' + minhaConta()) : doc in ['fornecedores', 'produtos']);
+    }
+
+    // ---- fazendas ----
+    // A fazenda só enxerga a si mesma. A consultoria enxerga todas.
+    // certificado digital do produtor (cifrado): só a função sefaz lê/grava
+    match /certificados/{uid} { allow read, write: if false; }
+
+    match /fazendas/{fazendaId} {
+      // a conferência de conta aqui é NO PRÓPRIO documento (minhaContaNoDoc):
+      // é a forma que a consulta em lista com where('conta'...) aceita —
+      // com get() o servidor recusava a lista inteira do comprador
+      allow read: if (consultorLiberado(fazendaId) || acessoFazendaLiberado(fazendaId)) &&
+        minhaContaNoDoc();
+      // criar fazenda nova: só consultor SEM limitação de fazendas (a nova
+      // não estaria na lista dele); editar: só quem enxerga aquela fazenda.
+      // Na versão de venda a fazenda nasce carimbada com a conta do criador.
+      // consultor limitado a certas fazendas TAMBÉM pode cadastrar: a nova nasce
+      // carimbada com criadoPor = ele (antes a nuvem recusava e o cadastro se perdia)
+      allow create: if podeC('cadastrar') && mesmaConta(request.resource.data) &&
+        (ehAdmin() || meuPerfil().get('fazendasLimitadas', null) == null ||
+         request.resource.data.get('criadoPor', '') == request.auth.uid);
+      // o produtor só grava os campos do Financeiro dele: produtividade
+      // estimada e preço da saca para a conta de custo em soja
+      allow update: if minhaContaNoDoc() &&
+        ((consultorLiberado(fazendaId) && podeC('cadastrar') && mesmaConta(request.resource.data)) ||
+         (produtorLiberado(fazendaId) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['produtividade', 'precoSacaCusto', 'fiscal'])) ||
+         // quem é da fazenda cadastra e posiciona os pluviômetros dela (só esse campo)
+         (acessoFazendaLiberado(fazendaId) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pluviometros'])));
+      // excluir uma fazenda apaga tudo dela — só o administrador (da conta)
+      allow delete: if ehAdmin() && minhaContaNoDoc();
+
+      // ---- tudo o que pertence à fazenda ----
+      // Cadastros e programação: consultoria escreve, fazenda lê.
+      match /talhoes/{doc}      { allow read: if temAcessoAFazenda(fazendaId);
+                                  allow write: if consultorNaFazenda(fazendaId); }
+      match /compras/{doc}      { allow read: if temAcessoAFazenda(fazendaId);
+                                  // a fazenda lança pedido só com "pedidos" liberado no acesso da pessoa
+                                  allow create, update: if (consultorNaFazenda(fazendaId) && podeC('cadastrar')) || fazendaPode(fazendaId, 'pedidos');
+                                  allow delete: if (consultorNaFazenda(fazendaId) && podeC('excluir')) || (fazendaPode(fazendaId, 'pedidos') && fazendaPodeApagar(fazendaId)); }
+      match /recomendacoes/{doc}{ allow read: if temAcessoAFazenda(fazendaId);
+                                  // a fazenda recomenda só com "recomendar" liberado no acesso da pessoa
+                                  allow create, update: if (consultorNaFazenda(fazendaId) && podeC('recomendar')) || fazendaPode(fazendaId, 'recomendacoes');
+                                  allow delete: if (consultorNaFazenda(fazendaId) && podeC('excluir')) || (fazendaPode(fazendaId, 'recomendacoes') && fazendaPodeApagar(fazendaId)); }
+      match /mapa/{doc}         { allow read: if temAcessoAFazenda(fazendaId);
+                                  allow write: if consultorNaFazenda(fazendaId); }
+      match /documentos/{doc}   { allow read: if temAcessoAFazenda(fazendaId);
+                                  allow write: if consultorNaFazenda(fazendaId); }
+      match /lavoura/{doc}      { allow read: if temAcessoAFazenda(fazendaId);
+                                  allow write: if consultorNaFazenda(fazendaId); }
+      // fertilidade do solo: laudos resumidos e pontos de coleta — quem tem acesso à
+      // fazenda lê e lança (o produtor manda o laudo dele); só a consultoria apaga
+      match /solo/{doc}         { allow read, create, update: if temAcessoAFazenda(fazendaId);
+                                  allow delete: if consultorNaFazenda(fazendaId) || fazendaPodeApagar(fazendaId); }
+      // visitas técnicas, regulagens e monitoramento de pragas: quem tem acesso
+      // à fazenda lê e registra (o consultor escolhe quem vê, por pessoa);
+      // só a consultoria altera ou apaga o que já foi registrado
+      match /visitas/{doc} {
+        allow read, create: if temAcessoAFazenda(fazendaId);
+        allow update, delete: if consultorNaFazenda(fazendaId) || fazendaPodeApagar(fazendaId);
+        // reenvio idêntico (fila do aparelho mandou de novo o que já subiu): não muda nada, aceita
+        allow update: if temAcessoAFazenda(fazendaId) && reenvioIgual();
+        // visita finalizada com áudios pendentes: quem tem acesso completa com as observações transcritas
+        allow update: if temAcessoAFazenda(fazendaId) && resource.data.get('audiosPendentes', 0) > 0;
+      }
+      // fotos das visitas/monitoramentos: um registro por foto (a visita guarda só a referência);
+      // quem tem acesso lê e grava; só a consultoria (ou quem apaga) tira
+      match /fotos/{doc} {
+        allow read, create: if temAcessoAFazenda(fazendaId);
+        allow update: if temAcessoAFazenda(fazendaId) && reenvioIgual();
+        allow delete: if consultorNaFazenda(fazendaId) || fazendaPodeApagar(fazendaId);
+      }
+      // mapa KML, imagens do mapa e documentos da fazenda
+      match /arquivos/{doc}     { allow read: if temAcessoAFazenda(fazendaId);
+                                  allow write: if consultorNaFazenda(fazendaId); }
+
+      // O que a fazenda lança no campo: execução, chuva e ajuste de estoque.
+      // São acréscimos — ninguém apaga o que já foi registrado.
+      match /execucoes/{doc} {
+        allow read, create: if temAcessoAFazenda(fazendaId);
+        allow update: if consultorNaFazenda(fazendaId);
+        // reenvio idêntico (fila do aparelho mandou de novo o que já subiu): não muda nada, aceita
+        allow update: if temAcessoAFazenda(fazendaId) && reenvioIgual();
+        // a fazenda nunca apaga; o administrador precisa poder, para
+        // conseguir excluir uma fazenda inteira (ex.: cadastro de teste)
+        allow delete: if (ehAdmin() && fazendaDaMinhaConta(fazendaId)) || (consultorNaFazenda(fazendaId) && podeC('excluir')) || fazendaPodeApagar(fazendaId);
+      }
+      match /chuvas/{doc} {
+        allow read, create: if temAcessoAFazenda(fazendaId);
+        // quem lançou errado corrige ou apaga (pedido do Daniel, 06/10/2026): qualquer um com acesso à fazenda
+        allow update, delete: if temAcessoAFazenda(fazendaId);
+        // reenvio idêntico (fila do aparelho mandou de novo o que já subiu): não muda nada, aceita
+        allow update: if temAcessoAFazenda(fazendaId) && reenvioIgual();
+      }
+      match /ajustes/{doc} {
+        allow read, create: if temAcessoAFazenda(fazendaId);
+        allow update, delete: if consultorNaFazenda(fazendaId) || fazendaPodeApagar(fazendaId);
+        // reenvio idêntico (fila do aparelho mandou de novo o que já subiu): não muda nada, aceita
+        allow update: if temAcessoAFazenda(fazendaId) && reenvioIgual();
+      }
+      // máquinas e implementos: patrimônio da fazenda — quem tem acesso
+      // à fazenda lê e cadastra (é opcional preencher)
+      match /maquinas/{doc} {
+        allow read, write: if temAcessoAFazenda(fazendaId);
+      }
+      // diesel (entradas e abastecimentos) e manutenções: lançamento de
+      // campo — quem tem acesso à fazenda lê e cria; excluir é da consultoria
+      match /combustivel/{doc} {
+        allow read, create, update: if temAcessoAFazenda(fazendaId);
+        allow delete: if consultorNaFazenda(fazendaId) || fazendaPodeApagar(fazendaId);
+      }
+      match /manutencoes/{doc} {
+        allow read, create, update: if temAcessoAFazenda(fazendaId);
+        allow delete: if consultorNaFazenda(fazendaId) || fazendaPodeApagar(fazendaId);
+      }
+      // almoxarifado (peças, filtros, óleo): o campo dá entrada e retira para a máquina;
+      // apagar movimento é da consultoria
+      match /almoxarifado/{doc} {
+        allow read, create, update: if temAcessoAFazenda(fazendaId);
+        allow delete: if consultorNaFazenda(fazendaId) || fazendaPodeApagar(fazendaId);
+      }
+      // colheita: cargas dos caminhões, áreas colhidas e frota — o campo
+      // lança e dá baixa; excluir é da consultoria
+      match /colheita/{doc} {
+        allow read, create, update: if temAcessoAFazenda(fazendaId);
+        allow delete: if consultorNaFazenda(fazendaId) || fazendaPodeApagar(fazendaId);
+      }
+
+      // custos (R$): dinheiro é assunto restrito — consultoria com a chave
+      // "custos", e o PRODUTOR da fazenda (vendas de soja são dele).
+      // Gerente, operador e monitor não leem nem escrevem.
+      match /custos/{doc} {
+        allow read, write: if (consultorNaFazenda(fazendaId) && podeC('custos'))
+          || ehProdutorNa(fazendaId);
+      }
+      // quadro de funcionários (salários/comissões): dinheiro — mesmas
+      // permissões dos custos
+      match /funcionarios/{doc} {
+        allow read, write: if (consultorNaFazenda(fazendaId) && podeC('custos'))
+          || ehProdutorNa(fazendaId);
+      }
+      // notas fiscais (R$, destinadas a custos/compras): dinheiro — mesmas
+      // permissões dos custos
+      // NF-e emitidas pela fazenda: quem tem acesso lê; só a função (servidor) grava
+      match /nfe/{doc}         { allow read: if temAcessoAFazenda(fazendaId);
+                                  allow write: if false; }
+      match /notas/{doc} {
+        allow read, write: if (consultorNaFazenda(fazendaId) && podeC('custos'))
+          || ehProdutorNa(fazendaId);
+      }
+
+      // entregas da revenda: a fazenda registra o que chegou; são acréscimos
+      match /entregas/{doc} {
+        allow read, create: if temAcessoAFazenda(fazendaId);
+        // corrigir ou apagar a entrega que alguém lançou: só quem tem "excluir"
+        allow update, delete: if (consultorNaFazenda(fazendaId) && podeC('excluir')) || fazendaPodeApagar(fazendaId);
+        // reenvio idêntico (fila do aparelho mandou de novo o que já subiu): não muda nada, aceita
+        allow update: if temAcessoAFazenda(fazendaId) && reenvioIgual();
+      }
+
+      // Registro de alterações: todo mundo escreve, ninguém edita.
+      // É o que faz a assinatura valer alguma coisa. Apagar, só o
+      // administrador — e na prática só ao excluir uma fazenda inteira.
+      match /historico/{doc} {
+        // a fazenda ESCREVE no registro (assinaturas), mas só a consultoria lê
+        allow read: if consultorNaFazenda(fazendaId);
+        allow create: if temAcessoAFazenda(fazendaId);
+        // ninguém edita o registro; só o reenvio idêntico passa (não muda nada)
+        allow update: if temAcessoAFazenda(fazendaId) && reenvioIgual();
+        allow delete: if ehAdmin() && fazendaDaMinhaConta(fazendaId);
+      }
+    }
+
+    // ---- dados da plataforma (versão de venda): links de pagamento ----
+    // Todo mundo logado lê (a tela de assinatura mostra o botão "Pagar");
+    // só o dono escreve.
+    // ---- comunidade: mural por estado entre quem usa o app ----
+    // qualquer pessoa logada lê e publica em seu nome; só apaga a própria (ou o administrador)
+    match /comunidade/{uf}/mensagens/{id} {
+      allow read: if logado();
+      allow create: if logado() && request.resource.data.uid == request.auth.uid
+                    && request.resource.data.texto is string && request.resource.data.texto.size() <= 1000;
+      allow update: if false;
+      allow delete: if logado() && (resource.data.uid == request.auth.uid || ehAdmin());
+    }
+
+    match /plataforma/{doc} {
+      allow read: if logado();
+      allow write: if ehDono();
+    }
+
+    // ---- financeiro do DONO: contratos, recebimentos e contas a pagar ----
+    // Só o dono da plataforma lê e escreve — ninguém mais vê esses valores.
+    match /financeiroDono/{id} {
+      allow read, write: if ehDono();
+    }
+    // Despesas da consultoria (só AgroCR): abastecimentos, despesas e trajetos. Cada pessoa da consultoria
+    // cria e vê os SEUS (uid no documento); o administrador vê e corrige todos. Na versão de venda não existe.
+    match /frota/{id} {
+      allow read: if !multiConta() && ehConsultoria() && (ehAdmin() || resource.data.uid == request.auth.uid);
+      allow create: if !multiConta() && ehConsultoria() && request.resource.data.uid == request.auth.uid;
+      allow update: if !multiConta() && ehConsultoria() && (ehAdmin() || resource.data.uid == request.auth.uid)
+        && request.resource.data.uid == resource.data.uid;
+      allow delete: if !multiConta() && ehConsultoria() && (ehAdmin() || resource.data.uid == request.auth.uid);
+    }
+
+    // Nada além do que está escrito acima é permitido.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

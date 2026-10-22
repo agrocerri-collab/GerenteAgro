@@ -1,0 +1,17 @@
+{
+  "name": "AgroCR Campo",
+  "short_name": "AgroCR",
+  "description": "Parceria de Resultados — consultoria e fazenda no mesmo aplicativo.",
+  "lang": "pt-BR",
+  "start_url": "./AgroCR.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#17335F",
+  "theme_color": "#17335F",
+  "icons": [
+    { "src": "icone-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icone-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icone-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

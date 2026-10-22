@@ -1,0 +1,441 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AgroCR Campo — Plano de implantação</title>
+<style>
+  :root {
+    --navy: #17335F; --navy-esc: #0E2242; --verde: #5CA13C; --verde-esc: #3E7A28;
+    --verde-bg: #EDF5E7; --amarelo: #B8860B; --amarelo-bg: #FCF3D9; --azul: #1565C0;
+    --azul-bg: #E4EFFB; --cinza: #5B6675; --borda: #D9E1D6; --fundo: #F4F6F3;
+    --vermelho: #B3402A;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--fundo); color: var(--navy-esc);
+    font-family: "Segoe UI", system-ui, sans-serif; font-size: 15px; line-height: 1.55; }
+  .folha { max-width: 900px; margin: 0 auto; background: #fff; padding: 40px 46px; }
+  .barra { position: sticky; top: 0; background: var(--navy); padding: 10px 16px; display: flex;
+    justify-content: space-between; align-items: center; z-index: 5; }
+  .barra button { background: var(--verde); color: #fff; border: none; border-radius: 10px;
+    padding: 10px 18px; font-weight: 800; font-size: 14px; cursor: pointer; font-family: inherit; }
+  .barra span { color: #fff; font-size: 13px; opacity: .9; }
+
+  header.capa { border-bottom: 4px solid var(--verde); padding-bottom: 16px; margin-bottom: 8px;
+    display: flex; justify-content: space-between; align-items: center; gap: 20px; }
+  header.capa img { height: 60px; }
+  h1 { font-size: 26px; color: var(--navy); margin: 18px 0 4px; }
+  h2 { font-size: 20px; color: var(--navy); margin: 34px 0 8px; padding-bottom: 6px;
+    border-bottom: 2px solid var(--verde-bg); }
+  h3 { font-size: 16px; color: var(--navy); margin: 20px 0 6px; }
+  p, li { color: #23303f; }
+  .sub { color: var(--cinza); font-size: 14px; }
+
+  table { width: 100%; border-collapse: collapse; margin: 10px 0 16px; font-size: 14px; }
+  th { background: var(--verde-bg); color: var(--navy); text-align: left; padding: 8px 10px; font-size: 13px; }
+  td { padding: 8px 10px; border-bottom: 1px solid var(--borda); vertical-align: top; }
+  tr:nth-child(even) td { background: #FAFBF9; }
+
+  .caixa { border-radius: 10px; padding: 12px 16px; margin: 14px 0; font-size: 14px; }
+  .aviso { background: var(--amarelo-bg); border-left: 5px solid var(--amarelo); }
+  .nota { background: var(--azul-bg); border-left: 5px solid var(--azul); }
+  .ok { background: var(--verde-bg); border-left: 5px solid var(--verde); }
+  .perigo { background: #FDECEA; border-left: 5px solid var(--vermelho); }
+  .caixa b { color: var(--navy); }
+
+  .etapa { border: 1.5px solid var(--borda); border-left: 7px solid var(--navy); border-radius: 12px;
+    padding: 16px 18px; margin: 16px 0; page-break-inside: avoid; }
+  .etapa.voce { border-left-color: var(--amarelo); }
+  .etapa h3 { margin-top: 0; }
+  .quem { display: inline-block; border-radius: 20px; padding: 2px 12px; font-size: 12px;
+    font-weight: 800; margin-left: 8px; vertical-align: middle; }
+  .quem.voce { background: var(--amarelo); color: #fff; }
+  .quem.eu { background: var(--navy); color: #fff; }
+
+  .check { list-style: none; padding-left: 0; }
+  .check li { margin: 7px 0; padding-left: 30px; position: relative; }
+  .check li::before { content: ""; position: absolute; left: 0; top: 2px; width: 17px; height: 17px;
+    border: 2px solid var(--navy); border-radius: 4px; }
+
+  code { background: #F0F3EE; border-radius: 4px; padding: 1px 6px; font-size: 13px; }
+  footer { margin-top: 40px; border-top: 1px solid var(--borda); padding-top: 12px;
+    font-size: 12px; color: var(--cinza); }
+
+  @media print {
+    body { background: #fff; font-size: 11.5pt; }
+    .barra { display: none; }
+    .folha { max-width: none; padding: 0; }
+    h2 { page-break-after: avoid; }
+    .etapa, table, .caixa { page-break-inside: avoid; }
+    .quebra { page-break-before: always; }
+  }
+</style>
+</head>
+<body>
+
+<div class="barra">
+  <span>Use o botão para gerar o PDF — em "Destino", escolha <b>Salvar como PDF</b>.</span>
+  <button onclick="window.print()">🖨️ Gerar PDF</button>
+</div>
+
+<div class="folha">
+
+<header class="capa">
+  <img src="data:image/jpeg;base64,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" alt="AgroCR">
+  <div style="text-align:right; color:#5B6675; font-size:13px">
+    Plano de implantação<br>Agosto de 2026
+  </div>
+</header>
+
+<h1>AgroCR Campo — do aplicativo pronto ao celular de cada operador</h1>
+<p class="sub">
+  Este documento é o roteiro do que precisa ser feito daqui para frente: criar a nuvem, publicar o
+  aplicativo, colocar no celular das pessoas e ligar as notificações. Cada etapa diz <b>quem faz</b>,
+  <b>o que precisa</b> e <b>como saber que terminou</b>.
+</p>
+
+<div class="caixa ok">
+  <b>O aplicativo de hoje continua funcionando durante toda a obra.</b> Nada do que já está pronto
+  será desligado antes da nova versão estar testada. Se algo der errado no meio do caminho, dá para
+  continuar usando o arquivo atual.
+</div>
+
+<h2>1. Onde estamos hoje</h2>
+
+<table>
+  <tr><th style="width:50%">Já funciona</th><th>Ainda não funciona</th></tr>
+  <tr>
+    <td>
+      Perfis consultoria e fazenda · cadastro de fazendas e talhões · programação de compras
+      (digitando ou anexando planilha) · estoque automático por tipo · pulverização, semeadura e
+      adubação · tabela por tanque · ordem de campo para o operador · pluviometria · mapa KML com
+      satélite · mapa em imagem · relatórios em PDF · registro de alterações
+    </td>
+    <td>
+      <b>Sincronização entre aparelhos</b> — o que a consultoria lança não chega no celular da fazenda<br><br>
+      <b>Notificação</b> — o celular não avisa quando chega recomendação<br><br>
+      <b>Leitura de foto</b> (nota fiscal e receita)<br><br>
+      <b>Backup automático</b> e login individual com senha
+    </td>
+  </tr>
+</table>
+
+<div class="caixa nota">
+  <b>Tudo o que falta depende da mesma peça: um servidor na nuvem.</b> Não são quatro obras
+  diferentes — é uma obra só, que destrava as quatro.
+</div>
+
+<h2>2. Como a nuvem funciona, em uma página</h2>
+
+<p>
+  <b>Hoje</b> cada aparelho tem uma caixa fechada. O que você digita no computador fica no
+  computador. O que o operador digita no celular fica no celular.
+</p>
+<p>
+  <b>Com a nuvem</b> passa a existir uma caixa central. Cada aparelho continua com a cópia dele —
+  e é essa cópia que o aplicativo usa no dia a dia. Quando aparece sinal, as cópias e a caixa
+  central se acertam sozinhas, em segundo plano, sem ninguém apertar nada.
+</p>
+
+<div class="caixa ok">
+  <b>O aplicativo não passa a depender de internet.</b> O operador no meio do talhão, sem sinal,
+  continua abrindo a recomendação, marcando execução, lançando chuva e ajustando estoque. Fica tudo
+  gravado no celular e sobe sozinho quando ele passar num lugar com sinal.
+</div>
+
+<h3>O que precisa existir</h3>
+<table>
+  <tr><th style="width:28%">Peça</th><th>Para que serve</th></tr>
+  <tr><td><b>Banco sincronizado</b></td><td>A caixa central e a lógica que acerta as cópias</td></tr>
+  <tr><td><b>Login por pessoa</b></td><td>Cada um com e-mail e senha próprios, no lugar do código único da fazenda</td></tr>
+  <tr><td><b>Endereço <code>https://</code></b></td><td>O aplicativo deixa de ser arquivo mandado por WhatsApp e vira um link que se instala uma vez. É exigência do celular para aceitar notificação</td></tr>
+</table>
+
+<h3>Ferramenta escolhida: Firebase (Google)</h3>
+<p>
+  A razão principal é uma: <b>a sincronização offline vem pronta e testada</b>. Essa é a parte mais
+  perigosa de escrever à mão — é onde nascem os defeitos do tipo "sumiu o lançamento" ou "voltou o
+  número velho", justamente os que fariam vocês perderem a confiança no aplicativo. Notificação e
+  login individual também já vêm juntos.
+</p>
+
+<h2 class="quebra">3. Cronograma</h2>
+<p class="sub">
+  As etapas são sequenciais: cada uma depende da anterior. A coluna de data fica em branco para
+  vocês combinarem conforme a disponibilidade.
+</p>
+
+<table>
+  <tr><th style="width:8%">Etapa</th><th style="width:44%">O que é</th><th style="width:16%">Quem faz</th><th style="width:16%">Esforço</th><th>Data combinada</th></tr>
+  <tr><td><b>0</b></td><td>Conta e decisões</td><td>Você</td><td>1 a 2 horas</td><td>___/___/____</td></tr>
+  <tr><td><b>1</b></td><td>Login e base sincronizada</td><td>Eu</td><td>Sessão longa</td><td>___/___/____</td></tr>
+  <tr><td><b>2</b></td><td>Compras, estoque e recomendações</td><td>Eu</td><td>Sessão longa</td><td>___/___/____</td></tr>
+  <tr><td><b>3</b></td><td>Execuções, chuva, mapas e fotos</td><td>Eu</td><td>Sessão média</td><td>___/___/____</td></tr>
+  <tr><td><b>4</b></td><td>Notificações</td><td>Eu</td><td>Sessão média</td><td>___/___/____</td></tr>
+  <tr><td><b>5</b></td><td>Publicação e instalação nos celulares</td><td>Eu + você</td><td>Sessão curta</td><td>___/___/____</td></tr>
+  <tr><td><b>6</b></td><td>Treinamento e virada</td><td>Você</td><td>1 dia</td><td>___/___/____</td></tr>
+</table>
+
+<div class="caixa aviso">
+  <b>Sobre prazo:</b> não coloco datas fixas porque dependem da sua disponibilidade para testar cada
+  etapa. O que garanto é a ordem — e que cada etapa termina com algo funcionando que você consegue
+  testar, não com promessa.
+</div>
+
+<div class="etapa voce">
+  <h3>Etapa 0 — Conta e decisões <span class="quem voce">VOCÊ</span></h3>
+  <p>Sem esta etapa nada começa. São coisas que eu não posso fazer no seu lugar: criar conta e cadastrar cartão.</p>
+  <ul class="check">
+    <li>Criar uma conta Google para a AgroCR (recomendo uma conta da empresa, não pessoal — se a pessoa sair, o sistema não vai junto)</li>
+    <li>Entrar em <code>console.firebase.google.com</code> e criar um projeto com o nome <b>AgroCR Campo</b></li>
+    <li>Ativar o plano de cobrança por uso ("Blaze") — <b>exige cartão</b>. Confira os valores na tela do próprio Firebase antes de confirmar</li>
+    <li>Ativar, dentro do projeto: <b>Authentication</b> (e-mail e senha), <b>Firestore</b> (banco), <b>Hosting</b> (endereço do app) e <b>Cloud Messaging</b> (notificação)</li>
+    <li>Me passar as chaves de configuração do projeto (apiKey, projectId e as demais). São chaves públicas por natureza — a segurança não vem delas, vem das regras que eu escrevo no servidor</li>
+    <li>Decidir a lista de pessoas que vão ter acesso: nome, e-mail, função e de qual fazenda</li>
+  </ul>
+  <p class="sub"><b>Terminou quando:</b> você me entrega as chaves e a lista de pessoas.</p>
+</div>
+
+<div class="etapa">
+  <h3>Etapa 1 — Login e base sincronizada <span class="quem eu">EU</span></h3>
+  <p>
+    A fundação. Aqui muda a forma como os dados são guardados: hoje é um bloco por fazenda, o que
+    faria um aparelho apagar o trabalho do outro. Passa a ser registro por registro, para duas
+    pessoas mexerem ao mesmo tempo sem se atropelar.
+  </p>
+  <ul class="check">
+    <li>Login individual com e-mail e senha, substituindo o código de 6 letras</li>
+    <li>Regras de segurança no servidor: a fazenda passa a <b>realmente</b> não enxergar as outras, e não só na tela</li>
+    <li>Fazendas e talhões sincronizando entre aparelhos</li>
+    <li>Migração dos dados que já estiverem nos aparelhos</li>
+  </ul>
+  <p class="sub"><b>Terminou quando:</b> você cadastra um talhão no computador e ele aparece sozinho no celular.</p>
+</div>
+
+<div class="etapa">
+  <h3>Etapa 2 — Compras, estoque e recomendações <span class="quem eu">EU</span></h3>
+  <ul class="check">
+    <li>Programação de compras e importação de planilha sincronizadas</li>
+    <li>Estoque calculado a partir dos dados da nuvem</li>
+    <li>Recomendações de pulverização, semeadura e adubação chegando na fazenda</li>
+    <li>Registro de alterações passa a valer entre aparelhos, com o nome real de quem entrou</li>
+  </ul>
+  <p class="sub"><b>Terminou quando:</b> você envia uma recomendação e ela aparece no celular do operador.</p>
+</div>
+
+<div class="etapa">
+  <h3>Etapa 3 — Execuções, chuva, mapas e fotos <span class="quem eu">EU</span></h3>
+  <p>É aqui que o offline é levado a sério, porque é o que o operador faz sem sinal.</p>
+  <ul class="check">
+    <li>Execução marcada offline entra na fila e sobe sozinha quando houver sinal</li>
+    <li>Chuva, ajuste de estoque e observação com o mesmo comportamento</li>
+    <li>Indicador claro na tela: <b>sincronizado</b> ou <b>x lançamentos aguardando sinal</b></li>
+    <li>Fotos e mapas guardados na nuvem, sem pesar no aparelho</li>
+  </ul>
+  <p class="sub"><b>Terminou quando:</b> você põe o celular em modo avião, lança três coisas, tira do modo avião e vê tudo subir sozinho.</p>
+</div>
+
+<div class="etapa">
+  <h3>Etapa 4 — Notificações <span class="quem eu">EU</span></h3>
+  <ul class="check">
+    <li>Recomendação enviada → o celular da fazenda toca</li>
+    <li>Execução marcada → a consultoria é avisada</li>
+    <li>Cada pessoa escolhe se quer receber, na primeira vez que abrir</li>
+  </ul>
+  <div class="caixa aviso" style="margin-top:10px">
+    <b>Limitação real:</b> a notificação só chega em celular com o aplicativo <b>instalado</b> pelo
+    link (Etapa 5). Quem só abrir o site no navegador não recebe. No iPhone, é obrigatório adicionar
+    à tela de início — sem isso a Apple não entrega notificação nenhuma.
+  </div>
+  <p class="sub"><b>Terminou quando:</b> você envia uma recomendação e o celular do operador toca com o celular no bolso.</p>
+</div>
+
+<div class="etapa">
+  <h3>Etapa 5 — Publicação e instalação nos celulares <span class="quem eu">EU + VOCÊ</span></h3>
+  <p>
+    O aplicativo passa a viver num endereço só de vocês — algo como
+    <code>agrocr-campo.web.app</code>, ou um endereço próprio se você tiver domínio da AgroCR.
+  </p>
+  <ul class="check">
+    <li>Eu publico o aplicativo no endereço</li>
+    <li>Eu preparo um cartão com o link e o passo a passo de instalação, para você mandar por WhatsApp</li>
+    <li>Você manda o link para cada pessoa</li>
+  </ul>
+  <p class="sub"><b>Terminou quando:</b> o ícone da AgroCR está na tela inicial do celular de todo mundo.</p>
+</div>
+
+<div class="etapa voce">
+  <h3>Etapa 6 — Treinamento e virada <span class="quem voce">VOCÊ</span></h3>
+  <ul class="check">
+    <li>Cadastrar as pessoas e entregar as senhas</li>
+    <li>Rodar uma fazenda real de ponta a ponta antes de soltar para todas</li>
+    <li>Mostrar ao operador as três coisas que ele realmente usa: abrir a recomendação, marcar executado, lançar chuva</li>
+    <li>Só depois disso, desligar o arquivo antigo do WhatsApp</li>
+  </ul>
+</div>
+
+<h2 class="quebra">4. Como o aplicativo chega no celular</h2>
+
+<p>Não vai para a Play Store. É instalado pelo link, o que tem duas vantagens: nada de espera por
+aprovação de loja, e a atualização é automática — quando eu corrijo algo, todo mundo recebe na
+próxima vez que abrir, sem reinstalar nada.</p>
+
+<h3>Android (a maioria de vocês)</h3>
+<ol>
+  <li>A pessoa recebe o link por WhatsApp e toca nele</li>
+  <li>Abre no Chrome e aparece o aviso <b>"Instalar aplicativo"</b> — toca em instalar</li>
+  <li>O ícone da AgroCR aparece na tela inicial, igual a qualquer outro aplicativo</li>
+  <li>Abre, entra com e-mail e senha <b>uma única vez</b></li>
+  <li>Aceita receber notificações quando o celular perguntar</li>
+</ol>
+
+<h3>iPhone</h3>
+<ol>
+  <li>Abrir o link <b>no Safari</b> (no iPhone só funciona pelo Safari)</li>
+  <li>Botão de compartilhar → <b>Adicionar à Tela de Início</b></li>
+  <li>Abrir pelo ícone criado, nunca mais pelo navegador</li>
+</ol>
+
+<div class="caixa aviso">
+  <b>Este passo não é opcional.</b> Quem continuar abrindo pelo navegador em vez do ícone não recebe
+  notificação e pode perder os dados guardados no aparelho. Vale insistir nisso no treinamento.
+</div>
+
+<h2>5. O que funciona sem internet</h2>
+
+<table>
+  <tr><th style="width:55%">Funciona sem sinal nenhum</th><th>Precisa de internet</th></tr>
+  <tr>
+    <td>
+      Abrir o aplicativo<br>
+      Ver as recomendações que já chegaram<br>
+      Marcar talhão como executado, com nome e foto<br>
+      Informar o volume real gasto<br>
+      Lançar chuva<br>
+      Lançar ajuste de estoque<br>
+      Ver estoque, tabela de tanque e ordem de campo<br>
+      Gerar PDF da ordem de campo<br>
+      Ver o mapa dos talhões (desenho)
+    </td>
+    <td>
+      A <b>primeira</b> instalação e o <b>primeiro</b> login<br><br>
+      Receber recomendação nova<br><br>
+      Enviar o que foi lançado offline<br><br>
+      Notificação<br><br>
+      A imagem de satélite no fundo do mapa
+    </td>
+  </tr>
+</table>
+
+<div class="caixa ok">
+  <b>Como funciona na prática:</b> o operador sai de manhã com as recomendações já no celular, roda
+  o dia inteiro sem sinal marcando execução e lançando chuva, e quando volta para a sede — ou passa
+  num ponto com sinal — tudo sobe sozinho. Ele não aperta nada e não precisa lembrar de nada.
+</div>
+
+<h2>6. Custo</h2>
+
+<table>
+  <tr><th style="width:34%">Item</th><th>Valor esperado</th></tr>
+  <tr><td>Banco e sincronização</td><td>Dentro da faixa gratuita para dezenas de fazendas</td></tr>
+  <tr><td>Login e notificações</td><td>Gratuito</td></tr>
+  <tr><td>Endereço do aplicativo</td><td>Gratuito no endereço do Google (<code>.web.app</code>)</td></tr>
+  <tr><td>Endereço próprio (opcional)</td><td>Custo do domínio, se você quiser <code>app.agrocr.com.br</code></td></tr>
+  <tr><td>Leitura de foto por IA (mais adiante)</td><td>Cobrado por foto lida — só entra se você quiser</td></tr>
+</table>
+
+<div class="caixa aviso">
+  <b>Cartão cadastrado, conta provavelmente zerada.</b> O Firebase exige cartão para liberar a
+  notificação, mas o consumo de vocês deve ficar dentro do que é gratuito. Mesmo assim, configure um
+  <b>alerta de gasto</b> no painel — leva dois minutos e evita susto. Não confie no valor que eu
+  digo aqui: confirme na tela do Firebase no dia do cadastro, porque preço muda.
+</div>
+
+<h2>7. Decisões que ainda são suas</h2>
+
+<table>
+  <tr><th style="width:38%">Decisão</th><th>Por que importa</th></tr>
+  <tr>
+    <td><b>Conta da empresa ou pessoal</b></td>
+    <td>Se a conta for de uma pessoa e ela sair da AgroCR, o sistema vai junto. Recomendo conta da empresa desde o começo</td>
+  </tr>
+  <tr>
+    <td><b>Endereço próprio ou do Google</b></td>
+    <td>O do Google é grátis e funciona igual. O próprio passa mais imagem de produto da AgroCR</td>
+  </tr>
+  <tr>
+    <td><b>Quem cadastra as pessoas</b></td>
+    <td>Alguém da consultoria precisa ser responsável por criar e desativar acessos. Sem dono definido, isso vira bagunça em três meses</td>
+  </tr>
+  <tr>
+    <td><b>Uma fazenda piloto</b></td>
+    <td>Rodar uma safra inteira numa fazenda antes de abrir para todas. Sai muito mais barato descobrir problema em uma do que em quinze</td>
+  </tr>
+</table>
+
+<h2>8. Riscos, ditos na lata</h2>
+
+<table>
+  <tr><th style="width:34%">Risco</th><th>Como reduzo</th></tr>
+  <tr>
+    <td><b>Mudança de login incomoda</b> — acaba o código único e cada um passa a ter senha</td>
+    <td>É o preço de o registro de alterações virar prova. Hoje qualquer um digita qualquer nome. Faço a virada com a fazenda piloto primeiro</td>
+  </tr>
+  <tr>
+    <td><b>Dois aparelhos editando o mesmo registro</b></td>
+    <td>Execução e chuva nunca se sobrescrevem — são acréscimos. Cadastro usa a última edição, e o registro mostra quem mudou</td>
+  </tr>
+  <tr>
+    <td><b>Alguém esquecer o celular no navegador</b>, sem instalar</td>
+    <td>Não recebe notificação. Por isso a instalação entra no treinamento, com conferência aparelho por aparelho</td>
+  </tr>
+  <tr>
+    <td><b>Dados de hoje se perderem na virada</b></td>
+    <td>Faço a migração dos aparelhos. Se houver pouco lançamento real na hora, redigitar pode ser mais seguro que migrar — decidimos na hora</td>
+  </tr>
+</table>
+
+<h2 class="quebra">9. Sua lista, para imprimir e riscar</h2>
+
+<h3>Agora (Etapa 0)</h3>
+<ul class="check">
+  <li>Definir se a conta Google será da empresa</li>
+  <li>Criar a conta e o projeto Firebase "AgroCR Campo"</li>
+  <li>Ativar cobrança por uso e configurar alerta de gasto</li>
+  <li>Ativar Authentication, Firestore, Hosting e Cloud Messaging</li>
+  <li>Me mandar as chaves de configuração</li>
+  <li>Montar a lista de pessoas: nome, e-mail, função, fazenda</li>
+  <li>Escolher a fazenda piloto</li>
+</ul>
+
+<h3>Durante as etapas 1 a 4</h3>
+<ul class="check">
+  <li>Testar cada etapa quando eu avisar que está pronta</li>
+  <li>Testar sempre com <b>dois aparelhos</b>, não só um</li>
+  <li>Fazer o teste do modo avião na etapa 3</li>
+</ul>
+
+<h3>Na virada (etapas 5 e 6)</h3>
+<ul class="check">
+  <li>Mandar o link para cada pessoa</li>
+  <li>Conferir aparelho por aparelho se instalou pelo ícone</li>
+  <li>Entregar as senhas</li>
+  <li>Rodar a fazenda piloto de ponta a ponta</li>
+  <li>Só então desligar o arquivo antigo</li>
+</ul>
+
+<h2>10. O que fica para depois</h2>
+<p>
+  Depois da nuvem no ar, estes itens ficam baratos de fazer porque a peça difícil já estará pronta:
+  leitura da nota fiscal por foto, leitura da receita por foto, painel web da consultoria,
+  custo por hectare, alerta de mecanismo de ação (FRAC/IRAC/HRAC) e intervalo de reentrada.
+</p>
+
+<footer>
+  AgroCR — Parceria de Resultados · Plano de implantação do AgroCR Campo<br>
+  Documento de trabalho: as etapas podem ser reordenadas conforme a necessidade da consultoria.
+</footer>
+
+</div>
+</body>
+</html>

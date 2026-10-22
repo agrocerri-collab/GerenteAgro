@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Política de Privacidade — GerenteAgro</title>
+<link rel="icon" href="icone-192.png">
+<style>
+  :root{--navy:#17335F;--verde:#5CA13C;--texto:#182A44;--cinza:#5E6E82;--fundo:#F2F5F8;--borda:#D6DEE8;--marca:#FFF1B8}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--fundo);color:var(--texto);font-family:"Instrument Sans","Segoe UI",system-ui,sans-serif;font-size:15.5px;line-height:1.55}
+  header{background:var(--navy);color:#fff;padding:14px 18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  header .marca{font-weight:900;font-size:20px;letter-spacing:-.02em}
+  header .marca span{color:#8BC34A}
+  header a{color:#C9D6E8;font-size:13px;font-weight:700;text-decoration:none;margin-left:auto}
+  main{max-width:820px;margin:0 auto;padding:22px 18px 60px}
+  .folha{background:#fff;border:1px solid var(--borda);border-radius:14px;padding:22px 22px 26px}
+  h1{font-size:24px;line-height:1.15;margin:0 0 4px;color:var(--navy)}
+  .sub{color:var(--cinza);font-size:13.5px;margin:0 0 18px}
+  h2{font-size:17px;margin:26px 0 8px;color:var(--navy);border-bottom:2px solid var(--verde);padding-bottom:4px}
+  p{margin:0 0 10px}
+  ul{margin:0 0 10px;padding-left:22px}
+  li{margin:0 0 5px}
+  .tab{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;margin:8px 0 10px;min-width:560px}
+  th,td{border:1px solid var(--borda);padding:7px 9px;text-align:left;vertical-align:top}
+  th{background:var(--fundo);color:var(--navy);font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+  mark.lacuna{background:var(--marca);color:#7A5C00;font-weight:800;padding:0 4px;border-radius:4px}
+  .rod{color:var(--cinza);font-size:12.5px;margin-top:22px;border-top:1px solid var(--borda);padding-top:10px}
+  @media print{header{display:none}main{padding:0}.folha{border:none}}
+</style>
+</head>
+<body>
+<header><span class="marca">Gerente<span>Agro</span></span><a href="./">← voltar ao aplicativo</a></header>
+<main>
+<div class="folha" id="doc">
+
+<h1>Política de Privacidade e Proteção de Dados Pessoais</h1>
+<p class="sub">GerenteAgro — Lei nº 13.709/2018 (LGPD) · versão <b id="versao"></b> · última atualização <b id="vigencia"></b></p>
+
+<h2>1. Quem é o responsável pelos dados</h2>
+<p><b>Controlador:</b> {{razao}}, CNPJ/CPF {{cnpj}}, {{endereco}}, e-mail {{email}}.</p>
+<p><b>Encarregado(a) pelo tratamento de dados (DPO):</b> {{dpo}}, e-mail {{emailPrivacidade}}. É por esse canal que o titular exerce seus direitos (item 9).</p>
+<p>Esta política vale para o aplicativo GerenteAgro, para o site de apresentação e para o atendimento pelo WhatsApp.</p>
+
+<h2>2. Papéis: quando somos controlador e quando somos operador</h2>
+<ul>
+<li>Somos <b>controlador</b> dos dados de quem se cadastra e paga: nome, CPF/CNPJ, e-mail, telefone, endereço de cobrança, por onde conheceu o aplicativo, registros de acesso e uso, e as conversas de suporte.</li>
+<li>Somos <b>operador</b> dos dados pessoais que o cliente lança dentro do aplicativo sobre terceiros — funcionários (nome, cargo, salário, dependentes), fornecedores, motoristas, visitantes técnicos. Nesses casos o cliente é o controlador e nós tratamos os dados só para prestar o serviço, conforme o contrato.</li>
+</ul>
+
+<h2>3. Quais dados tratamos e para quê</h2>
+<div class="tab"><table>
+<tr><th>Dados</th><th>Exemplos</th><th>Finalidade</th><th>Base legal (LGPD, art. 7º)</th></tr>
+<tr><td>Cadastro e login</td><td>nome, e-mail, senha (cifrada pelo provedor de login), telefone, CPF/CNPJ, endereço, por onde conheceu o aplicativo</td><td>criar a conta, autenticar, dar acesso, emitir cobrança, medir a divulgação</td><td>execução de contrato; legítimo interesse</td></tr>
+<tr><td>Pagamento</td><td>dados de cobrança processados pela plataforma de pagamentos; não guardamos número de cartão</td><td>cobrar o plano, comprovantes</td><td>execução de contrato; obrigação legal (fiscal)</td></tr>
+<tr><td>Dados da fazenda</td><td>fazendas, talhões, mapas KML, operações, estoque, chuvas, colheita, custos, vendas, notas fiscais, diesel, máquinas</td><td>funcionamento do aplicativo</td><td>execução de contrato</td></tr>
+<tr><td>Localização</td><td>posição do aparelho quando a pessoa aciona "onde estou" ou "pegar posição"; posição dos pluviômetros e dos pontos de monitoramento</td><td>mapa da fazenda, pluviômetros, monitoramento de pragas</td><td>consentimento (permissão do aparelho, revogável)</td></tr>
+<tr><td>Fotos, PDFs e áudios</td><td>notas fiscais, romaneios, listas, fotos de visitas e de pragas, diário falado da visita técnica</td><td>registro no campo, leitura automática por IA e transcrição</td><td>execução de contrato; legítimo interesse</td></tr>
+<tr><td>Certificado digital</td><td>arquivo A1 e senha, guardados cifrados</td><td>consultar NF-e na SEFAZ e registrar ciência, a pedido do cliente</td><td>consentimento específico (revogável no app)</td></tr>
+<tr><td>Uso do aplicativo</td><td>quem lançou o quê e quando, última entrada, aparelho ativo, versão</td><td>segurança, auditoria interna do cliente, suporte</td><td>legítimo interesse; execução de contrato</td></tr>
+<tr><td>Suporte</td><td>mensagens no assistente e no WhatsApp (texto e áudio); acesso da equipe à conta para ajudar</td><td>responder dúvidas, corrigir a pedido, melhorar o suporte</td><td>execução de contrato; legítimo interesse</td></tr>
+<tr><td>Avisos</td><td>endereço de notificação do aparelho (token push)</td><td>avisos de recomendações, chuvas e lembretes</td><td>consentimento (ativar os avisos, revogável)</td></tr>
+</table></div>
+<p>Não tratamos dados sensíveis (saúde, biometria, origem racial, religião etc.) e não usamos os dados para publicidade de terceiros. O aplicativo não se destina a menores de 18 anos.</p>
+
+<h2>4. Inteligência artificial</h2>
+<p>Fotos, PDFs, textos e áudios enviados às funções de leitura, transcrição, resumo e assistente são processados por provedores de inteligência artificial (Anthropic — modelos Claude; Google Cloud Speech-to-Text). O envio acontece só quando a pessoa aciona a função, o conteúdo é usado exclusivamente para gerar a resposta daquela solicitação e, nos termos comerciais desses provedores, não é usado para treinar modelos. Toda leitura é uma sugestão que a pessoa confirma antes de salvar.</p>
+
+<h2>5. Com quem compartilhamos (operadores e terceiros)</h2>
+<div class="tab"><table>
+<tr><th>Empresa / serviço</th><th>Para quê</th><th>Onde</th></tr>
+<tr><td>Google Cloud / Firebase (Hosting, Authentication, Firestore, Cloud Functions, Cloud Messaging, Secret Manager)</td><td>hospedar o aplicativo, guardar os dados, login, avisos, guarda cifrada de segredos</td><td>Região São Paulo (southamerica-east1); alguns serviços de login e avisos operam nos EUA</td></tr>
+<tr><td>Anthropic</td><td>leitura de documentos por IA, resumo de visitas, assistente e suporte</td><td>EUA</td></tr>
+<tr><td>Google Cloud Speech-to-Text</td><td>transcrição de áudio em português</td><td>Google Cloud (pode incluir EUA)</td></tr>
+<tr><td>Meta Platforms (WhatsApp Business)</td><td>atendimento pelo WhatsApp, quando o cliente escreve para o número do aplicativo</td><td>conforme a política da Meta</td></tr>
+<tr><td>Asaas</td><td>cobrança dos planos (cartão, Pix e boleto) e comprovantes</td><td>Brasil</td></tr>
+<tr><td>SEFAZ / Ambiente Nacional da NF-e</td><td>consulta das notas fiscais do cliente e registro de ciência, só com o certificado do próprio cliente</td><td>Brasil</td></tr>
+<tr><td>Open-Meteo, Copernicus/Sentinel, INMET, B3 e provedores de cotação</td><td>previsão do tempo, chuva por satélite, imagens de satélite e cotações; recebem apenas coordenadas ou nada de pessoal</td><td>diversos</td></tr>
+<tr><td>ViaCEP</td><td>preencher o endereço a partir do CEP no cadastro</td><td>Brasil</td></tr>
+</table></div>
+<p>Transferência internacional: quando um provedor processa dados fora do Brasil, isso ocorre com base em cláusulas contratuais e nos padrões de segurança desses provedores, conforme o art. 33 da LGPD. Não vendemos dados pessoais e não os compartilhamos com terceiros para fins próprios deles, salvo ordem legal.</p>
+
+<h2>6. Como protegemos os dados</h2>
+<ul>
+<li>Acesso por perfil: cada pessoa vê só as fazendas e áreas liberadas para ela; as regras valem no servidor, não só na tela. Cada cliente só enxerga a própria conta.</li>
+<li>Cifragem em trânsito (HTTPS) e em repouso (padrão do provedor). Certificados digitais e senhas de serviço ficam cifrados com chave guardada em cofre separado, inacessíveis ao aplicativo.</li>
+<li>Cópias de segurança diárias e recuperação pontual de 7 dias; o cliente também pode gerar a própria cópia.</li>
+<li>Verificação de origem das requisições, limites de uso por pessoa nas funções de IA e registro de alterações com autor e data.</li>
+<li>Um aparelho ativo por acesso; desconexão automática ao entrar em outro aparelho.</li>
+<li>A equipe de suporte só acessa a conta de um cliente para ajudar, corrigir a pedido ou verificar o funcionamento, sob sigilo.</li>
+</ul>
+
+<h2>7. Por quanto tempo guardamos</h2>
+<ul>
+<li>Durante o contrato e por 90 dias após o encerramento ou bloqueio por falta de pagamento, para permitir a retomada ou a exportação.</li>
+<li>Dados de cobrança e fiscais: 5 anos, por obrigação legal.</li>
+<li>Certificado digital: até o cliente removê-lo no aplicativo ou encerrar a conta, o que vier primeiro.</li>
+<li>Cópias de segurança: sobrescritas no ciclo de retenção (até 30 dias após a exclusão principal).</li>
+<li>Conversas de suporte pelo WhatsApp: últimas mensagens por número para contexto; registro resumido por 12 meses.</li>
+</ul>
+
+<h2>8. Cookies e armazenamento no aparelho</h2>
+<p>O aplicativo guarda dados no próprio aparelho (armazenamento local e IndexedDB) para funcionar sem internet e para lembrar o login e as preferências (letra grande, modo sol). Não usamos cookies de rastreamento nem publicidade. Ao sair da conta ou limpar os dados do navegador, essas informações locais são apagadas.</p>
+
+<h2>9. Seus direitos (LGPD, art. 18)</h2>
+<p>O titular pode, a qualquer momento, pedir: confirmação de que tratamos seus dados; acesso; correção; anonimização, bloqueio ou eliminação de dados desnecessários; portabilidade; informação sobre compartilhamentos; revogação do consentimento; e revisão de decisões automatizadas. Muitos desses pedidos podem ser feitos no próprio aplicativo (editar cadastro, remover certificado, desligar avisos, gerar a cópia de segurança, apagar acessos). Os demais, pelo e-mail do encarregado; respondemos em até 15 dias.</p>
+
+<h2>10. Incidentes de segurança</h2>
+<p>Se ocorrer um incidente que possa causar risco ou dano relevante aos titulares, comunicaremos a ANPD e os titulares afetados em prazo razoável (meta: até 72 horas do conhecimento), informando o que aconteceu, quais dados foram afetados e as medidas adotadas.</p>
+
+<h2>11. Alterações desta política</h2>
+<p>Podemos atualizar esta política para refletir mudanças no aplicativo ou na lei. Avisaremos no aplicativo e por e-mail com 30 dias de antecedência quando a mudança for relevante. A data da última atualização fica no início e no fim do documento.</p>
+
+<h2>12. Contato</h2>
+<p>Dúvidas e pedidos sobre dados pessoais: {{emailPrivacidade}} · WhatsApp {{whatsapp}} · {{endereco}}.</p>
+
+<p class="rod">GerenteAgro · {{razao}} · Versão <span class="v"></span>, atualizada em <span class="d"></span>. Veja também os <a href="termos.html">Termos de Uso</a>.</p>
+</div>
+</main>
+
+<script>
+// ===== DADOS DA EMPRESA — preencha aqui (aparecem em amarelo até serem preenchidos) =====
+const EMPRESA = {
+  razao: "AgroCR Soluções Agrícolas Ltda.",   // licenciante (Daniel, 15/09/2026)
+  cnpj: "28.518.476/0001-38",
+  endereco: "Av. Santa Catarina, Setor Central, Gurupi/TO, CEP 77403-060",           // ex.: "Rua …, nº …, Gurupi/TO, CEP …"
+  email: "agrocerri@yahoo.com.br",              // e-mail geral
+  dpo: "",                // nome do encarregado(a) de dados
+  emailPrivacidade: "agrocerri@yahoo.com.br",   // ex.: "privacidade@gerenteagro.com"
+  whatsapp: "",           // ex.: "(63) 9 9999-9999"
+};
+const VERSAO = "1.0";
+const VIGENCIA = "14/09/2026";
+// =========================================================================================
+(function () {
+  const doc = document.getElementById("doc");
+  doc.innerHTML = doc.innerHTML.replace(/\{\{(\w+)\}\}/g, (m, k) => EMPRESA[k] ? EMPRESA[k] : '<mark class="lacuna">[' + k + ' — a preencher]</mark>');
+  document.getElementById("versao").textContent = VERSAO;
+  document.getElementById("vigencia").textContent = VIGENCIA;
+  document.querySelectorAll(".v").forEach((e) => e.textContent = VERSAO);
+  document.querySelectorAll(".d").forEach((e) => e.textContent = VIGENCIA);
+})();
+</script>
+</body>
+</html>

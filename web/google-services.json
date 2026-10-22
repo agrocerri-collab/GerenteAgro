@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "997034245509",
+    "project_id": "agrocr-campo",
+    "storage_bucket": "agrocr-campo.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:997034245509:android:6ae29008b2d210139c98ec",
+        "android_client_info": {
+          "package_name": "com.agrocr.meuapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBI4tTKxmdTk82l0xdJeaz7AvX0FWK0kSw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

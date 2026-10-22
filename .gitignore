@@ -1,0 +1,32 @@
+# dependências e binários (reinstaláveis)
+node_modules/
+ferramentas/node/
+ferramentas/cli/node_modules/
+funcoes/node_modules/
+.firebase/
+
+# cache de navegador e material de publicidade (pesado)
+gerenteagro/publicidade/chromeprof/
+gerenteagro/publicidade/
+
+# dados de clientes e documentos pessoais — nunca num repositório público
+programas-agrobrazil.json
+DADOS-INPI-GerenteAgro.txt
+INPI-pedido-GerenteAgro.pdf
+Especificacao_AgroCR_Campo.docx
+*backup*.json
+*.zip
+*.pfx
+*.p12
+*.env
+.env*
+
+# saída de build (gerada pelo build.ps1)
+publicar/
+gerenteagro/publicar/
+web/AgroCR.html
+web/AgroCR-sozinho.html
+web/app-compilado.js
+
+# área de trabalho do Claude
+.claude/

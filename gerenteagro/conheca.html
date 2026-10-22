@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GerenteAgro — cada acesso, uma fazenda no controle</title>
+<meta name="description" content="Gestão da fazenda no celular, funcionando offline: estoque que se desconta sozinho, chuvas, NDVI de satélite, custos em saca de soja, diesel e manutenção.">
+<link rel="icon" href="icone-ga.svg">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;800;900&family=Instrument+Sans:wght@400;500;600;700&display=swap">
+<style>
+  :root{ --verde:#1B5E20; --escuro:#123815; --broto:#8BC34A; --broto2:#7CB342;
+    --fundo:#F5F7F1; --papel:#FFFFFF; --tinta:#1F2A1B; --apagado:#5C6B54; --risca:#DDE4D5; }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--fundo);color:var(--tinta);font-family:"Instrument Sans",system-ui,sans-serif;line-height:1.55;}
+  .topo{background:linear-gradient(160deg,var(--escuro),var(--verde) 70%);color:#fff;padding:48px 20px 56px;text-align:center;}
+  .escudo{width:110px;margin:0 auto 14px;display:block;}
+  h1{font-family:"Archivo";font-weight:900;font-size:clamp(30px,7vw,48px);margin:0;line-height:1.08;}
+  h1 span{color:var(--broto);}
+  .lema{font-size:18px;opacity:.92;max-width:34ch;margin:12px auto 26px;}
+  .botoes{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;}
+  .btn{display:inline-block;padding:15px 26px;border-radius:12px;font-weight:800;font-size:16px;text-decoration:none;font-family:"Instrument Sans";}
+  .btn-cheio{background:var(--broto);color:var(--escuro);}
+  .btn-vazio{background:rgba(255,255,255,.12);color:#fff;border:1.5px solid rgba(255,255,255,.45);}
+  .miolo{max-width:820px;margin:0 auto;padding:40px 18px 20px;}
+  h2{font-family:"Archivo";font-weight:800;font-size:26px;margin:0 0 6px;color:var(--verde);}
+  .sub{color:var(--apagado);margin:0 0 22px;max-width:62ch;}
+  .grade{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;}
+  .carta{background:var(--papel);border:1px solid var(--risca);border-radius:14px;padding:18px;}
+  .carta .ico{font-size:26px;}
+  .carta b{display:block;font-family:"Archivo";font-size:16px;margin:6px 0 4px;}
+  .carta p{margin:0;font-size:14px;color:var(--apagado);}
+  .faixa{background:var(--verde);color:#fff;border-radius:16px;padding:26px 22px;margin:44px 0;text-align:center;}
+  .faixa b{font-family:"Archivo";font-size:22px;display:block;margin-bottom:6px;}
+  .faixa p{margin:0 auto 16px;max-width:52ch;opacity:.92;font-size:15px;}
+  .passos{counter-reset:p;display:grid;gap:10px;margin:16px 0 0;padding:0;list-style:none;}
+  .passos li{background:var(--papel);border:1px solid var(--risca);border-radius:12px;padding:14px 16px 14px 52px;position:relative;font-size:15px;}
+  .passos li::before{counter-increment:p;content:counter(p);position:absolute;left:14px;top:12px;width:26px;height:26px;
+    border-radius:50%;background:var(--broto);color:var(--escuro);font-weight:800;display:flex;align-items:center;justify-content:center;font-family:"Archivo";}
+  .rodape{text-align:center;color:var(--apagado);font-size:13px;padding:34px 16px 44px;border-top:1px solid var(--risca);margin-top:44px;}
+  .rodape a{color:var(--verde);font-weight:700;text-decoration:none;}
+</style>
+</head>
+<body>
+
+<div class="topo">
+  <svg class="escudo" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+    <path d="M60 6 L106 23 V64 c0 28-21 42-46 50 C36 106 14 92 14 64 V23 Z" fill="#0E2B10"/>
+    <path d="M56 80 C56 60 46 52 32 50 c2 16 10 26 24 30 Z" fill="#8BC34A"/>
+    <path d="M62 80 C62 52 74 40 90 38 c-2 20-12 34-28 42 Z" fill="#7CB342"/>
+    <path d="M60 82 V54" stroke="#8BC34A" stroke-width="5" stroke-linecap="round"/>
+    <path d="M28 90 q34-16 66-4" stroke="#8BC34A" stroke-width="6" fill="none" stroke-linecap="round"/>
+    <circle cx="88" cy="72" r="15" fill="#fff"/><circle cx="88" cy="72" r="12" fill="#1B5E20"/>
+    <path d="M81 72 l5 5 9-10" stroke="#fff" stroke-width="3.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>
+  <h1>Gerente<span>Agro</span></h1>
+  <p class="lema">A sua fazenda inteira no celular — funcionando até <b>sem internet</b>.</p>
+  <div class="botoes">
+    <a class="btn btn-cheio" href="https://gerenteagro.web.app">Abrir o aplicativo</a>
+    <a class="btn btn-vazio" href="https://gerenteagro.web.app">🎁 Testar 7 dias grátis</a>
+  </div>
+</div>
+
+<div class="miolo">
+  <h2>Tudo que a fazenda lança, o app fecha</h2>
+  <p class="sub">Feito no campo, para gente do campo: botões grandes, telas simples, e as contas que ninguém tem tempo de fazer.</p>
+  <div class="grade">
+    <div class="carta"><span class="ico">📦</span><b>Estoque que se desconta sozinho</b><p>Aplicou no talhão, descontou. Pedido, entregue e o que tem na fazenda — sempre no número.</p></div>
+    <div class="carta"><span class="ico">🌧️</span><b>Chuva por pluviômetro</b><p>Cada ponto com seu registro e alerta automático de dias sem chuva com lavoura plantada.</p></div>
+    <div class="carta"><span class="ico">🛰️</span><b>NDVI de satélite</b><p>O vigor da lavoura pintado no mapa dos seus talhões, com GPS para ir direto na mancha.</p></div>
+    <div class="carta"><span class="ico">💰</span><b>Custo em saca de soja</b><p>Barter travado, dólar do dia, folha com encargos — e o hectare fechado em sacas.</p></div>
+    <div class="carta"><span class="ico">📈</span><b>Venda com trava</b><p>Comprometido contra a produção estimada: o app avisa antes de você vender o que não tem.</p></div>
+    <div class="carta"><span class="ico">⛽</span><b>Diesel e manutenção</b><p>Foto da bomba, tanque fechado, consumo por máquina e aviso da troca de óleo.</p></div>
+    <div class="carta"><span class="ico">💹</span><b>Cotações ao vivo</b><p>Dólar, Chicago e milho B3 direto na tela, mais os preços colhidos na sua região.</p></div>
+    <div class="carta"><span class="ico">🔧</span><b>Regulagem de máquinas</b><p>Pulverizador, faixa a lanço e plantadeira: digitou a coleta, saiu a conta e o relatório.</p></div>
+  </div>
+
+  <div class="faixa">
+    <b>🎁 7 dias grátis. Depois, R$ 149,99 por mês no cartão (em até 12x) — ou R$ 1.500,00 no ano, à vista no Pix ou boleto.</b>
+    <span style="display:block;color:#B08800;font-weight:800;margin-top:4px">🏷️ Preço de lançamento — promocional, vai subir.</span>
+    <p>Você faz o pré-cadastro no aplicativo, escolhe como vai pagar (<b>cartão de
+    crédito ou Pix</b>) e testa 7 dias de graça — não pagou, cancela sozinho, sem
+    multa. O seu plano já vem com <b>1 acesso extra grátis</b> para o gerente ou
+    operador: você compra um e ganha dois. Precisa de mais gente? Do segundo
+    acesso extra em diante, cada usuário sai por <b>R$ 80,00/mês no cartão ou
+    R$ 800,00/ano no Pix ou boleto</b>.</p>
+    <a class="btn btn-cheio" href="https://gerenteagro.web.app">🎁 Testar 7 dias grátis</a>
+  </div>
+
+  <h2>Como instalar no celular</h2>
+  <ol class="passos">
+    <li>Abra <b>gerenteagro.web.app</b> no Chrome do seu celular.</li>
+    <li>Toque no menu <b>⋮</b> e escolha <b>“Adicionar à tela inicial”</b>.</li>
+    <li>Pronto: o escudo verde vira um aplicativo — abre em tela cheia e funciona offline no campo.</li>
+  </ol>
+</div>
+
+<div class="rodape">
+  <div style="margin-bottom:8px"><a href="termos.html">Termos de Uso</a> · <a href="privacidade.html">Política de Privacidade</a></div>
+  <a href="https://instagram.com/gerenteagro.oficial">📷 @gerenteagro.oficial</a> ·
+  <a href="mailto:administrativo@gerenteagro.com">administrativo@gerenteagro.com</a><br>
+  © 2026 GerenteAgro — Parceria de Resultados.
+</div>
+
+</body>
+</html>

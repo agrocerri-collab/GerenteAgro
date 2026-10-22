@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AgroCR — socorro de atualização</title>
+<style>
+  body { margin: 0; background: #F4F6F3; font-family: system-ui, "Segoe UI", sans-serif; color: #0E2242; }
+  .caixa { max-width: 560px; margin: 0 auto; padding: 20px; }
+  h1 { color: #17335F; font-size: 19px; margin: 8px 0 4px; }
+  p.sub { color: #5B6675; font-size: 13px; margin-top: 0; }
+  .item { background: #fff; border: 1.5px solid #D9E1D6; border-radius: 10px; padding: 10px 12px; margin: 8px 0; font-size: 14px; }
+  .rot { font-weight: 800; font-size: 12px; color: #5B6675; }
+  .val { font-size: 15px; word-break: break-all; }
+  .ok { color: #2E7D32; font-weight: 800; } .mau { color: #B3402A; font-weight: 800; }
+  button { width: 100%; padding: 16px; background: #B3402A; color: #fff; border: none; border-radius: 12px;
+           font-size: 17px; font-weight: 800; margin-top: 14px; cursor: pointer; }
+  #estado { font-weight: 800; margin-top: 10px; }
+</style>
+</head>
+<body>
+<div class="caixa">
+  <h1>Socorro de atualização</h1>
+  <p class="sub">Esta página mostra o que o seu celular está guardando do AgroCR Campo e força a atualização.</p>
+
+  <div class="item"><div class="rot">VERSÃO NO SERVIDOR (a mais nova publicada)</div><div class="val" id="servidor">conferindo…</div></div>
+  <div class="item"><div class="rot">VERSÃO GUARDADA NESTE CELULAR</div><div class="val" id="local">conferindo…</div></div>
+  <div class="item"><div class="rot">GUARDIÃO DE OFFLINE (service worker)</div><div class="val" id="sw">conferindo…</div></div>
+  <div class="item"><div class="rot">ENDEREÇO DESTA PÁGINA</div><div class="val" id="origem"></div></div>
+
+  <button id="limpar">🔧 Limpar tudo e baixar a versão nova agora</button>
+  <div id="estado"></div>
+  <p class="sub" style="margin-top:14px">Os lançamentos e dados da fazenda NÃO são apagados — eles ficam na nuvem e na
+    memória de dados do aparelho. Isto limpa somente a cópia guardada do aplicativo.</p>
+</div>
+
+<script>
+const el = (id) => document.getElementById(id);
+el("origem").textContent = location.origin;
+
+fetch("/", { cache: "no-store" }).then((r) => r.text()).then((t) => {
+  const m = t.match(/AGROCR_VERSAO = '([^']+)'/);
+  el("servidor").textContent = m ? m[1] : "não encontrei (?)";
+}).catch(() => { el("servidor").innerHTML = '<span class="mau">sem internet agora</span>'; });
+
+caches.keys().then((ks) => {
+  const doApp = ks.filter((k) => k.startsWith("agrocr-"));
+  el("local").innerHTML = doApp.length
+    ? doApp.map((k) => k.replace("agrocr-", "")).join(", ")
+    : '<span class="mau">nenhuma cópia guardada</span>';
+}).catch(() => { el("local").textContent = "não consegui ler"; });
+
+navigator.serviceWorker.getRegistrations().then((regs) => {
+  el("sw").innerHTML = regs.length
+    ? regs.map((r) => (r.active ? "ativo" : r.installing ? "instalando" : r.waiting ? "esperando" : "?")).join(", ")
+    : '<span class="mau">nenhum — o app não guarda offline</span>';
+}).catch(() => { el("sw").textContent = "não consegui ler"; });
+
+el("limpar").onclick = async function () {
+  el("limpar").disabled = true;
+  el("estado").textContent = "Limpando…";
+  try {
+    const regs = await navigator.serviceWorker.getRegistrations();
+    for (const r of regs) await r.unregister();
+    const ks = await caches.keys();
+    for (const k of ks) await caches.delete(k);
+    el("estado").innerHTML = '<span class="ok">Limpo ✓ — abrindo o aplicativo novo…</span>';
+    setTimeout(() => location.replace("/?limpo=" + Date.now()), 800);
+  } catch (e) {
+    el("estado").innerHTML = '<span class="mau">Deu erro: ' + (e.message || e) + "</span>";
+    el("limpar").disabled = false;
+  }
+};
+</script>
+</body>
+</html>

@@ -1,0 +1,145 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AgroCR — testar a nuvem</title>
+<script src="vendor/firebase-app-compat.js"></script>
+<script src="vendor/firebase-auth-compat.js"></script>
+<script src="vendor/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<style>
+  body { margin:0; background:#F4F6F3; font-family:system-ui,"Segoe UI",sans-serif; color:#0E2242; }
+  .caixa { max-width:560px; margin:0 auto; padding:22px; }
+  h1 { color:#17335F; font-size:20px; margin:10px 0 4px; }
+  p.sub { color:#5B6675; font-size:14px; margin-top:0; }
+  label { display:block; font-size:13px; font-weight:700; color:#5B6675; margin:12px 0 4px; }
+  input { width:100%; font-size:16px; padding:10px; border:1.5px solid #D9E1D6; border-radius:10px; box-sizing:border-box; }
+  button { width:100%; padding:14px; background:#5CA13C; color:#fff; border:none; border-radius:10px;
+           font-size:16px; font-weight:800; margin-top:14px; cursor:pointer; }
+  .passo { background:#fff; border:1.5px solid #D9E1D6; border-radius:10px; padding:10px 12px; margin:8px 0; font-size:14px; }
+  .ok { border-left:5px solid #2E7D32; } .erro { border-left:5px solid #B3402A; } .indo { border-left:5px solid #B8860B; }
+  .rot { font-weight:800; } .det { color:#5B6675; font-size:12px; word-break:break-word; }
+</style>
+
+<div class="caixa">
+  <h1>Testar a conexão com a nuvem</h1>
+  <p class="sub">Confere, em ordem: o projeto responde, o login funciona, a gravação passa pelas regras e o dado volta.</p>
+
+  <label>E-mail do usuário de teste</label>
+  <input id="email" type="email" placeholder="voce@agrocr.com.br" autocomplete="username">
+  <label>Senha</label>
+  <input id="senha" type="password" placeholder="a senha que você criou no console" autocomplete="current-password">
+  <button id="ir">Testar agora</button>
+
+  <div id="saida"></div>
+</div>
+
+<script>
+const saida = document.getElementById("saida");
+function passo(rotulo, estado, detalhe) {
+  const d = document.createElement("div");
+  d.className = "passo " + estado;
+  d.innerHTML = '<div class="rot">' + rotulo + '</div>' + (detalhe ? '<div class="det">' + detalhe + '</div>' : '');
+  saida.appendChild(d);
+  return d;
+}
+
+document.getElementById("ir").onclick = async function () {
+  saida.innerHTML = "";
+  const email = document.getElementById("email").value.trim();
+  const senha = document.getElementById("senha").value;
+
+  try {
+    firebase.initializeApp(window.AGROCR_FIREBASE);
+    passo("1. Projeto encontrado", "ok", "agrocr-campo");
+  } catch (e) {
+    if (!/already exists/.test(e.message)) { passo("1. Falhou ao ligar no projeto", "erro", e.message); return; }
+    passo("1. Projeto encontrado", "ok", "agrocr-campo");
+  }
+
+  let uid;
+  try {
+    const cred = await firebase.auth().signInWithEmailAndPassword(email, senha);
+    uid = cred.user.uid;
+    passo("2. Login funcionou", "ok", "uid " + uid);
+  } catch (e) {
+    const naoExiste = e.code === "auth/invalid-credential" || e.code === "auth/user-not-found";
+    const d = passo("2. Login falhou", "erro", e.code + " — " +
+      (naoExiste
+        ? "Ou este usuário ainda não existe, ou a senha está diferente. Sua conta Google do projeto NÃO vale como usuário do aplicativo — são cadastros separados."
+        : e.message) +
+      (e.code === "auth/operation-not-allowed" ? " Ative E-mail/senha em Authentication > Sign-in method." : "") +
+      (e.code === "auth/unauthorized-domain" ? " Adicione este endereço em Authentication > Settings > Domínios autorizados." : ""));
+
+    if (naoExiste) {
+      const b = document.createElement("button");
+      b.textContent = "Criar este usuário agora";
+      b.style.marginTop = "10px";
+      b.onclick = async function () {
+        b.disabled = true; b.textContent = "Criando…";
+        try {
+          if (senha.length < 6) throw new Error("A senha precisa de pelo menos 6 caracteres.");
+          await firebase.auth().createUserWithEmailAndPassword(email, senha);
+          passo("Usuário criado ✓", "ok", "clique em Testar agora de novo");
+        } catch (err) {
+          if (err.code === "auth/email-already-in-use") {
+            passo("Este e-mail já tem cadastro", "indo",
+              "Então o problema é a senha, não o usuário. Use o botão abaixo para definir uma nova.");
+          } else {
+            passo("Não consegui criar", "erro", (err.code || "") + " " + err.message +
+              (err.code === "auth/operation-not-allowed"
+                ? " — ative E-mail/senha em Authentication > Sign-in method e tente de novo."
+                : ""));
+          }
+          b.disabled = false; b.textContent = "Criar este usuário agora";
+        }
+      };
+      d.appendChild(b);
+
+      // Senha errada é o caso mais comum: o link de redefinição resolve sem console
+      const r = document.createElement("button");
+      r.textContent = "Esqueci a senha — mandar link por e-mail";
+      r.style.marginTop = "8px";
+      r.style.background = "#17335F";
+      r.onclick = async function () {
+        r.disabled = true; r.textContent = "Enviando…";
+        try {
+          await firebase.auth().sendPasswordResetEmail(email);
+          passo("Link enviado ✓", "ok",
+            "Abra a caixa de entrada de " + email + " (veja também o spam), defina a senha nova e volte aqui.");
+        } catch (err) {
+          passo("Não consegui enviar", "erro", (err.code || "") + " " + err.message);
+          r.disabled = false; r.textContent = "Esqueci a senha — mandar link por e-mail";
+        }
+      };
+      d.appendChild(r);
+    }
+    return;
+  }
+
+  const db = firebase.firestore();
+  try {
+    await db.enablePersistence({ synchronizeTabs: true });
+    passo("3. Memória offline ligada", "ok", "o app vai funcionar sem sinal");
+  } catch (e) {
+    passo("3. Memória offline não ligou", "indo", e.code || e.message);
+  }
+
+  try {
+    await db.collection("usuarios").doc(uid).set({
+      papel: "consultoria", nome: email, fazendas: [], testadoEm: new Date().toISOString(),
+    }, { merge: true });
+    passo("4. Gravação passou pelas regras", "ok", "usuarios/" + uid);
+  } catch (e) {
+    passo("4. Gravação recusada", "erro", e.code + " — " + e.message +
+      " (publique o arquivo firestore.rules em Firestore > Regras)");
+    return;
+  }
+
+  try {
+    const doc = await db.collection("usuarios").doc(uid).get();
+    passo("5. Leitura de volta", "ok", JSON.stringify(doc.data()));
+    passo("Tudo certo — a nuvem está no ar", "ok", "pode me avisar que eu começo a Etapa 1");
+  } catch (e) {
+    passo("5. Leitura falhou", "erro", e.code + " — " + e.message);
+  }
+};
+</script>

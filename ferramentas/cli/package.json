@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "esbuild": "^0.28.2",
+    "firebase-tools": "^15.28.1"
+  }
+}

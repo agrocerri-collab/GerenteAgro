@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GerenteAgro em 75 Segundos</title>
+<meta name="description" content="A história do Seu João e o GerenteAgro — 75 segundos.">
+<link rel="icon" href="icone-ga.svg">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@700;800;900&family=Instrument+Sans:wght@500;700;800&display=swap">
+<style>
+  :root{
+    --noite:#0E2B10; --verde:#1B5E20; --broto:#8BC34A; --broto2:#7CB342;
+    --creme:#F5F7F1; --tinta:#1F2A1B; --ambar:#F5C542; --ceu-noite:#122A3A;
+    --ceu-dia:#BFE3F2; --papel:#FFFFFF;
+  }
+  html,body{margin:0;padding:0}
+  body{
+    background:#081A0A; color:var(--creme);
+    font-family:"Instrument Sans",system-ui,sans-serif;
+    min-height:100vh; display:flex; flex-direction:column; align-items:center;
+    justify-content:center; gap:14px; padding:18px 10px 26px; box-sizing:border-box;
+  }
+  .moldura{position:relative; width:min(92vw, calc(86vh * 9 / 16)); aspect-ratio:9/16;
+    background:var(--noite); border-radius:22px; overflow:hidden; container-type:size;
+    box-shadow:0 30px 80px rgba(0,0,0,.55), 0 0 0 1px rgba(139,195,74,.25);}
+  /* barra de progresso */
+  .progresso{position:absolute; top:0; left:0; right:0; height:5px; background:rgba(255,255,255,.14); z-index:50}
+  .progresso i{display:block; height:100%; width:0%; background:var(--broto)}
+
+  .cena{position:absolute; inset:0; opacity:0; visibility:hidden; transition:opacity .55s ease}
+  .cena.ativa{opacity:1; visibility:visible}
+  .cena .fundo{position:absolute; inset:0}
+
+  /* legenda grande (assiste no mudo) */
+  .fala{position:absolute; left:6%; right:6%; bottom:7%; z-index:20;
+    font-family:Archivo,system-ui,sans-serif; font-weight:900; text-align:center;
+    font-size:clamp(13px, 6.4cqw, 30px); line-height:1.22; color:#fff;
+    text-shadow:0 2px 14px rgba(0,0,0,.55); text-wrap:balance;}
+  .fala em{font-style:normal; color:var(--broto)}
+  .fala.escura{color:var(--tinta); text-shadow:none}
+  .fala.escura em{color:var(--verde)}
+  .cena.ativa .fala{animation:sobe .7s .25s ease both}
+  .selo{position:absolute; top:5%; left:0; right:0; text-align:center; z-index:20;
+    font-weight:800; font-size:clamp(9px,3.4cqw,15px); letter-spacing:2.5px; color:var(--broto); text-transform:uppercase}
+  .cena .selo{animation:none} .cena.ativa .selo{animation:aparece 1s ease both}
+
+  @keyframes sobe{from{opacity:0; transform:translateY(26px)} to{opacity:1; transform:none}}
+  @keyframes aparece{from{opacity:0} to{opacity:1}}
+  @keyframes flutua{0%,100%{transform:translateY(0)} 50%{transform:translateY(-12px)}}
+  @keyframes balanca{0%,100%{transform:rotate(-3deg)} 50%{transform:rotate(3deg)}}
+  @keyframes voa{0%{transform:translate(0,0) rotate(0)} 100%{transform:translate(150px,-190px) rotate(70deg); opacity:0}}
+  @keyframes voa2{0%{transform:translate(0,0) rotate(0)} 100%{transform:translate(-130px,-230px) rotate(-90deg); opacity:0}}
+  @keyframes pisca{0%,100%{opacity:1} 50%{opacity:.15}}
+  @keyframes cai{0%{transform:translateY(-40px); opacity:0} 15%{opacity:1} 100%{transform:translateY(560px); opacity:.9}}
+  @keyframes cresce{from{transform:scale(.2); opacity:0} to{transform:scale(1); opacity:1}}
+  @keyframes descesuave{from{transform:translateY(-260px)} to{transform:translateY(0)}}
+  @keyframes pulsa{0%,100%{transform:scale(1)} 50%{transform:scale(1.07)}}
+  @keyframes girasol{from{transform:rotate(0)} to{transform:rotate(360deg)}}
+  @keyframes ondaSinal{0%{opacity:.9; transform:scale(.4)} 100%{opacity:0; transform:scale(1.5)}}
+  @keyframes riscaFora{to{width:100%}}
+
+  /* pausa geral */
+  body.pausado .cena *, body.pausado .progresso i{animation-play-state:paused !important}
+
+  /* ---------- elementos de cena ---------- */
+  .chao{position:absolute; left:-5%; right:-5%; bottom:0; height:26%;
+    background:radial-gradient(120% 100% at 50% 0%, #17421B 0%, #0C2410 70%); border-radius:50% 50% 0 0}
+  .chao.dia{background:radial-gradient(120% 100% at 50% 0%, #7CB342 0%, #4E8B2E 70%)}
+  .lua{position:absolute; top:9%; right:12%; width:16cqw; height:16cqw; border-radius:50%;
+    background:#F4EFD3; box-shadow:0 0 40px 8px rgba(244,239,211,.35)}
+  .sol{position:absolute; top:8%; right:10%; width:19cqw; height:19cqw; border-radius:50%;
+    background:var(--ambar); box-shadow:0 0 60px 14px rgba(245,197,66,.45); animation:girasol 30s linear infinite}
+  .estrela{position:absolute; width:4px; height:4px; border-radius:50%; background:#fff; animation:pisca 2.6s infinite}
+  .personagem{position:absolute; z-index:10}
+  .personagem svg{width:42cqw; height:auto}
+  #capa svg{width:28cqw; height:auto}
+  .cartaz svg{width:21cqw; height:auto}
+  .papelzinho{position:absolute; width:8.5cqw; height:11cqw; background:#fff; border-radius:4px; z-index:9;
+    box-shadow:0 4px 10px rgba(0,0,0,.3)}
+  .papelzinho::before{content:""; position:absolute; left:5px; right:5px; top:8px; height:3px; background:#B9C4B0; box-shadow:0 7px 0 #B9C4B0, 0 14px 0 #B9C4B0, 0 21px 0 #B9C4B0}
+  .gota{position:absolute; width:7px; height:14px; background:#8FD0F2; border-radius:50% 50% 60% 60%; animation:cai 1.6s linear infinite}
+
+  /* telefone com "tela do app" */
+  .fone{position:absolute; left:50%; transform:translateX(-50%);
+    width:62%; background:#0B1F0D; border-radius:26px; padding:10px 10px 14px; z-index:12;
+    box-shadow:0 18px 50px rgba(0,0,0,.5), inset 0 0 0 2px rgba(139,195,74,.45)}
+  .fone .tela{background:var(--creme); border-radius:16px; overflow:hidden; color:var(--tinta)}
+  .fone .topo{background:var(--verde); color:#fff; font-weight:800; font-size:clamp(8px,3.4cqw,14px); padding:8px 10px;
+    font-family:Archivo; display:flex; align-items:center; gap:6px}
+  .fone .linha{display:flex; justify-content:space-between; align-items:center; padding:9px 10px;
+    border-top:1px solid #E2E8DC; font-size:clamp(7.5px,3.2cqw,13px); font-weight:700}
+  .fone .linha small{display:block; font-weight:500; color:#5C6B54; font-size:clamp(6.5px,2.7cqw,11px)}
+  .num{font-family:Archivo; font-weight:900; font-size:clamp(9px,3.8cqw,16px); color:var(--verde); font-variant-numeric:tabular-nums}
+  .tag{background:var(--broto); color:#123815; font-size:clamp(6px,2.6cqw,10px); font-weight:800; border-radius:20px; padding:3px 8px}
+  .tag.alerta{background:#FDECEA; color:#B3402A}
+  .riscado{position:relative; color:#98A48F}
+  .riscado::after{content:""; position:absolute; left:0; top:52%; height:2px; width:0; background:#B3402A; animation:riscaFora .8s 1.1s ease both}
+
+  /* cartaz final / preços */
+  .cartaz{position:absolute; inset:0; display:flex; flex-direction:column; align-items:center;
+    justify-content:center; gap:2.2vh; text-align:center; padding:0 8%}
+  .oferta{font-family:Archivo; font-weight:900; color:#fff; font-size:clamp(15px,7.4cqw,34px); line-height:1.15; text-wrap:balance}
+  .precoCard{background:rgba(255,255,255,.08); border:1.5px solid rgba(139,195,74,.6); border-radius:14px;
+    padding:1.2vh 16px; min-width:56%}
+  .precoCard b{display:block; font-family:Archivo; font-weight:900; font-size:clamp(15px,6.8cqw,30px); color:var(--broto)}
+  .precoCard span{font-size:clamp(9px,3.2cqw,14px); color:#D7E4CF}
+  .cta{background:var(--broto); color:#123815; font-family:Archivo; font-weight:900;
+    font-size:clamp(12px,5cqw,22px); padding:1.4vh 26px; border-radius:14px; animation:pulsa 1.8s infinite}
+  .mini{font-size:clamp(9px,3.2cqw,14px); color:#B9CBAF; font-weight:700}
+
+  /* mapa NDVI */
+  .mapa{position:absolute; left:10%; right:10%; top:20%; border-radius:16px; overflow:hidden;
+    box-shadow:0 16px 40px rgba(0,0,0,.45); z-index:12}
+  .mapa svg{display:block; width:100%}
+
+  /* controles */
+  .controles{display:flex; gap:10px; align-items:center}
+  .controles button{background:#14330F; color:var(--creme); border:1.5px solid rgba(139,195,74,.5);
+    border-radius:12px; font-family:Archivo; font-weight:800; font-size:15px; padding:10px 22px; cursor:pointer}
+  .controles button:hover{background:#1B4A15}
+  .controles button:focus-visible{outline:3px solid var(--broto); outline-offset:2px}
+  .dica{font-size:12.5px; color:#8FA982; text-align:center; max-width:420px; line-height:1.5}
+
+  /* capa (poster) */
+  #capa{z-index:60; background:linear-gradient(170deg,#0E2B10,#123815 65%,#0B1F0D); display:flex;
+    flex-direction:column; align-items:center; justify-content:center; gap:3vh; text-align:center; padding:0 10%}
+  #capa h1{font-family:Archivo; font-weight:900; font-size:clamp(17px,9.4cqw,44px); margin:0; line-height:1.1; color:#fff}
+  #capa h1 span{color:var(--broto)}
+  #botaoPlay{width:96px; height:96px; border-radius:50%; border:none; cursor:pointer;
+    background:var(--broto); color:#123815; font-size:38px; display:flex; align-items:center;
+    justify-content:center; animation:pulsa 2s infinite; box-shadow:0 14px 40px rgba(139,195,74,.35)}
+  #capa .sub{color:#C9DABE; font-weight:700; font-size:clamp(10px,3.6cqw,16px)}
+</style>
+</head>
+<body>
+
+<div class="moldura" id="palco">
+  <div class="progresso"><i id="barra"></i></div>
+
+  <!-- CAPA -->
+  <div class="cena ativa" id="capa">
+    <svg width="120" viewBox="0 0 120 120" aria-hidden="true">
+      <path d="M60 6 L106 23 V64 c0 28-21 42-46 50 C36 106 14 92 14 64 V23 Z" fill="#1B5E20"/>
+      <path d="M56 80 C56 60 46 52 32 50 c2 16 10 26 24 30 Z" fill="#8BC34A"/>
+      <path d="M62 80 C62 52 74 40 90 38 c-2 20-12 34-28 42 Z" fill="#7CB342"/>
+      <path d="M60 82 V54" stroke="#8BC34A" stroke-width="5" stroke-linecap="round"/>
+      <circle cx="88" cy="72" r="15" fill="#fff"/><circle cx="88" cy="72" r="12" fill="#1B5E20"/>
+      <path d="M81 72 l5 5 9-10" stroke="#fff" stroke-width="3.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <h1>A história do<br>Seu João e o <span>GerenteAgro</span></h1>
+    <button id="botaoPlay" aria-label="Assistir">▶</button>
+    <div class="sub">75 segundos · dá o play e assista</div>
+  </div>
+
+  <!-- CENA 1: noite, caderno perdido -->
+  <div class="cena" id="c1">
+    <div class="fundo" style="background:linear-gradient(180deg,#122A3A 0%,#0E2B10 78%)"></div>
+    <div class="lua"></div>
+    <div class="estrela" style="top:14%;left:18%"></div>
+    <div class="estrela" style="top:8%;left:44%;animation-delay:.7s"></div>
+    <div class="estrela" style="top:20%;left:66%;animation-delay:1.3s"></div>
+    <div class="chao"></div>
+    <div class="personagem" style="left:50%;bottom:16%;transform:translateX(-50%);animation:balanca 3s ease-in-out infinite">
+      <svg width="170" viewBox="0 0 170 220" aria-label="Seu João procurando anotações">
+        <ellipse cx="85" cy="212" rx="52" ry="8" fill="rgba(0,0,0,.35)"/>
+        <rect x="55" y="118" width="60" height="74" rx="16" fill="#3E5C8A"/>
+        <rect x="55" y="118" width="60" height="40" rx="14" fill="#B3402A"/>
+        <rect x="63" y="122" width="10" height="34" fill="#8E3222"/>
+        <rect x="97" y="122" width="10" height="34" fill="#8E3222"/>
+        <rect x="41" y="122" width="16" height="46" rx="8" fill="#B3402A" transform="rotate(18 49 122)"/>
+        <rect x="113" y="122" width="16" height="46" rx="8" fill="#B3402A" transform="rotate(-18 121 122)"/>
+        <circle cx="85" cy="88" r="30" fill="#E8B98B"/>
+        <path d="M62 84 q23 -14 46 0 l4 8 h-54 Z" fill="#C98A3D"/>
+        <path d="M48 90 h74 l-6 8 h-62 Z" fill="#B8792F"/>
+        <path d="M67 82 q18 -26 36 0" fill="#C98A3D"/>
+        <circle cx="75" cy="92" r="3.4" fill="#20261C"/>
+        <circle cx="95" cy="92" r="3.4" fill="#20261C"/>
+        <path d="M77 104 q8 6 16 0" stroke="#8E5B2A" stroke-width="3" fill="none" stroke-linecap="round" transform="rotate(180 85 104)"/>
+        <rect x="20" y="150" width="34" height="44" rx="4" fill="#F4EFD3" transform="rotate(-12 37 172)"/>
+        <path d="M24 158 l24 -5 M25 166 l24 -5 M26 174 l24 -5" stroke="#9AA08B" stroke-width="2.5" transform="rotate(-12 37 172)"/>
+      </svg>
+    </div>
+    <div class="papelzinho" style="left:22%;bottom:34%;animation:voa 2.6s 1s ease-in forwards"></div>
+    <div class="papelzinho" style="left:64%;bottom:30%;animation:voa2 2.9s 1.6s ease-in forwards"></div>
+    <div class="selo">Toda fazenda conhece essa noite…</div>
+    <div class="fala">“Cadê a anotação da <em>chuva</em> de ontem?!”</div>
+  </div>
+
+  <!-- CENA 2: os três problemas -->
+  <div class="cena" id="c2">
+    <div class="fundo" style="background:linear-gradient(180deg,#122A3A 0%,#0E2B10 78%)"></div>
+    <div class="chao"></div>
+    <div class="fone" style="top:12%;width:70%">
+      <div class="tela">
+        <div class="topo">📒 O caderno do Seu João</div>
+        <div class="linha"><span>Estoque de herbicida<small>“acho que tem uns 100 litros…”</small></span><span class="tag alerta">no chute</span></div>
+        <div class="linha"><span>Chuva do dia 12<small>papelzinho sumiu</small></span><span class="tag alerta">perdido</span></div>
+        <div class="linha"><span>Custo da soja<small>“faço a conta depois…”</small></span><span class="tag alerta">no escuro</span></div>
+      </div>
+    </div>
+    <div class="fala">Estoque no chute, chuva perdida,<br>custo <em>no escuro</em>.</div>
+  </div>
+
+  <!-- CENA 3: chega o GerenteAgro -->
+  <div class="cena" id="c3">
+    <div class="fundo" style="background:linear-gradient(180deg,#7FB7D6 0%,#BFE3F2 45%,#4E8B2E 100%)"></div>
+    <div class="sol"></div>
+    <div class="chao dia"></div>
+    <div class="personagem" style="left:50%;top:16%;transform:translateX(-50%);animation:descesuave 1.4s ease-out both, flutua 3.4s 1.4s ease-in-out infinite">
+      <svg width="150" viewBox="0 0 120 120" aria-label="Mascote GerenteAgro">
+        <path d="M60 6 L106 23 V64 c0 28-21 42-46 50 C36 106 14 92 14 64 V23 Z" fill="#1B5E20"/>
+        <path d="M56 80 C56 60 46 52 32 50 c2 16 10 26 24 30 Z" fill="#8BC34A"/>
+        <path d="M62 80 C62 52 74 40 90 38 c-2 20-12 34-28 42 Z" fill="#7CB342"/>
+        <path d="M60 82 V54" stroke="#8BC34A" stroke-width="5" stroke-linecap="round"/>
+        <circle cx="44" cy="38" r="6" fill="#fff"/><circle cx="44" cy="38" r="3" fill="#123815"/>
+        <circle cx="76" cy="38" r="6" fill="#fff"/><circle cx="76" cy="38" r="3" fill="#123815"/>
+        <path d="M48 52 q12 9 24 0" stroke="#8BC34A" stroke-width="4" fill="none" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <div class="personagem" style="left:50%;bottom:14%;transform:translateX(-50%)">
+      <svg width="150" viewBox="0 0 170 220" aria-label="Seu João sorrindo com o celular">
+        <ellipse cx="85" cy="212" rx="52" ry="8" fill="rgba(0,0,0,.2)"/>
+        <rect x="55" y="118" width="60" height="74" rx="16" fill="#3E5C8A"/>
+        <rect x="55" y="118" width="60" height="40" rx="14" fill="#1B5E20"/>
+        <rect x="41" y="122" width="16" height="42" rx="8" fill="#1B5E20" transform="rotate(30 49 122)"/>
+        <rect x="113" y="122" width="16" height="42" rx="8" fill="#1B5E20" transform="rotate(-40 121 122)"/>
+        <rect x="118" y="96" width="26" height="42" rx="6" fill="#0B1F0D"/>
+        <rect x="121" y="100" width="20" height="34" rx="3" fill="#8BC34A"/>
+        <circle cx="85" cy="88" r="30" fill="#E8B98B"/>
+        <path d="M62 84 q23 -14 46 0 l4 8 h-54 Z" fill="#C98A3D"/>
+        <path d="M48 90 h74 l-6 8 h-62 Z" fill="#B8792F"/>
+        <circle cx="75" cy="92" r="3.4" fill="#20261C"/>
+        <circle cx="95" cy="92" r="3.4" fill="#20261C"/>
+        <path d="M75 102 q10 9 20 0" stroke="#8E5B2A" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <div class="fala escura" style="bottom:auto;top:6%">Aí chegou o <em>GerenteAgro</em>.</div>
+  </div>
+
+  <!-- CENA 4: estoque desconta sozinho -->
+  <div class="cena" id="c4">
+    <div class="fundo" style="background:linear-gradient(180deg,#BFE3F2 0%,#7CB342 100%)"></div>
+    <div class="fone" style="top:14%">
+      <div class="tela">
+        <div class="topo">📦 Estoque</div>
+        <div class="linha"><span>Herbicida Fortax<small>galpão da sede</small></span><span class="num" id="contadorEstoque">120 L</span></div>
+        <div class="linha"><span>Aplicação no Talhão 3<small>2,0 L/ha × 13 ha</small></span><span class="tag">✓ lançada</span></div>
+        <div class="linha"><span>Desconto automático<small>ninguém fez conta nenhuma</small></span><span class="tag">sozinho</span></div>
+      </div>
+    </div>
+    <div class="fala">Aplicou no talhão?<br>O estoque <em>desconta sozinho</em>.</div>
+  </div>
+
+  <!-- CENA 5: chuva + satélite -->
+  <div class="cena" id="c5">
+    <div class="fundo" style="background:linear-gradient(180deg,#57728B 0%,#4E8B2E 100%)"></div>
+    <div class="gota" style="left:16%;animation-delay:0s"></div>
+    <div class="gota" style="left:30%;animation-delay:.5s"></div>
+    <div class="gota" style="left:48%;animation-delay:.2s"></div>
+    <div class="gota" style="left:66%;animation-delay:.8s"></div>
+    <div class="gota" style="left:82%;animation-delay:.4s"></div>
+    <div class="mapa" style="animation:cresce .8s .9s both">
+      <svg viewBox="0 0 320 250" role="img" aria-label="Mapa NDVI dos talhões">
+        <rect width="320" height="250" fill="#123815"/>
+        <path d="M18 30 L150 18 L162 108 L34 122 Z" fill="#7CB342"/>
+        <path d="M168 22 L300 40 L288 118 L172 110 Z" fill="#8BC34A"/>
+        <path d="M40 132 L160 120 L176 226 L58 236 Z" fill="#4E8B2E"/>
+        <path d="M182 122 L292 128 L302 216 L188 228 Z" fill="#C9A93B"/>
+        <circle cx="245" cy="175" r="10" fill="none" stroke="#fff" stroke-width="3">
+          <animate attributeName="r" values="8;14;8" dur="1.6s" repeatCount="indefinite"/>
+        </circle>
+        <text x="245" y="150" text-anchor="middle" font-family="Archivo" font-weight="900" font-size="13" fill="#fff">mancha aqui!</text>
+        <text x="14" y="243" font-family="Instrument Sans" font-weight="700" font-size="11" fill="#CFE6BF">🛰️ NDVI · satélite de 22/08 · 🌧 32 mm no pluviômetro 2</text>
+      </svg>
+    </div>
+    <div class="fala">Chuva anotada em <em>2 toques</em> — e o satélite<br>mostra a lavoura <em>pintada no mapa</em>.</div>
+  </div>
+
+  <!-- CENA 6: custo em saca -->
+  <div class="cena" id="c6">
+    <div class="fundo" style="background:linear-gradient(180deg,#BFE3F2 0%,#7CB342 100%)"></div>
+    <div class="fone" style="top:14%">
+      <div class="tela">
+        <div class="topo">💰 Financeiro</div>
+        <div class="linha"><span>Custo da safra<small>insumos + diesel + folha + barter</small></span><span class="num">28,4 sc/ha</span></div>
+        <div class="linha"><span>Soja comprometida<small>vendas e travas</small></span><span class="num">12.400 sc</span></div>
+        <div class="linha"><span>Diesel do tanque<small>foto da bomba a cada abastecida</small></span><span class="num">3.180 L</span></div>
+      </div>
+    </div>
+    <div class="fala">O custo fechado em <em>saca de soja</em> —<br>até o diesel entra na conta.</div>
+  </div>
+
+  <!-- CENA 7: sem internet -->
+  <div class="cena" id="c7">
+    <div class="fundo" style="background:linear-gradient(180deg,#F09F4B 0%,#C9A93B 55%,#4E8B2E 100%)"></div>
+    <div class="chao dia"></div>
+    <div class="personagem" style="left:50%;bottom:16%;transform:translateX(-50%)">
+      <svg width="150" viewBox="0 0 170 220" aria-label="Seu João no meio da lavoura com o celular">
+        <ellipse cx="85" cy="212" rx="52" ry="8" fill="rgba(0,0,0,.2)"/>
+        <rect x="55" y="118" width="60" height="74" rx="16" fill="#3E5C8A"/>
+        <rect x="55" y="118" width="60" height="40" rx="14" fill="#B3402A"/>
+        <rect x="41" y="122" width="16" height="42" rx="8" fill="#B3402A" transform="rotate(30 49 122)"/>
+        <rect x="113" y="122" width="16" height="42" rx="8" fill="#B3402A" transform="rotate(-40 121 122)"/>
+        <rect x="118" y="96" width="26" height="42" rx="6" fill="#0B1F0D"/>
+        <rect x="121" y="100" width="20" height="34" rx="3" fill="#8BC34A"/>
+        <circle cx="85" cy="88" r="30" fill="#E8B98B"/>
+        <path d="M62 84 q23 -14 46 0 l4 8 h-54 Z" fill="#C98A3D"/>
+        <path d="M48 90 h74 l-6 8 h-62 Z" fill="#B8792F"/>
+        <circle cx="75" cy="92" r="3.4" fill="#20261C"/>
+        <circle cx="95" cy="92" r="3.4" fill="#20261C"/>
+        <path d="M75 102 q10 9 20 0" stroke="#8E5B2A" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <div style="position:absolute;left:50%;top:22%;transform:translateX(-50%);z-index:11">
+      <div style="position:relative;width:30cqw;height:30cqw">
+        <div style="position:absolute;inset:0;border:4px solid var(--ambar);border-radius:50%;animation:ondaSinal 1.8s ease-out infinite"></div>
+        <div style="position:absolute;inset:0;border:4px solid var(--ambar);border-radius:50%;animation:ondaSinal 1.8s .9s ease-out infinite"></div>
+        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:11cqw">📵</div>
+      </div>
+    </div>
+    <div class="fala">No meio da lavoura, <em>sem sinal</em>?<br>Funciona do mesmo jeito — e sobe sozinho<br>quando o sinal volta.</div>
+  </div>
+
+  <!-- CENA 8: oferta + CTA -->
+  <div class="cena" id="c8">
+    <div class="fundo" style="background:linear-gradient(170deg,#0E2B10,#123815 65%,#0B1F0D)"></div>
+    <div class="cartaz">
+      <svg width="86" viewBox="0 0 120 120" aria-hidden="true" style="animation:cresce .7s both">
+        <path d="M60 6 L106 23 V64 c0 28-21 42-46 50 C36 106 14 92 14 64 V23 Z" fill="#1B5E20"/>
+        <path d="M56 80 C56 60 46 52 32 50 c2 16 10 26 24 30 Z" fill="#8BC34A"/>
+        <path d="M62 80 C62 52 74 40 90 38 c-2 20-12 34-28 42 Z" fill="#7CB342"/>
+        <circle cx="88" cy="72" r="15" fill="#fff"/><circle cx="88" cy="72" r="12" fill="#1B5E20"/>
+        <path d="M81 72 l5 5 9-10" stroke="#fff" stroke-width="3.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <div class="oferta">🎁 Teste <span style="color:var(--broto)">7 dias grátis</span><br>a fazenda inteira no controle</div>
+      <div class="precoCard"><b>R$ 149,99/mês</b><span>ou R$ 1.500,00 no ano, à vista no Pix ou boleto</span></div>
+      <div class="mini">cada acesso a mais da equipe: R$ 80,00/mês ou R$ 800,00/ano · 🏷️ preço de lançamento, promocional</div>
+      <div class="cta">gerenteagro.web.app</div>
+      <div class="mini">📷 @gerenteagro.oficial · pagou, usou; parou, parou.</div>
+    </div>
+  </div>
+</div>
+
+<div class="controles">
+  <button id="bPausa" hidden>⏸ Pausar</button>
+  <button id="bReiniciar" hidden>↻ Reiniciar</button>
+</div>
+<p class="dica">Para virar vídeo de verdade: dê o play e grave a tela do celular (ou do computador) — sai pronto no formato de Reels/Status. Depois é só narrar por cima ou colar uma música.</p>
+
+<script>
+(function () {
+  // roteiro: cena → duração (ms)
+  var CENAS = [
+    { id: "c1", dur: 8500 },
+    { id: "c2", dur: 9000 },
+    { id: "c3", dur: 8000 },
+    { id: "c4", dur: 9500 },
+    { id: "c5", dur: 10000 },
+    { id: "c6", dur: 9500 },
+    { id: "c7", dur: 9500 },
+    { id: "c8", dur: 12000 },
+  ];
+  var TOTAL = CENAS.reduce(function (s, c) { return s + c.dur; }, 0);
+  var atual = -1, timer = null, inicio = 0, resta = 0, decorridoAntes = 0, rodando = false;
+  var barra = document.getElementById("barra");
+  var bPausa = document.getElementById("bPausa");
+  var bRe = document.getElementById("bReiniciar");
+
+  function mostrar(n) {
+    document.querySelectorAll(".cena").forEach(function (c) { c.classList.remove("ativa"); });
+    if (n >= 0 && n < CENAS.length) {
+      var el = document.getElementById(CENAS[n].id);
+      // reinicia as animações da cena
+      el.classList.remove("ativa"); void el.offsetWidth; el.classList.add("ativa");
+      if (CENAS[n].id === "c4") contarEstoque();
+    }
+  }
+  function proxima() {
+    atual++;
+    if (atual >= CENAS.length) { fim(); return; }
+    decorridoAntes = CENAS.slice(0, atual).reduce(function (s, c) { return s + c.dur; }, 0);
+    mostrar(atual);
+    inicio = Date.now(); resta = CENAS[atual].dur;
+    timer = setTimeout(proxima, resta);
+  }
+  function tique() {
+    if (rodando && atual >= 0 && atual < CENAS.length) {
+      var d = decorridoAntes + Math.min(Date.now() - inicio, CENAS[atual].dur);
+      barra.style.width = (d / TOTAL * 100) + "%";
+    }
+    requestAnimationFrame(tique);
+  }
+  function comecar() {
+    document.getElementById("capa").classList.remove("ativa");
+    bPausa.hidden = false; bRe.hidden = false;
+    rodando = true; atual = -1; proxima();
+  }
+  function fim() {
+    rodando = false; clearTimeout(timer);
+    barra.style.width = "100%";
+    bPausa.hidden = true;
+    // a última cena (oferta) fica parada na tela
+    atual = CENAS.length - 1; mostrar(atual);
+  }
+  bPausa.addEventListener("click", function () {
+    if (rodando) {
+      rodando = false; clearTimeout(timer);
+      resta -= (Date.now() - inicio);
+      document.body.classList.add("pausado");
+      bPausa.textContent = "▶ Continuar";
+    } else {
+      rodando = true; inicio = Date.now();
+      document.body.classList.remove("pausado");
+      timer = setTimeout(proxima, Math.max(resta, 0));
+      bPausa.textContent = "⏸ Pausar";
+    }
+  });
+  bRe.addEventListener("click", function () {
+    clearTimeout(timer); document.body.classList.remove("pausado");
+    bPausa.textContent = "⏸ Pausar"; bPausa.hidden = false;
+    rodando = true; atual = -1; barra.style.width = "0%"; proxima();
+  });
+  document.getElementById("botaoPlay").addEventListener("click", comecar);
+  tique();
+
+  // cena 4: o numero do estoque desce sozinho (120 -> 94 L)
+  function contarEstoque() {
+    var alvo = document.getElementById("contadorEstoque");
+    var v = 120, fim = 94;
+    alvo.textContent = "120 L"; alvo.style.color = "";
+    var int = setInterval(function () {
+      if (!rodando) return;
+      v -= 1;
+      alvo.textContent = v + " L";
+      if (v <= fim) { clearInterval(int); alvo.style.color = "#B3402A"; alvo.textContent = "94 L ✓"; }
+    }, 90);
+    setTimeout(function () { clearInterval(int); }, 9000);
+  }
+})();
+</script>
+</body>
+</html>
