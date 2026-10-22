@@ -24963,9 +24963,12 @@ const audioEsperando = (it) => it.tipo === "audio" && it.estado === "esperando";
 function linhaItemVisita(it) {
   const t = String((it && it.texto) || "").trim();
   if (it.tipo === "audio") return t ? `🎙 ${t}` : it.estado === "naoEntendeu" ? "🎙 (áudio que não deu para entender)" : "🎙 (áudio ainda não virou texto)";
+  if (it.tipo === "lista") return `${String(it.cat || "").split(" ")[0] || "📋"} ${t}`;
   if (it.tipo === "foto") return `📷 ${t || "foto"}`;
   return `✍️ ${t}`;
 }
+const LISTA_COM_PRESSAO = /Praga|Doença|Daninha|Nutrição/;
+const textoDaLista = (cat, nome, pressao, acao) => `${String(cat || "").replace(/^\S+\s*/, "")}: ${nome}` + (LISTA_COM_PRESSAO.test(cat) && pressao ? ` — pressão ${pressao}` : "") + (LISTA_COM_PRESSAO.test(cat) && acao ? ` — ${String(acao).toLowerCase()}` : "");
 // rascunho antigo (observações por categoria) → itens novos; o áudio continua junto até ser guardado à parte
 function migrarRascunhoVisita(d) {
   if (!d) return null;
@@ -25024,7 +25027,7 @@ function montarVisitaFinal(itens, grupos, talhoes, lavoura) {
   });
   const CAT = { foto: "📷 Foto", audio: "🎙 Fala", texto: "📝 Anotação" };
   const obsCampo = prontos.map((it) => ({ id: it.id, hora: it.hora || "", talhaoId: it.talhaoId || null, talhaoNome: it.talhaoNome || null, parteNome: it.parteNome || null,
-    cat: CAT[it.tipo] || "📝 Anotação", item: String(it.texto || "").trim() || "foto", pressao: null, acao: null, nota: null, img: (it.fotos || [])[0] || null, fotos: it.fotos || [] }));
+    cat: it.tipo === "lista" && it.cat ? it.cat : CAT[it.tipo] || "📝 Anotação", item: String(it.texto || "").trim() || "foto", pressao: null, acao: null, nota: null, img: (it.fotos || [])[0] || null, fotos: it.fotos || [] }));
   return { versao: 2, itens: [...(linhasT.length ? [{ titulo: "Talhões visitados", texto: linhasT.join("\n"), fotos: [] }] : []), ...secoes], obsCampo, grupos: gs.map((g) => ({ talhoes: g.talhoes, porIA: !!(String(g.resumo || "").trim() && g.porIA) })) };
 }
 // A IA escreve o resumo de UM grupo (um talhão, ou vários unidos por estarem na mesma situação)
@@ -25116,6 +25119,7 @@ function ChatVisita({ fazenda, lavoura, kml, usuario, onFechar, onSalvar }) {
   const transcrevendo = useRef(null);               // id do áudio que está virando texto
   const [verTodos, setVerTodos] = useState(false);
   const [editando, setEditando] = useState(null);   // {id, texto}
+  const [lista, setLista] = useState(null);         // escolher da lista: {cat, item, outro, pressao, acao, mais}
   const [sel, setSel] = useState({});               // grupos marcados para unir
   const [iaGrupo, setIaGrupo] = useState({});       // id do grupo → "gerando" | mensagem de erro
   const talhaoAtual = d ? d.talhaoAtual : null;
@@ -25225,6 +25229,17 @@ function ChatVisita({ fazenda, lavoura, kml, usuario, onFechar, onSalvar }) {
     setTimeout(() => { try { if (mr.state === "recording") mr.stop(); } catch (e) {} }, 55000);
   }
 
+  // ---------- 📋 escolher da lista: categoria → o que é → (pressão/ação, se quiser) → guarda; e pode já falar ----------
+  function guardarLista(falar) {
+    if (!lista || !lista.cat || !lista.item) return;
+    const nome = lista.item === "__outro" ? String(lista.outro || "").trim() : lista.item;
+    if (!nome) return;
+    const com = LISTA_COM_PRESSAO.test(lista.cat);
+    acrescentar(novoItem({ tipo: "lista", cat: lista.cat, item: nome, pressao: com ? lista.pressao || null : null, acao: com ? lista.acao || null : null, texto: textoDaLista(lista.cat, nome, lista.pressao, lista.acao) }));
+    setLista(null);
+    if (falar) gravar(); else setMsg("📋 Guardado em " + (tAtual ? tAtual.nome + (parteAtual ? ` (${parteAtual})` : "") : "sem talhão") + ".");
+  }
+
   // ---------- fila: áudio guardado → texto (uma por vez; sem sinal, espera e tenta de novo) ----------
   useEffect(() => {
     const on = () => { setOnline(true); setTick((t) => t + 1); };
@@ -25318,7 +25333,7 @@ function ChatVisita({ fazenda, lavoura, kml, usuario, onFechar, onSalvar }) {
     return <span style={{ color: "#7A5C00", fontWeight: 800 }}>⏳ na fila para virar texto</span>;
   };
   const cartaoItem = (it, comTalhao) => (
-    <div key={it.id} style={{ background: "#fff", border: `1px solid ${C.borda}`, borderLeft: `5px solid ${it.tipo === "audio" ? "#7B1FA2" : it.tipo === "foto" ? "#1E88E5" : C.verde}`, borderRadius: 10, padding: "8px 10px", marginBottom: 6 }}>
+    <div key={it.id} style={{ background: "#fff", border: `1px solid ${C.borda}`, borderLeft: `5px solid ${it.tipo === "audio" ? "#7B1FA2" : it.tipo === "foto" ? "#1E88E5" : it.tipo === "lista" ? C.navy : C.verde}`, borderRadius: 10, padding: "8px 10px", marginBottom: 6 }}>
       <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
         <div style={{ flex: 1, minWidth: 0, fontSize: 13.5 }}>
           {editando && editando.id === it.id ? (
@@ -25435,8 +25450,8 @@ function ChatVisita({ fazenda, lavoura, kml, usuario, onFechar, onSalvar }) {
         )}
         <div style={{ display: "flex", gap: 8 }}>
           <button onClick={gravar} style={botaoGrande(gravando ? C.vermelho : "#7B1FA2")}>{gravando ? <>⏹ PARAR<span style={{ display: "block", fontSize: 12, fontWeight: 700 }}>gravando {gravando} s (máx. 55)</span></> : <>🎙<span style={{ display: "block" }}>Falar</span></>}</button>
-          <button onClick={() => { setModo(modo === "foto" ? null : "foto"); setTexto(""); setFotosPend([]); }} disabled={!!gravando} style={botaoGrande(modo === "foto" ? C.navyEscuro : "#1E88E5")}>📷<span style={{ display: "block" }}>Foto</span></button>
-          <button onClick={() => { setModo(modo === "texto" ? null : "texto"); setTexto(""); }} disabled={!!gravando} style={botaoGrande(modo === "texto" ? C.navyEscuro : C.verde)}>✍️<span style={{ display: "block" }}>Escrever</span></button>
+          <button onClick={() => { setModo(modo === "foto" ? null : "foto"); setTexto(""); setFotosPend([]); setLista(null); }} disabled={!!gravando} style={botaoGrande(modo === "foto" ? C.navyEscuro : "#1E88E5")}>📷<span style={{ display: "block" }}>Foto</span></button>
+          <button onClick={() => { setModo(modo === "texto" ? null : "texto"); setTexto(""); setLista(null); }} disabled={!!gravando} style={botaoGrande(modo === "texto" ? C.navyEscuro : C.verde)}>✍️<span style={{ display: "block" }}>Escrever</span></button>
         </div>
         {msg && <div style={{ fontSize: 12.5, fontWeight: 700, color: C.navyEscuro, background: "#F3E5F5", borderRadius: 8, padding: "7px 10px", marginTop: 8 }}>{msg}</div>}
         {modo === "foto" && (
@@ -25454,6 +25469,47 @@ function ChatVisita({ fazenda, lavoura, kml, usuario, onFechar, onSalvar }) {
             <button disabled={!texto.trim()} onClick={() => { acrescentar(novoItem({ tipo: "texto", texto: texto.trim() })); setTexto(""); setModo(null); }} style={{ width: "100%", padding: 11, marginTop: 6, background: C.verde, color: "#fff", border: "none", borderRadius: 10, fontWeight: 900, fontSize: 14, opacity: texto.trim() ? 1 : 0.5 }}>➤ Guardar no {nomeAqui}</button>
           </div>
         )}
+        {!lista ? (
+          <button onClick={() => { setLista({ cat: null, item: null, outro: "", pressao: null, acao: null, mais: false }); setModo(null); }} disabled={!!gravando} style={{ width: "100%", marginTop: 8, padding: "11px 12px", background: "#fff", color: C.navy, border: `1.5px solid ${C.navy}`, borderRadius: 12, fontWeight: 900, fontSize: 14, textAlign: "left" }}>📋 Escolher da lista <span style={{ fontWeight: 600, fontSize: 12, color: C.cinza }}>— praga, doença, daninha, lavoura, operação…</span></button>
+        ) : (() => {
+          const nomeLista = lista.item ? (lista.item === "__outro" ? String(lista.outro || "").trim() : lista.item) : "";
+          const doGuia = nomeLista ? acharNoGuia(nomeLista) : null;
+          return (
+            <div style={{ background: "#fff", border: `1.5px solid ${C.navy}`, borderRadius: 12, padding: 10, marginTop: 8 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                <b style={{ color: C.navy, fontSize: 13.5, minWidth: 0 }}>📋 {!lista.cat ? "O que você está vendo?" : !lista.item ? `${lista.cat} — qual?` : `${lista.cat} · ${lista.item === "__outro" ? "outro" : lista.item}`}</b>
+                <button onClick={() => setLista(lista.item ? { ...lista, item: null, outro: "" } : lista.cat ? { ...lista, cat: null, mais: false } : null)} style={{ flex: "none", background: "transparent", border: "none", color: C.cinza, fontSize: 12.5, fontWeight: 800 }}>{lista.cat ? "← voltar" : "✕ fechar"}</button>
+              </div>
+              {!lista.cat && <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>{Object.keys(OBS_CATALOGO).map((c) => <button key={c} onClick={() => setLista({ ...lista, cat: c })} style={{ ...{ padding: "9px 10px", borderRadius: 10, fontWeight: 800, fontSize: 13, border: "none", background: false ? C.navy : C.fundo, color: false ? "#fff" : C.navyEscuro }, flex: "1 1 30%" }}>{c}</button>)}</div>}
+              {lista.cat && !lista.item && (
+                <div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    {[...OBS_CATALOGO[lista.cat], ...(lista.mais ? OBS_CATALOGO_MAIS[lista.cat] || [] : [])].filter((i) => !/^Outra/.test(i)).map((i) => <button key={i} onClick={() => setLista({ ...lista, item: i })} style={{ ...{ padding: "9px 10px", borderRadius: 10, fontWeight: 800, fontSize: 13, border: "none", background: false ? C.navy : C.fundo, color: false ? "#fff" : C.navyEscuro }, flex: "1 1 45%" }}>{i}</button>)}
+                    <button onClick={() => setLista({ ...lista, item: "__outro" })} style={{ ...{ padding: "9px 10px", borderRadius: 10, fontWeight: 800, fontSize: 13, border: "none", background: false ? C.navy : C.fundo, color: false ? "#fff" : C.navyEscuro }, flex: "1 1 100%", background: "#fff", boxShadow: `inset 0 0 0 1.5px ${C.navy}` }}>✍️ Outro — escrever o nome</button>
+                  </div>
+                  {(OBS_CATALOGO_MAIS[lista.cat] || []).length > 0 && <button onClick={() => setLista({ ...lista, mais: !lista.mais })} style={{ width: "100%", marginTop: 6, padding: "8px 10px", background: "#fff", color: C.navy, border: `1.5px solid ${C.borda}`, borderRadius: 10, fontWeight: 800, fontSize: 12.5 }}>{lista.mais ? "▴ menos opções" : `▾ mais opções (${OBS_CATALOGO_MAIS[lista.cat].length})`}</button>}
+                </div>
+              )}
+              {lista.cat && lista.item && (
+                <div>
+                  {lista.item === "__outro" && <input value={lista.outro} onChange={(e) => setLista({ ...lista, outro: e.target.value })} placeholder="Qual? Ex.: percevejo-castanho" style={{ marginTop: 0, marginBottom: 6 }} autoFocus />}
+                  {LISTA_COM_PRESSAO.test(lista.cat) && (
+                    <>
+                      <div style={{ fontSize: 11.5, fontWeight: 800, color: C.cinza, marginBottom: 4 }}>Pressão e ação — se quiser (toque de novo para tirar)</div>
+                      <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>{OBS_PRESSOES.map((p) => <button key={p} onClick={() => setLista({ ...lista, pressao: lista.pressao === p ? null : p })} style={{ ...{ padding: "9px 10px", borderRadius: 10, fontWeight: 800, fontSize: 13, border: "none", background: lista.pressao === p ? C.navy : C.fundo, color: lista.pressao === p ? "#fff" : C.navyEscuro }, flex: 1 }}>{p}</button>)}</div>
+                      <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>{OBS_ACOES.map((a) => <button key={a} onClick={() => setLista({ ...lista, acao: lista.acao === a ? null : a })} style={{ ...{ padding: "9px 10px", borderRadius: 10, fontWeight: 800, fontSize: 13, border: "none", background: lista.acao === a ? C.navy : C.fundo, color: lista.acao === a ? "#fff" : C.navyEscuro }, flex: 1, fontSize: 11.5, background: lista.acao === a ? (a === "Ação urgente" ? C.vermelho : C.navy) : C.fundo }}>{a}</button>)}</div>
+                    </>
+                  )}
+                  {doGuia && <button onClick={() => setGuiaAberto(doGuia)} style={{ width: "100%", marginBottom: 6, padding: "7px 10px", background: C.verdeBg, color: C.verdeEscuro, border: "none", borderRadius: 10, fontWeight: 800, fontSize: 12.5 }}>📖 Ver no guia: {doGuia.nome}</button>}
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button onClick={() => guardarLista(false)} disabled={!nomeLista} style={{ flex: 1, padding: 11, background: C.verde, color: "#fff", border: "none", borderRadius: 10, fontWeight: 900, fontSize: 14, opacity: nomeLista ? 1 : 0.5 }}>➤ Guardar</button>
+                    <button onClick={() => guardarLista(true)} disabled={!nomeLista} style={{ flex: 1, padding: 11, background: "#7B1FA2", color: "#fff", border: "none", borderRadius: 10, fontWeight: 900, fontSize: 14, opacity: nomeLista ? 1 : 0.5 }}>🎙 Guardar e falar</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
         <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
           <button onClick={() => setIdentificando(true)} style={{ flex: 1, padding: "8px 10px", background: "#fff", color: C.verdeEscuro, border: `1.5px solid ${C.borda}`, borderRadius: 10, fontWeight: 800, fontSize: 12.5 }}>🔍 Não sei o que é — identificar pela foto</button>
         </div>
@@ -25466,7 +25522,7 @@ function ChatVisita({ fazenda, lavoura, kml, usuario, onFechar, onSalvar }) {
         {d.itens.length > 0 && <div style={{ textAlign: "center", marginTop: 8 }}><button onClick={descartar} style={{ background: "transparent", border: "none", color: C.cinza, fontSize: 12, fontWeight: 700 }}>🗑 descartar esta visita</button></div>}
       </div>
       {identificando && <IdentificarPelaFoto cultura={tAtual ? (((lavoura || []).find((l) => l.talhaoId === tAtual.id) || {}).cultura || tAtual.cultura || "") : ""} onFechar={() => setIdentificando(false)}
-        onEscolher={(it) => { setIdentificando(false); setGuiaAberto(it); setModo("texto"); setTexto((t) => t || it.nome); }} />}
+        onEscolher={(it) => { setIdentificando(false); setGuiaAberto(it); setModo(null); const catDo = { daninha: "🌿 Daninha", praga: "🐛 Praga", doenca: "🦠 Doença", deficiencia: "🧪 Nutrição", inimigo: "🐛 Praga" }[it.tipo] || "🌱 Lavoura"; const igual = [...(OBS_CATALOGO[catDo] || []), ...(OBS_CATALOGO_MAIS[catDo] || [])].find((n) => acharNoGuia(n) === it); setLista({ cat: catDo, item: igual || "__outro", outro: igual ? "" : it.nome, pressao: null, acao: null, mais: false }); }} />}
       {guiaAberto && <ModalGuiaItem item={guiaAberto} usuario={usuario} fazenda={fazenda} naNuvem={!!window.AGROCR_FIREBASE} consultor={!!(usuario && usuario.tipo === "consultoria")} onFechar={() => setGuiaAberto(null)} />}
     </div>
   );
