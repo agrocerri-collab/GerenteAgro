@@ -893,15 +893,23 @@ window.Nuvem = (function () {
     const u = firebase.auth().currentUser;
     if (!u) throw new Error("entre na sua conta para transcrever");
     let audio = audioOriginal;
-    try { audio = await paraWav16k(audioOriginal); } catch (e) { throw new Error("não consegui ler o áudio gravado neste aparelho (" + (e && e.message || e) + ")"); }
+    try { audio = await paraWav16k(audioOriginal); } catch (e) { const er = new Error("não consegui ler o áudio gravado neste aparelho (" + (e && e.message || e) + ")"); er.status = 422; throw er; }
     const token = await u.getIdToken();
-    const r = await fetch("https://southamerica-east1-agrocr-campo.cloudfunctions.net/transcrever", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
-      body: JSON.stringify({ audio, dicas: dicas || [] }),
-    });
+    // sinal fraco no campo: sem tempo-limite o fetch fica pendurado para sempre
+    const ctl = typeof AbortController !== "undefined" ? new AbortController() : null;
+    const relogio = ctl ? setTimeout(() => ctl.abort(), 90000) : null;
+    let r;
+    try {
+      r = await fetch("https://southamerica-east1-agrocr-campo.cloudfunctions.net/transcrever", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+        body: JSON.stringify({ audio, dicas: dicas || [] }),
+        signal: ctl ? ctl.signal : undefined,
+      });
+    } catch (e) { throw new Error(e && e.name === "AbortError" ? "sinal fraco (demorou demais)" : "sem conexão"); }
+    finally { if (relogio) clearTimeout(relogio); }
     const j = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(j.erro || ("falha na transcrição (" + r.status + ")"));
+    if (!r.ok) { const er = new Error(j.erro || ("falha na transcrição (" + r.status + ")")); er.status = r.status; throw er; }
     return j.texto;
   }
   // ---------------- dados da plataforma (versão de venda) ----------------

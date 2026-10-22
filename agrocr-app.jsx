@@ -5957,6 +5957,7 @@ function TelaFazenda({ fazenda, fazendas, grupos, papel, usuario, naNuvem, equip
       )}
 
       {secao === "inicio" && <FaixaAvisos naNuvem={naNuvem} />}
+      {secao === "inicio" && mostrar("visitas") && <AvisoVisitaAndamento fazenda={fazenda} onAbrir={() => { ABRIR_VISITA.fid = fazenda.id; setSecao("visitas"); }} />}
       {secao === "inicio" && (
         <PainelHoje estoque={(() => { try { return calcularEstoque(); } catch (e) { return []; } })()} kml={kml} custos={custos} fazenda={fazenda} apls={apls} lavoura={lavoura} visitas={visitas} notas={notas} chuvas={chuvas} veFinanceiro={veFinanceiro && veCustos}
           irPara={(sec, mod, aba) => { setSecao(sec); setModulo(mod || null); setAbaFin(aba || null); }} />
@@ -6852,7 +6853,7 @@ function AssistenteFazenda({ fazenda, safra, usuario, chuvas, colheitas, combust
       if (nomeForn) {
         const ja = (fornecedores || []).find((f) => f.nome.toLowerCase() === nomeForn || f.nome.toLowerCase().includes(nomeForn) || nomeForn.includes(f.nome.toLowerCase()));
         if (ja) fornecedorId = ja.id;
-        else if (onSalvarFornecedores) { const novo = { id: idNovo(), nome: v.meta.fornecedor, whats: "" }; try { onSalvarFornecedores([...(fornecedores || []), novo]); fornecedorId = novo.id; } catch (e) {} }
+        else if (onSalvarFornecedores) { const novo = { id: idNovo(), nome: v.meta.fornecedor, whats: "", categorias: ["insumo"] }; try { onSalvarFornecedores([...(fornecedores || []), novo]); fornecedorId = novo.id; } catch (e) {} }
       }
       const obs = [v.meta.numeroNota ? `NF ${v.meta.numeroNota}` : "", v.meta.fornecedor].filter(Boolean).join(" · ");
       const novos = escolhidos.map((x) => ({ id: idNovo(), produto: String(x.produto || x.descricao).trim(), categoria: x.categoria || "Outro", qtd: num(x.qtd), unidade: x.unidade || "un", preco: num(x.preco) || null, data: v.meta.data, ciclo: v.ciclo || "Safra", cultura: v.cultura || "", fornecedorId, origem: "compra", barter: false, pagamento: "", vencimento: "", obs, quem }));
@@ -9697,7 +9698,7 @@ function SecaoProgramacao({ prog, consultor, registrar, fornecedores, onSalvarFo
         fornecedorId = ja.id;
         const falta = Object.keys(extra).filter((k) => !ja[k]);
         if (falta.length && onSalvarFornecedores) onSalvarFornecedores((fornecedores || []).map((f) => (f.id === ja.id ? { ...f, ...Object.fromEntries(falta.map((k) => [k, extra[k]])) } : f)));
-      } else if (onSalvarFornecedores) { const nf = { id: idNovo(), nome: cabP.fornecedor, whats: "", ...extra }; fornecedorId = nf.id; onSalvarFornecedores([...(fornecedores || []), nf]); }
+      } else if (onSalvarFornecedores) { const nf = { id: idNovo(), nome: cabP.fornecedor, whats: "", categorias: ["insumo"], ...extra }; fornecedorId = nf.id; onSalvarFornecedores([...(fornecedores || []), nf]); }
     }
     if (cabP && cabP.barter && cabP.sacas > 0 && lancarBarterJunto && onLancarBarter && !importarComoAntigo) {
       onLancarBarter({ descricao: `Barter ${cabP.fornecedor || "fornecedor"}${cabP.numero ? ` — pedido ${cabP.numero}` : ""}`, categoria: "Barter (pacote)", ehBarter: true, sacas: cabP.sacas, precoSaca: cabP.precoSaca > 0 ? cabP.precoSaca : null, valorTotal: null,
@@ -10259,6 +10260,7 @@ function ModalPedido({ linhas, prog, fornecedores, onSalvarFornecedores, fazenda
   const [cadastrando, setCadastrando] = useState((fornecedores || []).length === 0);
   const [nomeForn, setNomeForn] = useState("");
   const [zap, setZap] = useState("");
+  const [catsForn, setCatsForn] = useState(["insumo"]);
   const [itens, setItens] = useState({});   // chave produto||ciclo -> {marcado, qtd}
   const fornecedor = (fornecedores || []).find((f) => f.id === fornecedorId);
 
@@ -10308,8 +10310,9 @@ function ModalPedido({ linhas, prog, fornecedores, onSalvarFornecedores, fazenda
           <input value={nomeForn} onChange={(e) => setNomeForn(e.target.value)} placeholder="Ex.: Agro Insumos Gurupi" />
           <label>WhatsApp (com DDD)</label>
           <input inputMode="tel" value={zap} onChange={(e) => setZap(e.target.value)} placeholder="Ex.: 63 99999-9999" />
+          <EscolherCategoriasForn valor={catsForn} onMudar={setCatsForn} />
           <button disabled={!nomeForn.trim() || String(zap).replace(/\D/g, "").length < 10} onClick={() => {
-            const novo = { id: idNovo(), nome: nomeForn.trim(), whats: String(zap).replace(/\D/g, "") };
+            const novo = { id: idNovo(), nome: nomeForn.trim(), whats: String(zap).replace(/\D/g, ""), categorias: catsForn };
             onSalvarFornecedores([...(fornecedores || []), novo]);
             setFornecedorId(novo.id); setNomeForn(""); setZap(""); setCadastrando(false);
           }} style={{ width: "100%", padding: 10, marginTop: 8, background: C.verde, color: "#fff", border: "none", borderRadius: 10, fontWeight: 800, fontSize: 13 }}>
@@ -20721,6 +20724,24 @@ function PessoasPonto({ cfg, funcionarios, onSalvar }) {
 // não deixa abrir várias conversas sozinho). As empresas são o mesmo cadastro de fornecedores,
 // com categorias. Cada máquina guarda os links dos seus manuais (peças, operador).
 const TIPOS_COTACAO = [["diesel", "⛽", "Diesel"], ["oleo", "🛢", "Óleo e lubrificante"], ["peca", "⚙️", "Peças"], ["pneu", "🛞", "Pneus"], ["servico", "🔧", "Oficina / serviço"], ["insumo", "🌱", "Insumos"], ["outro", "📦", "Outros"]];
+// Categoria do FORNECEDOR (o que a empresa é): a cotação manda só para quem é da categoria certa
+const CATEGORIAS_FORNECEDOR = [["insumo", "🌱", "Revenda de insumos"], ["posto", "⛽", "Posto de combustível"], ["trr", "🚛", "TRR (diesel a granel)"], ["peca", "⚙️", "Peças"], ["oficina", "🔧", "Oficina / manutenção"], ["pneu", "🛞", "Pneus"], ["oleo", "🛢", "Lubrificantes"], ["semente", "🌾", "Sementes"], ["outro", "📦", "Outros"]];
+// categorias gravadas antes com os tipos da cotação (diesel, serviço) → as de agora
+const categoriasDoForn = (f) => [...new Set(((f && f.categorias) || []).map((c) => ({ diesel: "posto", servico: "oficina" })[c] || c))];
+const CATS_DA_COTACAO = { diesel: ["posto", "trr"], oleo: ["oleo", "peca", "posto", "trr"], peca: ["peca"], pneu: ["pneu"], servico: ["oficina"], insumo: ["insumo", "semente"], outro: ["outro"] };
+const iconesDoForn = (f) => categoriasDoForn(f).map((c) => (CATEGORIAS_FORNECEDOR.find((x) => x[0] === c) || [])[1]).filter(Boolean).join(" ");
+// botões de categoria (cadastro de fornecedor em qualquer tela)
+function EscolherCategoriasForn({ valor, onMudar, rotulo }) {
+  const v = valor || [];
+  return (
+    <>
+      <label>{rotulo || "Categoria — o que a empresa é (pode marcar mais de uma)"}</label>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+        {CATEGORIAS_FORNECEDOR.map(([id, e, r]) => <button key={id} type="button" onClick={() => onMudar(v.includes(id) ? v.filter((x) => x !== id) : [...v, id])} style={{ padding: "7px 9px", borderRadius: 10, fontWeight: 800, fontSize: 12, border: "none", background: v.includes(id) ? C.verde : "#fff", color: v.includes(id) ? "#fff" : C.navyEscuro, boxShadow: v.includes(id) ? "none" : `inset 0 0 0 1.5px ${C.borda}` }}>{e} {r}</button>)}
+      </div>
+    </>
+  );
+}
 const UNIDADES_COTACAO = ["un", "L", "kg", "jogo", "m", "cx", "galão", "balde"];
 const zapLimpo = (n) => { const d = String(n || "").replace(/\D/g, "").replace(/^0+/, ""); return d ? (d.length <= 11 ? "55" + d : d) : ""; };
 const nomeMaquina = (m) => (m ? [m.nome, m.marca, m.ano].filter(Boolean).join(" · ") : "");
@@ -20804,14 +20825,15 @@ function NovaCotacao({ fazenda, quem, maquinas, fornecedores, onCriar, irEmpresa
   const [prazo, setPrazo] = useState("");
   const [obs, setObs] = useState("");
   const [sel, setSel] = useState({});
-  const [todas, setTodas] = useState(false);
+  const [filtro, setFiltro] = useState(CATS_DA_COTACAO.peca);
   const maq = (maquinas || []).find((m) => m.id === maqId) || null;
   const comZap = (fornecedores || []).filter((f) => zapLimpo(f.whats));
-  const daCategoria = comZap.filter((f) => todas || !(f.categorias || []).length || (f.categorias || []).includes(tipo));
+  const daCategoria = comZap.filter((f) => categoriasDoForn(f).some((c) => filtro.includes(c)));
+  const semCategoria = comZap.filter((f) => !categoriasDoForn(f).length);
   const mudaItem = (i, campo, v) => setItens(itens.map((x, j) => (j === i ? { ...x, [campo]: v } : x)));
-  const trocaTipo = (t) => { setTipo(t); if (t === "diesel" && itens.length === 1 && !itens[0].descricao) setItens([{ descricao: "Diesel S10", codigo: "", qtd: "", unidade: "L" }]); };
+  const trocaTipo = (t) => { setTipo(t); setFiltro(CATS_DA_COTACAO[t] || [t]); if (t === "diesel" && itens.length === 1 && !itens[0].descricao) setItens([{ descricao: "Diesel S10", codigo: "", qtd: "", unidade: "L" }]); };
   const prontos = itens.filter((i) => i.descricao.trim());
-  const escolhidas = daCategoria.filter((f) => sel[f.id]);
+  const escolhidas = comZap.filter((f) => sel[f.id]);
   const rascunho = { tipo, maquina: maq ? nomeMaquina(maq) : "", maquinaId: maqId || null, chassi: chassi.trim(), itens: prontos.map((i) => ({ ...i, descricao: i.descricao.trim(), codigo: i.codigo.trim() })), entrega, prazo, obs: obs.trim() };
   const ok = prontos.length > 0 && escolhidas.length > 0;
   return (
@@ -20860,21 +20882,33 @@ function NovaCotacao({ fazenda, quem, maquinas, fornecedores, onCriar, irEmpresa
       <label>Observação (opcional)</label>
       <input value={obs} onChange={(e) => setObs(e.target.value)} placeholder="Ex.: pagamento em 30 dias; marca original ou similar" />
       <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <span>Mandar para quais empresas</span>
-        <span style={{ display: "flex", gap: 6 }}>
-          {daCategoria.length > 0 && <button onClick={() => setSel(Object.fromEntries(daCategoria.map((f) => [f.id, !escolhidas.length || escolhidas.length < daCategoria.length])))} style={{ background: "transparent", border: "none", color: C.navy, fontWeight: 800, fontSize: 12, textDecoration: "underline" }}>{escolhidas.length === daCategoria.length ? "desmarcar" : "marcar todas"}</button>}
-          <button onClick={() => setTodas(!todas)} style={{ background: "transparent", border: "none", color: C.navy, fontWeight: 800, fontSize: 12, textDecoration: "underline" }}>{todas ? "só desta categoria" : "ver todas"}</button>
-        </span>
+        <span>Mandar para quais empresas{escolhidas.length ? ` · ${escolhidas.length} marcada${escolhidas.length === 1 ? "" : "s"}` : ""}</span>
+        {daCategoria.length > 0 && (() => { const todasMarcadas = daCategoria.every((f) => sel[f.id]); return <button onClick={() => setSel({ ...sel, ...Object.fromEntries(daCategoria.map((f) => [f.id, !todasMarcadas])) })} style={{ background: "transparent", border: "none", color: C.navy, fontWeight: 800, fontSize: 12, textDecoration: "underline" }}>{todasMarcadas ? "desmarcar estas" : `marcar as ${daCategoria.length}`}</button>; })()}
       </label>
+      <div style={{ fontSize: 11.5, color: C.cinza, marginBottom: 4 }}>Mostrando só as empresas destas categorias — toque para mudar:</div>
+      <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 8 }}>
+        {CATEGORIAS_FORNECEDOR.map(([id, e, r]) => { const n = comZap.filter((f) => categoriasDoForn(f).includes(id)).length; if (!n && !filtro.includes(id)) return null; const on = filtro.includes(id); return <button key={id} onClick={() => setFiltro(on ? filtro.filter((x) => x !== id) : [...filtro, id])} style={{ padding: "6px 9px", borderRadius: 999, fontWeight: 800, fontSize: 12, border: "none", background: on ? C.navy : C.fundo, color: on ? "#fff" : C.navyEscuro }}>{e} {r} ({n})</button>; })}
+      </div>
       {comZap.length === 0 && <div style={{ background: C.amareloBg, borderRadius: 10, padding: "8px 12px", fontSize: 13 }}>Nenhuma empresa com WhatsApp cadastrada. <button onClick={irEmpresas} style={{ background: "transparent", border: "none", color: C.navy, fontWeight: 800, textDecoration: "underline", padding: 0 }}>Cadastrar empresas</button></div>}
-      {comZap.length > 0 && daCategoria.length === 0 && <div style={{ fontSize: 12.5, color: C.cinza }}>Nenhuma empresa marcada com esta categoria — toque em "ver todas" ou ajuste em 🏪 Empresas.</div>}
+      {comZap.length > 0 && daCategoria.length === 0 && <div style={{ background: C.amareloBg, borderRadius: 10, padding: "8px 12px", fontSize: 12.5, marginBottom: 6 }}>Nenhuma empresa cadastrada nesta categoria. <button onClick={irEmpresas} style={{ background: "transparent", border: "none", color: C.navy, fontWeight: 800, textDecoration: "underline", padding: 0 }}>Cadastrar ou marcar a categoria</button></div>}
       {daCategoria.map((f) => (
         <label key={f.id} style={{ display: "flex", alignItems: "center", gap: 8, background: sel[f.id] ? C.verdeBg : "#fff", border: `1.5px solid ${sel[f.id] ? C.verde : C.borda}`, borderRadius: 10, padding: "8px 10px", margin: "0 0 6px", cursor: "pointer", fontWeight: 700 }}>
           <input type="checkbox" checked={!!sel[f.id]} onChange={(e) => setSel({ ...sel, [f.id]: e.target.checked })} style={{ width: 20, height: 20, margin: 0 }} />
           <span style={{ flex: 1 }}>{f.nome}{f.cidade ? <span style={{ fontWeight: 500, color: C.cinza }}> · {f.cidade}</span> : null}</span>
-          <span style={{ fontSize: 11.5, color: C.cinza }}>{(f.categorias || []).map((c) => (TIPOS_COTACAO.find((x) => x[0] === c) || [])[1]).join(" ")}</span>
+          <span style={{ fontSize: 11.5, color: C.cinza }}>{iconesDoForn(f)}</span>
         </label>
       ))}
+      {semCategoria.length > 0 && (
+        <details style={{ marginTop: 4 }}>
+          <summary style={{ fontSize: 12.5, fontWeight: 800, color: C.cinza, cursor: "pointer" }}>Empresas sem categoria ({semCategoria.length}) — marque a categoria em 🏪 Empresas para elas aparecerem no lugar certo</summary>
+          {semCategoria.map((f) => (
+            <label key={f.id} style={{ display: "flex", alignItems: "center", gap: 8, background: sel[f.id] ? C.verdeBg : "#fff", border: `1.5px solid ${sel[f.id] ? C.verde : C.borda}`, borderRadius: 10, padding: "7px 10px", margin: "6px 0 0", cursor: "pointer", fontWeight: 700 }}>
+              <input type="checkbox" checked={!!sel[f.id]} onChange={(e) => setSel({ ...sel, [f.id]: e.target.checked })} style={{ width: 20, height: 20, margin: 0 }} />
+              <span style={{ flex: 1 }}>{f.nome}{f.cidade ? <span style={{ fontWeight: 500, color: C.cinza }}> · {f.cidade}</span> : null}</span>
+            </label>
+          ))}
+        </details>
+      )}
       {prontos.length > 0 && (
         <details style={{ marginTop: 8 }}>
           <summary style={{ fontSize: 12.5, fontWeight: 800, color: C.navy, cursor: "pointer" }}>Ver a mensagem</summary>
@@ -20926,18 +20960,19 @@ function DetalheCotacao({ cot, fazenda, quem, podeApagar, onVoltar, onSalvar, on
 function EmpresasCotacao({ fornecedores, onSalvar }) {
   const [form, setForm] = useState(null);   // {id?, nome, whats, cidade, categorias}
   const [busca, setBusca] = useState("");
-  const lista = (fornecedores || []).filter((f) => !busca || semAcento(f.nome || "").toLowerCase().includes(semAcento(busca).toLowerCase())).slice().sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || "")));
+  const [cat, setCat] = useState("");      // "" todas · id da categoria · "sem"
+  const contaCat = (id) => (fornecedores || []).filter((f) => (id === "sem" ? !categoriasDoForn(f).length : categoriasDoForn(f).includes(id))).length;
+  const lista = (fornecedores || []).filter((f) => !busca || semAcento(f.nome || "").toLowerCase().includes(semAcento(busca).toLowerCase())).filter((f) => !cat || (cat === "sem" ? !categoriasDoForn(f).length : categoriasDoForn(f).includes(cat))).slice().sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || "")));
   const salvar = () => {
     const limpo = { nome: form.nome.trim(), whats: String(form.whats || "").replace(/\D/g, ""), cidade: (form.cidade || "").trim(), categorias: form.categorias || [] };
     if (form.id) onSalvar((fornecedores || []).map((f) => (f.id === form.id ? { ...f, ...limpo } : f)));
     else onSalvar([...(fornecedores || []), { id: idNovo(), ...limpo }]);
     setForm(null);
   };
-  const toggleCat = (c) => setForm({ ...form, categorias: (form.categorias || []).includes(c) ? form.categorias.filter((x) => x !== c) : [...(form.categorias || []), c] });
   return (
     <div>
-      <div style={{ fontSize: 12.5, color: C.cinza, marginBottom: 8 }}>Mesmo cadastro dos fornecedores de insumos. Marque o que cada empresa vende para ela aparecer na cotação certa.</div>
-      {!form && <button onClick={() => setForm({ nome: "", whats: "", cidade: "", categorias: [] })} style={{ width: "100%", padding: 12, background: C.navy, color: "#fff", border: "none", borderRadius: 12, fontWeight: 800, fontSize: 14, marginBottom: 10 }}>➕ Cadastrar empresa</button>}
+      <div style={{ fontSize: 12.5, color: C.cinza, marginBottom: 8 }}>Mesmo cadastro dos fornecedores de insumos. Cada empresa com a sua categoria — revenda, posto, TRR, peças, oficina… — e a cotação manda só para as da categoria certa.</div>
+      {!form && <button onClick={() => setForm({ nome: "", whats: "", cidade: "", categorias: cat && cat !== "sem" ? [cat] : [] })} style={{ width: "100%", padding: 12, background: C.navy, color: "#fff", border: "none", borderRadius: 12, fontWeight: 800, fontSize: 14, marginBottom: 10 }}>➕ Cadastrar empresa</button>}
       {form && (
         <div style={{ background: "#fff", border: `1.5px solid ${C.navy}`, borderRadius: 12, padding: 12, marginBottom: 10 }}>
           <label style={{ marginTop: 0 }}>Nome da empresa</label>
@@ -20946,24 +20981,28 @@ function EmpresasCotacao({ fornecedores, onSalvar }) {
             <div style={{ flex: 1 }}><label>WhatsApp</label><input inputMode="tel" value={form.whats} onChange={(e) => setForm({ ...form, whats: e.target.value })} placeholder="63 99999-9999" /></div>
             <div style={{ flex: 1 }}><label>Cidade (opcional)</label><input value={form.cidade} onChange={(e) => setForm({ ...form, cidade: e.target.value })} placeholder="Ex.: Palmas" /></div>
           </div>
-          <label>Vende</label>
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-            {TIPOS_COTACAO.map(([id, e, r]) => <button key={id} onClick={() => toggleCat(id)} style={{ padding: "7px 9px", borderRadius: 10, fontWeight: 800, fontSize: 12, border: "none", background: (form.categorias || []).includes(id) ? C.verde : C.fundo, color: (form.categorias || []).includes(id) ? "#fff" : C.navyEscuro }}>{e} {r}</button>)}
-          </div>
+          <EscolherCategoriasForn valor={form.categorias} onMudar={(v) => setForm({ ...form, categorias: v })} />
           <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
             <button onClick={() => setForm(null)} style={{ flex: 1, padding: 10, background: "#fff", border: `1.5px solid ${C.borda}`, borderRadius: 10, fontWeight: 800, color: C.navy }}>Cancelar</button>
             <button disabled={!form.nome.trim()} onClick={salvar} style={{ flex: 2, padding: 10, background: C.verde, color: "#fff", border: "none", borderRadius: 10, fontWeight: 800, opacity: form.nome.trim() ? 1 : 0.5 }}>Salvar</button>
           </div>
         </div>
       )}
+      {(fornecedores || []).length > 0 && (
+        <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 8 }}>
+          <button onClick={() => setCat("")} style={{ padding: "6px 9px", borderRadius: 999, fontWeight: 800, fontSize: 12, border: "none", background: !cat ? C.navy : C.fundo, color: !cat ? "#fff" : C.navyEscuro }}>Todas ({(fornecedores || []).length})</button>
+          {CATEGORIAS_FORNECEDOR.map(([id, e, r]) => { const n = contaCat(id); return n ? <button key={id} onClick={() => setCat(id)} style={{ padding: "6px 9px", borderRadius: 999, fontWeight: 800, fontSize: 12, border: "none", background: cat === id ? C.navy : C.fundo, color: cat === id ? "#fff" : C.navyEscuro }}>{e} {r} ({n})</button> : null; })}
+          {contaCat("sem") > 0 && <button onClick={() => setCat("sem")} style={{ padding: "6px 9px", borderRadius: 999, fontWeight: 800, fontSize: 12, border: "none", background: cat === "sem" ? C.vermelho : C.amareloBg, color: cat === "sem" ? "#fff" : "#7A5C00" }}>❓ Sem categoria ({contaCat("sem")})</button>}
+        </div>
+      )}
       {(fornecedores || []).length > 6 && <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="🔎 Buscar empresa" style={{ marginBottom: 8 }} />}
       {lista.map((f) => (
-        <button key={f.id} onClick={() => setForm({ id: f.id, nome: f.nome || "", whats: f.whats || "", cidade: f.cidade || "", categorias: f.categorias || [] })} style={{ width: "100%", textAlign: "left", background: "#fff", border: `1.5px solid ${C.borda}`, borderRadius: 12, padding: "9px 12px", marginBottom: 6, display: "flex", alignItems: "center", gap: 8 }}>
+        <button key={f.id} onClick={() => setForm({ id: f.id, nome: f.nome || "", whats: f.whats || "", cidade: f.cidade || "", categorias: categoriasDoForn(f) })} style={{ width: "100%", textAlign: "left", background: "#fff", border: `1.5px solid ${C.borda}`, borderRadius: 12, padding: "9px 12px", marginBottom: 6, display: "flex", alignItems: "center", gap: 8 }}>
           <span style={{ flex: 1, minWidth: 0 }}>
             <b style={{ color: C.navy }}>{f.nome}</b>{f.cidade ? <span style={{ color: C.cinza, fontSize: 12.5 }}> · {f.cidade}</span> : null}
             <span style={{ display: "block", fontSize: 12, color: zapLimpo(f.whats) ? C.cinza : C.vermelho }}>{zapLimpo(f.whats) ? `💬 ${f.whats}` : "sem WhatsApp — toque para completar"}</span>
           </span>
-          <span style={{ fontSize: 13 }}>{(f.categorias || []).map((c) => (TIPOS_COTACAO.find((x) => x[0] === c) || [])[1]).join(" ")}</span>
+          <span style={{ fontSize: 13 }}>{iconesDoForn(f) || <span style={{ fontSize: 11.5, color: "#7A5C00", fontWeight: 800 }}>sem categoria</span>}</span>
         </button>
       ))}
     </div>
@@ -24799,7 +24838,8 @@ function AudiosPendentesVisita({ fazenda, lavoura, visitas, onSalvar }) {
         for (const k of chaves) {
           const d = await idbGet(k); if (!d || !Array.isArray(d.obs)) { await idbDel(k); continue; }
           const visita = (visitasRef.current || []).find((v) => v.id === d.visitaId);
-          if (!visita) { if (visitasRef.current && visitasRef.current.length) await idbDel(k); continue; }   // visita apagada: solta o áudio
+          // visita não está na lista (outra safra, lista ainda carregando): só solta o áudio depois de 60 dias
+          if (!visita) { if (visitasRef.current && visitasRef.current.length && d.em && Date.now() - new Date(d.em).getTime() > 60 * 86400000) await idbDel(k); continue; }
           const talhoes = fazenda.talhoes || [];
           let restantes = d.obs.slice(); let feitos = 0;
           for (const p of d.obs) {
@@ -24829,6 +24869,44 @@ function AudiosPendentesVisita({ fazenda, lavoura, visitas, onSalvar }) {
     })();
     return () => { vivo = false; };
   }, [tick, fazenda.id, (visitas || []).length]);
+  // visita EM ANDAMENTO com a tela fechada: o áudio guardado vira texto quando o sinal volta
+  const ocupadoRasc = useRef(false);
+  useEffect(() => {
+    if (ocupadoRasc.current || !navigator.onLine || !window.Nuvem || !Nuvem.transcreverAudio || window.__agrocrVisitaAberta === fazenda.id) return;
+    ocupadoRasc.current = true;
+    (async () => {
+      let feitos = 0;
+      try {
+        const r = await carregarRascunhoVisita(fazenda.id);
+        if (!r) return;
+        const agora = Date.now();
+        const pend = r.itens.filter((it) => audioEsperando(it) && !(it.proxima > agora));
+        for (const p of pend) {
+          if (window.__agrocrVisitaAberta === fazenda.id || !navigator.onLine) break;
+          setEstado({ andamento: true, feitos, total: pend.length });
+          let patch, parar = false;
+          try {
+            const audio = await idbGet(kVisitaAudio(fazenda.id, p.id));
+            if (!audio) patch = { estado: "naoEntendeu", erro: "o áudio não está mais neste aparelho" };
+            else { const txt = String((await Nuvem.transcreverAudio(audio, dicasVozDe(fazenda.talhoes || []))) || "").trim(); patch = { texto: txt, estado: "pronto", erro: null, aviso: null, proxima: null }; feitos++; }
+          } catch (e) {
+            const m = String((e && e.message) || "falha");
+            if (falhaDefinitiva(e)) patch = { estado: "naoEntendeu", erro: m };
+            else { const n = (p.tentativas || 0) + 1; patch = { tentativas: n, proxima: Date.now() + esperaDaTentativa(n), aviso: m }; parar = true; }
+          }
+          if (window.__agrocrVisitaAberta === fazenda.id) break;   // a tela abriu no meio: ela mesma refaz
+          const atual = await carregarRascunhoVisita(fazenda.id);
+          if (!atual) break;
+          await idbSet(kVisitaRascunho(fazenda.id), { ...atual, itens: atual.itens.map((it) => (it.id === p.id ? { ...it, ...patch } : it)) });
+          avisarVisitaMudou();
+          if (parar) break;
+        }
+      } catch (e) {} finally {
+        ocupadoRasc.current = false;
+        if (feitos) { setEstado({ andamentoPronto: true, feitos }); setTimeout(() => setEstado(null), 8000); } else setEstado((x) => (x && x.andamento ? null : x));
+      }
+    })();
+  }, [tick, fazenda.id]);
   // resumo em texto corrido pela IA: visita finalizada com resumoPendente e sem áudio esperando.
   // Até 3 tentativas por sessão; se não der, fica o resumo montado pelo app mesmo.
   const tentativasResumo = useRef({});
@@ -24859,59 +24937,235 @@ function AudiosPendentesVisita({ fazenda, lavoura, visitas, onSalvar }) {
   if (!estado) return null;
   return (
     <div className="nao-imprimir" style={{ position: "fixed", left: 10, right: 10, bottom: 86, zIndex: 55, background: estado.erro ? "#FDF0ED" : C.verdeBg, color: estado.erro ? C.vermelho : C.verdeEscuro, border: `1.5px solid ${estado.erro ? C.vermelho : C.verde}`, borderRadius: 12, padding: "8px 12px", fontSize: 12.5, fontWeight: 700, boxShadow: "0 4px 14px rgba(0,0,0,.15)" }}>
-      {estado.resumo ? "✍️ Escrevendo o resumo da visita de " + fmtD(estado.visita) + " com IA…" : estado.resumoPronto ? "✓ Resumo da visita de " + fmtD(estado.visita) + " pronto — uma escrita só para a fazenda inteira." : estado.erro ? `⚠️ Áudio da visita de ${fmtD(estado.visita)} não transcreveu (${estado.erro}). Tento de novo em 1 minuto.`
+      {estado.andamento ? `🎙 Visita em andamento: áudio ${estado.feitos + 1} de ${estado.total} virando texto…` : estado.andamentoPronto ? `✓ ${estado.feitos} áudio${estado.feitos === 1 ? "" : "s"} da visita em andamento ${estado.feitos === 1 ? "virou" : "viraram"} texto — abra a visita para ver o pré-relatório.` : estado.resumo ? "✍️ Escrevendo o resumo da visita de " + fmtD(estado.visita) + " com IA…" : estado.resumoPronto ? "✓ Resumo da visita de " + fmtD(estado.visita) + " pronto — uma escrita só para a fazenda inteira." : estado.erro ? `⚠️ Áudio da visita de ${fmtD(estado.visita)} ainda não virou texto (${estado.erro}). Fica guardado — tento de novo em 1 minuto.`
         : estado.pronto ? `✓ Visita de ${fmtD(estado.visita)}: ${estado.feitos} áudio${estado.feitos === 1 ? "" : "s"} transcrito${estado.feitos === 1 ? "" : "s"} e acrescentado${estado.feitos === 1 ? "" : "s"} ao relatório.`
         : `🎙 Transcrevendo áudios da visita de ${fmtD(estado.visita)}… (${estado.feitos + 1} de ${estado.total})`}
     </div>
   );
 }
+// =========================== VISITA DE CAMPO (em andamento) ===========================
+// A visita fica guardada NO APARELHO do começo ao fim (IndexedDB "visita:{fazenda}"): sair do app,
+// fechar a tela ou o celular desligar não perde nada — ela só some ao Finalizar ou Descartar.
+// Cada coisa lançada é um item do talhão: 🎙 fala (áudio), 📷 foto com comentário ou ✍️ texto.
+// O áudio vai para uma chave própria ("vaudio:{fazenda}:{item}") assim que a gravação para. Sem sinal
+// ele espera: falha de rede NÃO é erro — o app tenta de novo sozinho, com a tela aberta ou fechada.
+// Depois do campo vem o pré-relatório, um por talhão; os talhões na mesma situação são unidos num resumo só.
+const kVisitaRascunho = (fid) => "visita:" + fid;
+const kVisitaAudio = (fid, id) => `vaudio:${fid}:${id}`;
+const ABRIR_VISITA = { fid: null };   // "Continuar visita" do início: a seção Visitas já abre nela
+const avisarVisitaMudou = () => { try { window.dispatchEvent(new Event("agrocr-visita")); } catch (e) {} };
+// transcrição: só 400/413/422 são definitivos (áudio que não dá para ler); o resto (sem sinal, servidor fora) espera
+const falhaDefinitiva = (e) => [400, 413, 422].includes(e && e.status);
+const esperaDaTentativa = (n) => Math.min(5 * 60000, 20000 * Math.pow(2, Math.max(0, (n || 1) - 1)));
+const grupoDoItem = (it) => (it && it.talhaoNome) || "Geral";
+const audioEsperando = (it) => it.tipo === "audio" && it.estado === "esperando";
+// linha do item no pré-relatório, no relatório e no material da IA
+function linhaItemVisita(it) {
+  const t = String((it && it.texto) || "").trim();
+  if (it.tipo === "audio") return t ? `🎙 ${t}` : it.estado === "naoEntendeu" ? "🎙 (áudio que não deu para entender)" : "🎙 (áudio ainda não virou texto)";
+  if (it.tipo === "foto") return `📷 ${t || "foto"}`;
+  return `✍️ ${t}`;
+}
+// rascunho antigo (observações por categoria) → itens novos; o áudio continua junto até ser guardado à parte
+function migrarRascunhoVisita(d) {
+  if (!d) return null;
+  if (d.v === 2) return { ...d, itens: d.itens || [], grupos: d.grupos || [] };
+  const itens = (d.obs || []).map((o) => {
+    const base = { id: o.id || idNovo(), hora: o.hora || "", talhaoId: o.talhaoId || null, talhaoNome: o.talhaoNome || null, parteNome: o.parteNome || null };
+    if (o.pendente && o.audioB64) return { ...base, tipo: "audio", texto: "", estado: "esperando", tentativas: 0, audioB64: o.audioB64, fotos: [] };
+    const fotos = fotosDaObs(o);
+    const cat = String(o.cat || "").replace(/^\S+\s*/, "");
+    const txt = `${cat && !/Anota/.test(cat) ? cat + ": " : ""}${o.item || ""}` + (o.pressao ? ` — pressão ${o.pressao}` : "") + (o.acao ? ` — ${String(o.acao).toLowerCase()}` : "") + (o.nota ? ` (${o.nota})` : "");
+    return { ...base, tipo: fotos.length ? "foto" : "texto", texto: txt.trim(), fotos };
+  });
+  return { v: 2, inicio: d.em || new Date().toISOString(), etapa: "campo", talhaoAtual: d.talhaoAtual || null, itens, grupos: [] };
+}
+// lê o rascunho deste aparelho (migra o antigo e tira os áudios de dentro dele)
+async function carregarRascunhoVisita(fid) {
+  const r = migrarRascunhoVisita(await idbGet(kVisitaRascunho(fid)));
+  if (!r) return null;
+  if (r.itens.some((it) => it.audioB64)) {
+    for (const it of r.itens) if (it.audioB64) { if (await idbSet(kVisitaAudio(fid, it.id), it.audioB64)) delete it.audioB64; }
+    await idbSet(kVisitaRascunho(fid), r);
+  }
+  return r;
+}
+// grupos do pré-relatório: cada talhão (ou parte) em UM grupo; os que ninguém uniu ficam sozinhos
+function gruposDaVisita(itens, grupos) {
+  const ordem = []; for (const it of itens || []) { const k = grupoDoItem(it); if (!ordem.includes(k)) ordem.push(k); }
+  const usados = new Set(); const out = [];
+  for (const g of grupos || []) {
+    const ks = (g.talhoes || []).filter((k) => ordem.includes(k) && !usados.has(k));
+    if (!ks.length) continue;
+    ks.forEach((k) => usados.add(k));
+    out.push({ ...g, talhoes: ks.sort((a, b) => ordem.indexOf(a) - ordem.indexOf(b)) });
+  }
+  for (const k of ordem) if (!usados.has(k)) out.push({ id: "g:" + k, talhoes: [k], resumo: "" });
+  return out.sort((a, b) => ordem.indexOf(a.talhoes[0]) - ordem.indexOf(b.talhoes[0]));
+}
+const itensDoGrupo = (itens, g) => (itens || []).filter((it) => g.talhoes.includes(grupoDoItem(it)));
+function tituloDoGrupo(g, itens, talhoes, lavoura) {
+  if (g.talhoes.length > 1) return "Talhões " + listarNomes(g.talhoes);
+  if (g.talhoes[0] === "Geral") return "Geral (fazenda)";
+  const tid = (itensDoGrupo(itens, g).find((it) => it.talhaoId) || {}).talhaoId;
+  const t = (talhoes || []).find((x) => x.id === tid);
+  return g.talhoes[0] + (t ? " — " + contextoDoTalhao(t, lavoura) : "");
+}
+// rascunho → visita finalizada (relatório: talhões visitados + uma seção por grupo)
+function montarVisitaFinal(itens, grupos, talhoes, lavoura) {
+  const prontos = (itens || []).filter((it) => !(it.tipo === "audio" && !String(it.texto || "").trim()));
+  const gs = gruposDaVisita(prontos, grupos);
+  const idsT = []; for (const it of prontos) if (it.talhaoId && !idsT.includes(it.talhaoId)) idsT.push(it.talhaoId);
+  const linhasT = idsT.map((id) => { const t = (talhoes || []).find((x) => x.id === id); return t ? `• ${t.nome} — ${contextoDoTalhao(t, lavoura)}` : null; }).filter(Boolean);
+  const secoes = gs.map((g) => {
+    const doGrupo = itensDoGrupo(prontos, g);
+    const resumo = String(g.resumo || "").trim();
+    return { titulo: tituloDoGrupo(g, prontos, talhoes, lavoura), texto: resumo || doGrupo.map((it) => "• " + linhaItemVisita(it)).join("\n"), fotos: doGrupo.flatMap((it) => it.fotos || []).slice(0, 12), talhoes: g.talhoes.slice(), porIA: !!(resumo && g.porIA) };
+  });
+  const CAT = { foto: "📷 Foto", audio: "🎙 Fala", texto: "📝 Anotação" };
+  const obsCampo = prontos.map((it) => ({ id: it.id, hora: it.hora || "", talhaoId: it.talhaoId || null, talhaoNome: it.talhaoNome || null, parteNome: it.parteNome || null,
+    cat: CAT[it.tipo] || "📝 Anotação", item: String(it.texto || "").trim() || "foto", pressao: null, acao: null, nota: null, img: (it.fotos || [])[0] || null, fotos: it.fotos || [] }));
+  return { versao: 2, itens: [...(linhasT.length ? [{ titulo: "Talhões visitados", texto: linhasT.join("\n"), fotos: [] }] : []), ...secoes], obsCampo, grupos: gs.map((g) => ({ talhoes: g.talhoes, porIA: !!(String(g.resumo || "").trim() && g.porIA) })) };
+}
+// A IA escreve o resumo de UM grupo (um talhão, ou vários unidos por estarem na mesma situação)
+async function escreverResumoGrupo(nomes, itens, talhoes, lavoura) {
+  if (!window.Nuvem || !Nuvem.lerNota) throw new Error("sem nuvem");
+  const ids = [...new Set((itens || []).map((it) => it.talhaoId).filter(Boolean))];
+  const ctx = ids.map((id) => { const t = (talhoes || []).find((x) => x.id === id); return t ? `${t.nome}: ${contextoDoTalhao(t, lavoura)}` : null; }).filter(Boolean).join("\n");
+  const material = nomes.map((n) => `${n}:\n` + (itens || []).filter((it) => grupoDoItem(it) === n).map((it) => `- ${it.hora || ""} ${linhaItemVisita(it)}`).join("\n")).join("\n\n");
+  const r = await Nuvem.lerNota({
+    texto: "TALHÕES:\n" + (ctx || "(sem talhão marcado)") + "\n\nO QUE O AGRÔNOMO FALOU (🎙), ESCREVEU (✍️) E COMENTOU NAS FOTOS (📷), POR TALHÃO:\n" + material,
+    modo: "voz",
+    contexto: {
+      descricao: "ATENÇÃO: isto NÃO é uma fala só. É o material de uma visita técnica de campo: falas transcritas automaticamente (podem ter palavras trocadas — interprete pelo SOM: 'capinha amargoso' = capim-amargoso, 'buba' = buva, 'mancha alva' = mancha-alvo), anotações e comentários de fotos. " +
+        "Escreva o RESUMO deste trecho da visita para mandar ao produtor, em texto corrido, 1 a 3 parágrafos curtos. " +
+        (nomes.length > 1 ? "Os talhões " + listarNomes(nomes) + " foram juntados porque estão na mesma situação: escreva UMA vez só citando os talhões, e aponte diferença entre eles só quando houver. " : "") +
+        "Comece pelo que exige ação (aplicar, urgência), depois o estado da lavoura. Cite os números ditos (DAE, plantas por metro, pressão, notas). Escreva os nomes técnicos certos. " +
+        "Português do Brasil, direto, sem saudação, sem assinatura e sem inventar nada que não esteja no material.",
+      formato: '{"resumo":"texto corrido, com os parágrafos separados por linha em branco"}',
+    },
+  });
+  const s = r && typeof r.resumo === "string" ? r.resumo.trim() : "";
+  if (!s) throw new Error("a IA não devolveu o resumo");
+  return s;
+}
+// item lançado depois que a tela fechou (gravação que terminou no meio do fechamento)
+async function acrescentarNoRascunho(fid, item) {
+  const r = (await carregarRascunhoVisita(fid)) || { v: 2, inicio: new Date().toISOString(), etapa: "campo", talhaoAtual: null, itens: [], grupos: [] };
+  await idbSet(kVisitaRascunho(fid), { ...r, itens: [...r.itens, item] });
+  avisarVisitaMudou();
+}
+async function apagarAudiosVisita(fid, itens) { for (const it of itens || []) if (it.tipo === "audio") await idbDel(kVisitaAudio(fid, it.id)); }
+// visita em andamento neste aparelho (para o aviso no início e o botão "Continuar")
+function useVisitaEmAndamento(fid) {
+  const [r, setR] = useState(null);
+  useEffect(() => {
+    let vivo = true;
+    const ler = () => idbGet(kVisitaRascunho(fid)).then((x) => { if (vivo) setR(x && (x.itens || x.obs || []).length ? x : null); }).catch(() => {});
+    ler();
+    window.addEventListener("agrocr-visita", ler);
+    return () => { vivo = false; window.removeEventListener("agrocr-visita", ler); };
+  }, [fid]);
+  return r;
+}
+function resumoDoAndamento(r) {
+  const itens = (r && (r.itens || r.obs)) || [];
+  const nT = new Set(itens.map(grupoDoItem)).size;
+  const pend = itens.filter((it) => audioEsperando(it) || (it.pendente && it.audioB64)).length;
+  const ini = r && (r.inicio || r.em) ? new Date(r.inicio || r.em) : null;
+  return `${ini ? `começou ${ini.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })} às ${horaLocal(ini)} · ` : ""}${nT} ${nT === 1 ? "talhão" : "talhões"} · ${itens.length} ${itens.length === 1 ? "item" : "itens"}${pend ? ` · ${pend} áudio${pend === 1 ? "" : "s"} esperando sinal` : ""}`;
+}
+function AvisoVisitaAndamento({ fazenda, onAbrir }) {
+  const r = useVisitaEmAndamento(fazenda.id);
+  if (!r) return null;
+  return (
+    <button className="nao-imprimir" onClick={onAbrir} style={{ width: "100%", textAlign: "left", background: "#F3E5F5", border: "2px solid #7B1FA2", borderRadius: 14, padding: "12px 14px", marginBottom: 12 }}>
+      <div style={{ fontWeight: 900, color: "#4A148C", fontSize: 15 }}>📋 Visita em andamento — toque para continuar</div>
+      <div style={{ fontSize: 12.5, color: C.navyEscuro, marginTop: 2 }}>{resumoDoAndamento(r)} · fica guardada até você finalizar</div>
+    </button>
+  );
+}
+function AudioGuardado({ fid, id }) {
+  const [src, setSrc] = useState(null);
+  if (src === "sem") return <span style={{ fontSize: 11.5, color: C.cinza }}>áudio não está neste aparelho</span>;
+  if (src) return <audio controls autoPlay src={src} style={{ width: "100%", height: 36, marginTop: 4 }} />;
+  return <button onClick={async () => { const d = await idbGet(kVisitaAudio(fid, id)); setSrc(d || "sem"); }} style={{ background: C.fundo, border: "none", borderRadius: 8, padding: "4px 10px", fontWeight: 800, fontSize: 12, color: C.navy }}>▶ ouvir</button>;
+}
+
 function ChatVisita({ fazenda, lavoura, kml, usuario, onFechar, onSalvar }) {
-  const [obs, setObs] = useState([]);            // observações estruturadas
-  // rascunho da visita guardado no aparelho: sair da tela (ou o app fechar) não perde observações nem áudios
-  const kRascunho = "visita:" + fazenda.id;
-  const [rascunhoLido, setRascunhoLido] = useState(false);
-  const [anotacao, setAnotacao] = useState("");   // caixa para escrever, além da fala
-  const [talhaoAtual, setTalhaoAtual] = useState(null);
+  const fid = fazenda.id;
+  const talhoes = fazenda.talhoes || [];
+  const [d, setD] = useState(null);                 // rascunho {v:2, inicio, etapa, talhaoAtual, itens, grupos}
+  const dRef = useRef(null); dRef.current = d;
+  const mudar = (f) => setD((x) => (x ? f(x) : x));
+  const [modo, setModo] = useState(null);           // null · "foto" · "texto"
+  const [texto, setTexto] = useState("");
+  const [fotosPend, setFotosPend] = useState([]);
+  const [msg, setMsg] = useState("");
+  const [gravando, setGravando] = useState(0);      // segundos de gravação (0 = parado)
+  const gravadorRef = useRef(null);
+  const montadoRef = useRef(true);
   const [autoGps, setAutoGps] = useState(true);
   const [gpsNome, setGpsNome] = useState("");
-  const [parteAtual, setParteAtual] = useState("");   // parte (A/B) do talhão, pela divisão no mapa ou escolhida na mão
+  const [parteAtual, setParteAtual] = useState("");
   const parteAtualRef = useRef("");
-  useEffect(() => { setParteAtual(""); parteAtualRef.current = ""; }, [talhaoAtual]);
-  // composer em etapas: categoria -> item -> pressão/ação/nota
-  const [cat, setCat] = useState(null);
-  const [item, setItem] = useState(null);
-  const [outroTexto, setOutroTexto] = useState("");
-  const [maisOpcoes, setMaisOpcoes] = useState(false);   // segunda página de itens da categoria
-  const [pressao, setPressao] = useState("Média");
-  const [acao, setAcao] = useState("Só monitorar");
-  const [nota, setNota] = useState("");
-  const [fotosPend, setFotosPend] = useState([]);   // fotos da observação que está sendo lançada
-  const [identificando, setIdentificando] = useState(false);   // 🔍 identificar pela foto (guia)
-  const [guiaAberto, setGuiaAberto] = useState(null);           // verbete do guia aberto
-  // diário falado: null | "ouvindo" | "gravando" | "processando"
-  const [vozEstado, setVozEstado] = useState(null);
-  const [vozMsg, setVozMsg] = useState("");
-  const gravadorRef = useRef(null);
-  const transcrevendoRef = useRef(false);
-  const talhoes = fazenda.talhoes || [];
-  const hora = () => new Date().toTimeString().slice(0, 5);
+  const [identificando, setIdentificando] = useState(false);
+  const [guiaAberto, setGuiaAberto] = useState(null);
+  const [tick, setTick] = useState(0);
+  const [online, setOnline] = useState(navigator.onLine);
+  const transcrevendo = useRef(null);               // id do áudio que está virando texto
+  const [verTodos, setVerTodos] = useState(false);
+  const [editando, setEditando] = useState(null);   // {id, texto}
+  const [sel, setSel] = useState({});               // grupos marcados para unir
+  const [iaGrupo, setIaGrupo] = useState({});       // id do grupo → "gerando" | mensagem de erro
+  const talhaoAtual = d ? d.talhaoAtual : null;
+  const setTalhaoAtual = (id) => mudar((x) => ({ ...x, talhaoAtual: id }));
 
-  // GPS → talhão: acha o polígono do KML que contém o ponto e usa o
-  // talhão ligado a ele; muda sozinho conforme o técnico anda
-  useTelaAcesa(!!autoGps);
-  const gpsCandidatoRef = useRef(null);   // talhão que o GPS sugeriu na última leitura (precisa repetir para valer)
+  // enquanto a tela está aberta, o processador de fundo não mexe nesta visita
   useEffect(() => {
-    if (!autoGps || !navigator.geolocation || !kml || !kml.poligonos) return;
+    window.__agrocrVisitaAberta = fid; montadoRef.current = true;
+    return () => { montadoRef.current = false; if (window.__agrocrVisitaAberta === fid) window.__agrocrVisitaAberta = null; try { gravadorRef.current && gravadorRef.current.stop(); } catch (e) {} };
+  }, [fid]);
+  // retoma a visita guardada neste aparelho (ou começa uma nova)
+  useEffect(() => {
+    let vivo = true;
+    carregarRascunhoVisita(fid).catch(() => null).then((r) => {
+      if (!vivo) return;
+      if (r && r.itens.length) {
+        const pend = r.itens.filter(audioEsperando).length;
+        setMsg(`↩ Visita retomada: ${r.itens.length} ${r.itens.length === 1 ? "item guardado" : "itens guardados"} neste aparelho${pend ? ` (${pend} áudio${pend === 1 ? "" : "s"} para virar texto)` : ""}.`);
+      }
+      setD(r && r.itens.length ? { ...r, itens: r.itens.map((it) => ({ ...it, proxima: null })) } : { v: 2, inicio: new Date().toISOString(), etapa: "campo", talhaoAtual: null, itens: [], grupos: [] });
+    });
+    return () => { vivo = false; };
+  }, []);
+  // grava no aparelho a cada mudança, e na hora em que o app vai para o fundo
+  const salvarAgora = (v) => {
+    v = v || dRef.current; if (!v) return;
+    if (!v.itens.length) { idbDel(kVisitaRascunho(fid)).then(avisarVisitaMudou); return; }
+    idbSet(kVisitaRascunho(fid), { ...v, em: new Date().toISOString() }).then((ok) => { if (!ok) setMsg("⚠️ Não consegui guardar a visita neste aparelho (sem espaço). Libere espaço ou finalize assim que puder."); avisarVisitaMudou(); });
+  };
+  useEffect(() => { if (!d) return; const id = setTimeout(() => salvarAgora(d), 250); return () => clearTimeout(id); }, [d]);
+  useEffect(() => {
+    const f = () => { if (document.visibilityState === "hidden") salvarAgora(); };
+    document.addEventListener("visibilitychange", f); window.addEventListener("pagehide", f);
+    return () => { document.removeEventListener("visibilitychange", f); window.removeEventListener("pagehide", f); };
+  }, []);
+
+  // GPS → talhão: acha o polígono do KML que contém o ponto; muda sozinho conforme o técnico anda
+  useTelaAcesa(!!autoGps && !!d && d.etapa === "campo");
+  const gpsCandidatoRef = useRef(null);
+  useEffect(() => { setParteAtual(""); parteAtualRef.current = ""; }, [talhaoAtual]);
+  useEffect(() => {
+    if (!autoGps || !navigator.geolocation || !kml || !kml.poligonos || !d || d.etapa !== "campo") return;
     const id = navigator.geolocation.watchPosition((p) => {
       const { longitude: lon, latitude: lat, accuracy: acc } = p.coords;
-      // dentro do talhão, a parte (A/B) pela divisão marcada no mapa — só bem dentro dela
       if (talhaoAtual) {
         const tv = talhoes.find((x) => x.id === talhaoAtual);
         const pp = parteDoPonto(partesDaLavoura((lavoura || []).find((l) => l.talhaoId === talhaoAtual), tv), lon, lat);
         if (pp && pp.nome !== parteAtualRef.current && distanciaAoAnel(lon, lat, pp.anel) >= Math.min(15, Math.max(8, num(acc) || 0))) { parteAtualRef.current = pp.nome; setParteAtual(pp.nome); }
       }
-      // na divisa de dois talhões o GPS oscila: só troca quando está bem dentro do outro,
-      // e confirmado em duas leituras seguidas (senão a observação cai no talhão errado)
+      // na divisa de dois talhões o GPS oscila: só troca bem dentro do outro e confirmado em duas leituras
       const sugerido = talhaoPeloGps(kml, lon, lat, num(acc) || 999, talhaoAtual);
       if (!sugerido || sugerido === talhaoAtual) { gpsCandidatoRef.current = null; return; }
       const c = gpsCandidatoRef.current;
@@ -24923,390 +25177,296 @@ function ChatVisita({ fazenda, lavoura, kml, usuario, onFechar, onSalvar }) {
       } else gpsCandidatoRef.current = { id: sugerido };
     }, () => {}, { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 });
     return () => { try { navigator.geolocation.clearWatch(id); } catch (e) {} };
-  }, [autoGps, talhaoAtual]);
+  }, [autoGps, talhaoAtual, d && d.etapa]);
 
-  const contextoDe = (t) => contextoDoTalhao(t, lavoura);
-
-  const itemFinal = item === "__outro" ? outroTexto.trim() : item;
-  const precisaGravidade = cat && !/Lavoura/.test(cat) ? true : false;
-
-  function lancar() {
-    if (!cat || !itemFinal) return;
-    const t = talhoes.find((x) => x.id === talhaoAtual);
-    setObs((o) => [...o, {
-      id: idNovo(), hora: hora(), talhaoId: talhaoAtual, talhaoNome: nomeTalhaoObs(t), parteNome: parteAtual || null,
-      cat, item: itemFinal,
-      pressao: precisaGravidade ? pressao : null,
-      acao: precisaGravidade ? acao : null,
-      nota: nota.trim() || null, img: fotosPend[0] || null, fotos: fotosPend,
-    }]);
-    setCat(null); setItem(null); setOutroTexto(""); setNota(""); setFotosPend([]); setPressao("Média"); setAcao("Só monitorar");
-  }
-
-  // ---------- diário falado ----------
-  // Online: reconhece a fala na hora e a IA transforma em observações.
-  // Sem sinal: grava o áudio no aparelho; quando a internet volta,
-  // transcreve e resume sozinho (os áudios ficam na lista aguardando).
-  const estruturarFala = (fala, talhaoId, horaDita) => estruturarFalaVisita(fala, talhaoId, horaDita || hora(), talhoes);
-  function estruturarFalaAntiga(fala, talhaoId, horaDita) {
-    const catalogo = Object.keys(OBS_CATALOGO).map((c) => `${c}: ${OBS_CATALOGO[c].filter((i) => !/^Outra/.test(i)).join(", ")}`).join("\n");
-    return Nuvem.lerNota({
-      texto: fala, modo: "voz",
-      contexto: {
-        descricao: "Fala de um agrônomo durante visita técnica de campo (monitoramento de lavoura). " +
-          "O texto vem de transcrição automática de áudio e pode ter palavras trocadas: interprete pelo SOM " +
-          "(ex.: 'capinha amargoso' = Capim-amargoso, 'buba' = Buva, 'trapueraba' = Trapoeraba, 'mancha alva' = Mancha-alvo). " +
-          "Separe a fala em observações. Categorias possíveis (use EXATAMENTE como escrito, com o emoji):\n" + catalogo +
-          "\nPara cada observação escolha o item do catálogo mais parecido com o que foi dito; se não houver parecido, use as palavras do agrônomo. " +
-          "pressao é a infestação/gravidade citada (Baixa, Média ou Alta; null se não citou ou se for categoria Lavoura). " +
-          "acao: 'Ação urgente' se pediu urgência/aplicar já, 'Programar aplicação' se falou em aplicar/programar, senão 'Só monitorar' (null para Lavoura). " +
-          "nota guarda números e detalhes ditos (ex.: '3 por metro', 'na beirada do carreador').",
-        formato: '{"observacoes":[{"categoria":"…","item":"…","pressao":"Baixa|Média|Alta|null","acao":"Só monitorar|Programar aplicação|Ação urgente|null","nota":"…|null"}]}',
-      },
-    }).then((r) => {
-      const t = talhoes.find((x) => x.id === talhaoId);
-      const cats = Object.keys(OBS_CATALOGO);
-      return (r.observacoes || []).filter((o) => o && o.item).map((o) => {
-        const cat = cats.includes(o.categoria) ? o.categoria
-          : (cats.find((c) => c.toLowerCase().includes(String(o.categoria || "").replace(/^\S+\s*/, "").toLowerCase())) || "🌱 Lavoura");
-        const semGrav = /Lavoura/.test(cat);
-        return {
-          id: idNovo(), hora: horaDita || hora(), talhaoId: talhaoId || null, talhaoNome: t ? t.nome : null,
-          cat, item: String(o.item), pressao: semGrav ? null : (o.pressao || null),
-          acao: semGrav ? null : (o.acao || null), nota: o.nota || null, img: null, porVoz: true,
-        };
-      });
-    });
-  }
-
-  // dicionário que vai junto com o áudio: o transcritor prioriza estas
-  // palavras (nomes de praga/daninha/doença, talhões, pressões…)
-  const dicasVoz = () => dicasVozDe(talhoes);
-  function dicasVozAntiga() {
-    const d = [];
-    for (const c of Object.keys(OBS_CATALOGO)) {
-      d.push(c.replace(/^\S+\s*/, ""));
-      for (const i of OBS_CATALOGO[c]) if (!/^Outra/.test(i)) d.push(i.replace(/-/g, " "));
-    }
-    for (const t of talhoes) d.push(t.nome);
-    d.push("pressão alta", "pressão média", "pressão baixa", "só monitorar",
-      "programar aplicação", "ação urgente", "por metro", "na beirada do carreador",
-      "reboleira", "dessecação", "estande", "soja", "milho", "algodão", "sorgo", "feijão", "arroz");
-    return d;
-  }
-
-  function falarObservacao() {
-    if (vozEstado === "gravando") { try { gravadorRef.current && gravadorRef.current.stop(); } catch (e) {} return; }
-    if (vozEstado) return;
-    // grava sempre (mesmo online): a transcrição na nuvem com o dicionário
-    // agronômico entende os nomes técnicos muito melhor que o navegador
-    gravarAudio();
-  }
-
-  async function gravarAudio() {
-    if (!window.MediaRecorder || !navigator.mediaDevices) { setVozEstado(null); setVozMsg("⚠️ Este aparelho não grava áudio pelo navegador."); return; }
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const tipo = MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? "audio/webm;codecs=opus"
-        : (MediaRecorder.isTypeSupported("audio/ogg;codecs=opus") ? "audio/ogg;codecs=opus" : "");
-      const mr = tipo ? new MediaRecorder(stream, { mimeType: tipo }) : new MediaRecorder(stream);
-      const partes = [];
-      mr.ondataavailable = (e) => { if (e.data && e.data.size) partes.push(e.data); };
-      mr.onstop = () => {
-        stream.getTracks().forEach((t) => t.stop());
-        const blob = new Blob(partes, { type: mr.mimeType || "audio/webm" });
-        const leitor = new FileReader();
-        leitor.onload = () => {
-          const t = talhoes.find((x) => x.id === talhaoAtual);
-          setObs((o) => [...o, {
-            id: idNovo(), hora: hora(), talhaoId: talhaoAtual || null, talhaoNome: nomeTalhaoObs(t), parteNome: parteAtual || null,
-            cat: "🎙 Áudio", item: "áudio gravado — vira resumo quando o sinal voltar",
-            pressao: null, acao: null, nota: null, img: null, audioB64: leitor.result, pendente: true,
-          }]);
-          setVozEstado(null);
-          setVozMsg(navigator.onLine ? "🤖 Áudio enviado — transcrevendo…"
-            : "💾 Áudio guardado. Pode continuar andando e falando — quando a internet voltar, o app transcreve e resume sozinho.");
-        };
-        leitor.readAsDataURL(blob);
-      };
-      gravadorRef.current = mr;
-      mr.start();
-      setVozEstado("gravando");
-      setVozMsg("⏺ GRAVANDO — fale o que está vendo e toque de novo para PARAR. Máx. 55 s por áudio.");
-      setTimeout(() => { try { if (mr.state === "recording") mr.stop(); } catch (e) {} }, 55000);
-    } catch (e) { setVozEstado(null); setVozMsg("⚠️ Permita o uso do microfone para gravar."); }
-  }
-
-  // retoma a visita guardada neste aparelho (observações e áudios ainda não transcritos)
-  useEffect(() => {
-    let vivo = true;
-    idbGet(kRascunho).then((d) => {
-      if (!vivo) return;
-      if (d && Array.isArray(d.obs) && d.obs.length) {
-        setObs(d.obs.map((o) => ({ ...o, erro: null })));
-        if (d.talhaoAtual) setTalhaoAtual(d.talhaoAtual);
-        const pend = d.obs.filter((o) => o.pendente && o.audioB64).length;
-        setVozMsg(`↩ Visita retomada: ${d.obs.length} item${d.obs.length === 1 ? "" : "s"} guardado${d.obs.length === 1 ? "" : "s"} neste aparelho${pend ? ` (${pend} áudio${pend === 1 ? "" : "s"} para transcrever)` : ""}.`);
-      }
-      setRascunhoLido(true);
-    }).catch(() => setRascunhoLido(true));
-    return () => { vivo = false; };
-  }, []);
-  useEffect(() => {
-    if (!rascunhoLido) return;
-    const id = setTimeout(() => { if (obs.length) idbSet(kRascunho, { obs, talhaoAtual, em: new Date().toISOString() }).then((ok) => { if (!ok) setVozMsg("⚠️ Não consegui guardar o rascunho neste aparelho (sem espaço). Finalize a visita assim que puder."); }); else idbDel(kRascunho); }, 400);
-    return () => clearTimeout(id);
-  }, [obs, talhaoAtual, rascunhoLido]);
-  const fecharGuardando = () => {
-    if (obs.length && !window.confirm(`Fechar sem finalizar? O que você lançou (${obs.length} item${obs.length === 1 ? "" : "s"}, inclusive áudios) fica guardado neste aparelho e volta quando abrir a visita de novo.`)) return;
-    onFechar();
-  };
-  const descartarRascunho = () => { if (!window.confirm("Apagar esta visita em andamento, com todos os itens e áudios? Não dá para desfazer.")) return; setObs([]); idbDel(kRascunho); setVozMsg(""); };
-  // anotação escrita: entra como observação, igual à falada
-  const anotar = () => {
-    const txt = anotacao.trim(); if (!txt) return;
-    const tt = talhoes.find((x) => x.id === talhaoAtual);
-    setObs((o) => [...o, { id: idNovo(), hora: hora(), talhaoId: talhaoAtual || null, talhaoNome: nomeTalhaoObs(tt), parteNome: parteAtual || null, cat: "📝 Anotação", item: txt, pressao: null, acao: null, nota: null, img: null, porTexto: true }]);
-    setAnotacao("");
-  };
-
-  // fila: quando a internet volta, transcreve os áudios pendentes um a um
-  useEffect(() => {
-    const soltar = () => setObs((o) => o.slice());
-    window.addEventListener("online", soltar);
-    return () => window.removeEventListener("online", soltar);
-  }, []);
-  useEffect(() => {
-    const pend = obs.filter((o) => o.pendente && o.audioB64 && !o.erro);
-    if (!pend.length || transcrevendoRef.current || !navigator.onLine) return;
-    transcrevendoRef.current = true;
-    (async () => {
-      let feitos = 0;
-      for (const p of pend) {
-        try {
-          setVozMsg("🤖 Transcrevendo áudio de " + p.hora + "…");
-          const texto = await Nuvem.transcreverAudio(p.audioB64, dicasVoz());
-          const novas = (await estruturarFala(texto, p.talhaoId, p.hora)).map((n) => (p.parteNome ? { ...n, talhaoNome: n.talhaoNome ? `${n.talhaoNome} (${p.parteNome})` : n.talhaoNome, parteNome: p.parteNome } : n));
-          setObs((atual) => {
-            const resto = atual.filter((x) => x.id !== p.id);
-            return novas.length ? [...resto, ...novas]
-              : [...resto, { ...p, pendente: false, audioB64: null, cat: "🌱 Lavoura", item: "áudio sem observação clara", nota: texto.slice(0, 160) }];
-          });
-          feitos++;
-        } catch (e) {
-          // marca o erro NESTE áudio e segue para o próximo; "tentar de novo" limpa a marca
-          const msg = String(e && e.message || "falha ao transcrever");
-          setObs((atual) => atual.map((x) => (x.id === p.id ? { ...x, erro: msg } : x)));
-          setVozMsg("⚠️ Áudio de " + p.hora + ": " + msg + " — continua guardado; toque em \"tentar de novo\" nele.");
-        }
-      }
-      if (feitos) setVozMsg("✓ " + feitos + (feitos > 1 ? " áudios transcritos" : " áudio transcrito") + " e resumido(s) — confira na lista.");
-      transcrevendoRef.current = false;
-    })();
-  }, [obs]);
-
-  const fraseDe = (o) => `${o.cat.slice(o.cat.indexOf(" ") + 1)}: ${o.item}` +
-    (o.pressao ? ` — pressão ${o.pressao.toUpperCase()}` : "") +
-    (o.acao ? ` — ${o.acao.toLowerCase()}` : "") +
-    (o.nota ? ` (${o.nota})` : "");
-
-  function finalizar() {
-    const pend = obs.filter((o) => o.pendente && o.audioB64);
-    if (pend.length) {
-      const ok = window.confirm(pend.length + (pend.length > 1 ? " áudios ainda não foram transcritos" : " áudio ainda não foi transcrito") +
-        " (sem internet).\n\nFinalizar agora: a visita é salva já, e os áudios ficam guardados neste aparelho. Quando a internet voltar, eles viram observações DENTRO desta mesma visita, sozinhos — pode fechar e fazer outras coisas.\n\nFinalizar?");
-      if (!ok) return;
-    }
-    const prontas = obs.filter((o) => !o.pendente);
-    const visitaId = idNovo();
-    // áudios ainda não transcritos: ficam no aparelho, ligados a esta visita, para o processador de fundo
-    if (pend.length) idbSet("audios:" + fazenda.id + ":" + visitaId, { visitaId, fazendaId: fazenda.id, em: new Date().toISOString(), obs: pend.map((o) => ({ ...o, erro: null })) });
-
-    const itens = montarItensVisita(prontas, talhoes, lavoura);
-    onSalvar({ id: visitaId, data: hojeISO(), tecnico: (usuario && usuario.nomeUsuario) || "Técnico", itens, obsCampo: prontas.map((o) => { const { audioB64, ...resto } = o; return resto; }), audiosPendentes: pend.length, resumoPendente: prontas.length > 0 && !!window.AGROCR_FIREBASE });
-    idbDel(kRascunho);
-  }
-
-  // quais talhões já têm observação nesta visita (para marcar na lista e contar no Finalizar)
-  const obsPorTalhao = {};
-  for (const o of obs) if (o.talhaoId) obsPorTalhao[o.talhaoId] = (obsPorTalhao[o.talhaoId] || 0) + 1;
-  const visitados = talhoes.filter((t) => obsPorTalhao[t.id]);
-  const chip = (ativo) => ({
-    padding: "9px 12px", borderRadius: 10, fontWeight: 800, fontSize: 13, border: "none",
-    background: ativo ? C.navy : C.fundo, color: ativo ? "#fff" : C.navyEscuro,
-  });
   const tAtual = talhoes.find((x) => x.id === talhaoAtual);
   const partesAtual = tAtual ? partesDaLavoura((lavoura || []).find((l) => l.talhaoId === tAtual.id), tAtual) : [];
-  const nomeTalhaoObs = (t) => (t ? t.nome + (parteAtual && t.id === talhaoAtual ? ` (${parteAtual})` : "") : null);
+  const novoItem = (extra) => ({ id: idNovo(), hora: horaLocal(), talhaoId: tAtual ? tAtual.id : null, talhaoNome: tAtual ? tAtual.nome + (parteAtual ? ` (${parteAtual})` : "") : null, parteNome: parteAtual || null, fotos: [], texto: "", ...extra });
+  const acrescentar = (it) => mudar((x) => ({ ...x, itens: [...x.itens, it] }));
+  const mudarItem = (id, patch) => mudar((x) => ({ ...x, itens: x.itens.map((it) => (it.id === id ? { ...it, ...patch } : it)) }));
+  const tirarItem = (it) => {
+    if (!window.confirm("Tirar este item da visita?")) return;
+    if (it.tipo === "audio") idbDel(kVisitaAudio(fid, it.id));
+    mudar((x) => ({ ...x, itens: x.itens.filter((y) => y.id !== it.id) }));
+  };
 
+  // ---------- 🎙 fala: grava no celular; vira texto quando houver sinal ----------
+  async function gravar() {
+    if (gravadorRef.current) { try { gravadorRef.current.stop(); } catch (e) {} return; }
+    if (!window.MediaRecorder || !navigator.mediaDevices) { setMsg("⚠️ Este aparelho não grava áudio pelo navegador — use ✍️ Escrever."); return; }
+    let stream;
+    try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); } catch (e) { setMsg("⚠️ Permita o uso do microfone para gravar."); return; }
+    const tipo = MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? "audio/webm;codecs=opus" : (MediaRecorder.isTypeSupported("audio/ogg;codecs=opus") ? "audio/ogg;codecs=opus" : "");
+    let mr;
+    try { mr = tipo ? new MediaRecorder(stream, { mimeType: tipo }) : new MediaRecorder(stream); } catch (e) { stream.getTracks().forEach((t) => t.stop()); setMsg("⚠️ Não consegui abrir o gravador deste aparelho — use ✍️ Escrever."); return; }
+    const base = novoItem({ tipo: "audio", estado: "esperando", tentativas: 0 });   // talhão de quando COMEÇOU a falar
+    const partes = []; const inicio = Date.now();
+    const relogio = setInterval(() => setGravando(Math.max(1, Math.round((Date.now() - inicio) / 1000))), 500);
+    mr.ondataavailable = (e) => { if (e.data && e.data.size) partes.push(e.data); };
+    mr.onstop = () => {
+      clearInterval(relogio); gravadorRef.current = null; if (montadoRef.current) setGravando(0);
+      stream.getTracks().forEach((t) => t.stop());
+      const blob = new Blob(partes, { type: mr.mimeType || "audio/webm" });
+      if (!blob.size) { if (montadoRef.current) setMsg("⚠️ O áudio saiu vazio — grave de novo."); return; }
+      const leitor = new FileReader();
+      leitor.onload = async () => {
+        const ok = await idbSet(kVisitaAudio(fid, base.id), leitor.result);
+        if (!ok) { if (montadoRef.current) setMsg("⚠️ Sem espaço no aparelho para guardar o áudio — escreva o que viu em ✍️."); return; }
+        const item = { ...base, segundos: Math.round((Date.now() - inicio) / 1000) };
+        if (!montadoRef.current) { acrescentarNoRascunho(fid, item); return; }
+        acrescentar(item);
+        setMsg(navigator.onLine ? "💾 Áudio guardado no celular — virando texto…" : "💾 Áudio guardado no celular. Sem sinal: ele vira texto sozinho quando a internet voltar — pode seguir.");
+      };
+      leitor.readAsDataURL(blob);
+    };
+    gravadorRef.current = mr;
+    mr.start(1000);
+    setGravando(1); setMsg("");
+    setTimeout(() => { try { if (mr.state === "recording") mr.stop(); } catch (e) {} }, 55000);
+  }
+
+  // ---------- fila: áudio guardado → texto (uma por vez; sem sinal, espera e tenta de novo) ----------
+  useEffect(() => {
+    const on = () => { setOnline(true); setTick((t) => t + 1); };
+    const off = () => setOnline(false);
+    window.addEventListener("online", on); window.addEventListener("offline", off);
+    const id = setInterval(() => { setOnline(navigator.onLine); setTick((t) => t + 1); }, 15000);
+    return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); clearInterval(id); };
+  }, []);
+  useEffect(() => {
+    if (!d || transcrevendo.current || !navigator.onLine || !window.Nuvem || !Nuvem.transcreverAudio) return;
+    const agora = Date.now();
+    const p = d.itens.find((it) => audioEsperando(it) && !(it.proxima > agora));
+    if (!p) return;
+    transcrevendo.current = p.id;
+    (async () => {
+      try {
+        const audio = await idbGet(kVisitaAudio(fid, p.id));
+        if (!audio) { mudarItem(p.id, { estado: "naoEntendeu", erro: "o áudio não está mais neste aparelho" }); return; }
+        const txt = String((await Nuvem.transcreverAudio(audio, dicasVozDe(talhoes))) || "").trim();
+        mudarItem(p.id, { texto: txt, estado: "pronto", erro: null, aviso: null, proxima: null });
+      } catch (e) {
+        const m = String((e && e.message) || "falha");
+        if (falhaDefinitiva(e)) mudarItem(p.id, { estado: "naoEntendeu", erro: m });
+        else { const n = (p.tentativas || 0) + 1; mudarItem(p.id, { tentativas: n, proxima: Date.now() + esperaDaTentativa(n), aviso: m }); }
+      } finally { transcrevendo.current = null; setTick((t) => t + 1); }
+    })();
+  }, [d, tick]);
+
+  // ---------- fechar, descartar, finalizar ----------
+  const fechar = () => {
+    if (gravando) { setMsg("Pare a gravação antes de sair (toque em ⏹)."); return; }
+    salvarAgora(); onFechar();
+  };
+  const descartar = async () => {
+    if (!window.confirm("Descartar esta visita inteira, com fotos, textos e áudios? Não dá para desfazer.")) return;
+    const v = dRef.current;
+    await apagarAudiosVisita(fid, v ? v.itens : []); await idbDel(kVisitaRascunho(fid)); avisarVisitaMudou();
+    onFechar();
+  };
+  const pendentes = d ? d.itens.filter(audioEsperando) : [];
+  const naoEntendidos = d ? d.itens.filter((it) => it.tipo === "audio" && it.estado === "naoEntendeu" && !String(it.texto || "").trim()) : [];
+  async function finalizar() {
+    const v = dRef.current; if (!v || !v.itens.length || pendentes.length) return;
+    if (naoEntendidos.length && !window.confirm(`${naoEntendidos.length} áudio${naoEntendidos.length === 1 ? "" : "s"} não ${naoEntendidos.length === 1 ? "virou" : "viraram"} texto e ${naoEntendidos.length === 1 ? "fica" : "ficam"} fora do relatório (dá para escrever o que falou no lugar). Finalizar assim?`)) return;
+    const final = montarVisitaFinal(v.itens, v.grupos, talhoes, lavoura);
+    if (!final.itens.length) { setMsg("Nada para pôr no relatório ainda."); return; }
+    onSalvar({ data: diaLocal(new Date(v.inicio || Date.now())), tecnico: (usuario && usuario.nomeUsuario) || "Técnico", inicio: v.inicio || null, ...final });
+    await apagarAudiosVisita(fid, v.itens); await idbDel(kVisitaRascunho(fid)); avisarVisitaMudou();
+  }
+
+  // ---------- pré-relatório: unir talhões e resumir ----------
+  const grupos = d ? gruposDaVisita(d.itens, d.grupos) : [];
+  const nSel = grupos.filter((g) => sel[g.id]).length;
+  const unir = () => {
+    const escolhidos = grupos.filter((g) => sel[g.id]);
+    if (escolhidos.length < 2) return;
+    const novo = { id: idNovo(), talhoes: escolhidos.flatMap((g) => g.talhoes), resumo: "" };
+    mudar((x) => ({ ...x, grupos: [...gruposDaVisita(x.itens, x.grupos).filter((g) => !sel[g.id]), novo] }));
+    setSel({});
+  };
+  const separar = (g) => mudar((x) => ({ ...x, grupos: gruposDaVisita(x.itens, x.grupos).filter((y) => y.id !== g.id) }));
+  const mudarGrupo = (g, patch) => mudar((x) => ({ ...x, grupos: gruposDaVisita(x.itens, x.grupos).map((y) => (y.id === g.id ? { ...y, ...patch } : y)) }));
+  async function resumirGrupo(g) {
+    if (!navigator.onLine) { setIaGrupo((s) => ({ ...s, [g.id]: "Sem sinal agora — escreva você mesmo ou tente quando a internet voltar." })); return; }
+    setIaGrupo((s) => ({ ...s, [g.id]: "gerando" }));
+    try {
+      const doGrupo = itensDoGrupo(dRef.current.itens, g);
+      const s = await escreverResumoGrupo(g.talhoes, doGrupo, talhoes, lavoura);
+      mudarGrupo(g, { resumo: s, porIA: true, nItens: doGrupo.length });
+      setIaGrupo((x) => { const y = { ...x }; delete y[g.id]; return y; });
+    } catch (e) { setIaGrupo((x) => ({ ...x, [g.id]: "Não deu: " + String((e && e.message) || e) })); }
+  }
+  const resumirTodos = async () => { for (const g of grupos.filter((y) => !String(y.resumo || "").trim())) await resumirGrupo(g); };
+
+  // ---------- desenho ----------
+  if (!d) return <div style={{ position: "fixed", inset: 0, background: C.fundo, zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center", color: C.cinza, fontWeight: 700 }}>Abrindo a visita…</div>;
+  const contagem = {}; for (const it of d.itens) contagem[grupoDoItem(it)] = (contagem[grupoDoItem(it)] || 0) + 1;
+  const visitados = talhoes.filter((t) => d.itens.some((it) => it.talhaoId === t.id));
+  const doTalhao = verTodos || !tAtual ? d.itens : d.itens.filter((it) => it.talhaoId === tAtual.id);
+  const nomeAqui = tAtual ? tAtual.nome + (parteAtual ? ` (${parteAtual})` : "") : "sem talhão";
+  const fotosUsadas = d.itens.reduce((s, it) => s + (it.fotos || []).length, 0);
+  const botaoGrande = (cor) => ({ flex: 1, padding: "14px 6px", border: "none", borderRadius: 14, fontWeight: 900, fontSize: 15, color: "#fff", background: cor, lineHeight: 1.15 });
+
+  const estadoAudio = (it) => {
+    if (it.tipo !== "audio") return null;
+    if (it.estado === "pronto") return null;
+    if (it.estado === "naoEntendeu") return <span style={{ color: C.vermelho, fontWeight: 800 }}>não deu para entender{it.erro ? ` (${it.erro})` : ""}</span>;
+    if (transcrevendo.current === it.id) return <span style={{ color: "#7B1FA2", fontWeight: 800 }}>🤖 virando texto…</span>;
+    if (!online) return <span style={{ color: "#7A5C00", fontWeight: 800 }}>💾 guardado · sem sinal — vira texto quando a internet voltar</span>;
+    if (it.proxima) return <span style={{ color: "#7A5C00", fontWeight: 800 }}>📶 sinal fraco — tento de novo sozinho em {Math.max(1, Math.round((it.proxima - Date.now()) / 1000))} s</span>;
+    return <span style={{ color: "#7A5C00", fontWeight: 800 }}>⏳ na fila para virar texto</span>;
+  };
+  const cartaoItem = (it, comTalhao) => (
+    <div key={it.id} style={{ background: "#fff", border: `1px solid ${C.borda}`, borderLeft: `5px solid ${it.tipo === "audio" ? "#7B1FA2" : it.tipo === "foto" ? "#1E88E5" : C.verde}`, borderRadius: 10, padding: "8px 10px", marginBottom: 6 }}>
+      <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+        <div style={{ flex: 1, minWidth: 0, fontSize: 13.5 }}>
+          {editando && editando.id === it.id ? (
+            <div>
+              <textarea rows={3} value={editando.texto} onChange={(e) => setEditando({ ...editando, texto: e.target.value })} style={{ marginTop: 0 }} />
+              <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
+                <button onClick={() => setEditando(null)} style={{ flex: 1, padding: 7, background: "#fff", border: `1.5px solid ${C.borda}`, borderRadius: 8, fontWeight: 800, color: C.navy, fontSize: 12.5 }}>Cancelar</button>
+                <button onClick={() => { mudarItem(it.id, { texto: editando.texto.trim(), ...(it.tipo === "audio" && editando.texto.trim() ? { estado: "pronto", erro: null } : {}) }); setEditando(null); }} style={{ flex: 2, padding: 7, background: C.verde, color: "#fff", border: "none", borderRadius: 8, fontWeight: 800, fontSize: 12.5 }}>✓ Guardar</button>
+              </div>
+            </div>
+          ) : <b style={{ fontWeight: 700, color: C.navyEscuro, whiteSpace: "pre-wrap" }}>{linhaItemVisita(it)}</b>}
+        </div>
+        {!(editando && editando.id === it.id) && <button onClick={() => setEditando({ id: it.id, texto: it.texto || "" })} title="corrigir o texto" style={{ flex: "none", background: "transparent", border: "none", fontSize: 14, padding: 2 }}>✏️</button>}
+        <button onClick={() => tirarItem(it)} title="tirar" style={{ flex: "none", background: "transparent", border: "none", color: C.vermelho, fontSize: 13, padding: 2 }}>✕</button>
+      </div>
+      <div style={{ fontSize: 11.5, color: C.cinza, marginTop: 2, display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+        <span>{comTalhao ? `${grupoDoItem(it)} · ` : ""}{it.hora}{it.segundos ? ` · ${it.segundos} s` : ""}</span>
+        {estadoAudio(it)}
+        {it.tipo === "audio" && <AudioGuardado fid={fid} id={it.id} />}
+        {it.tipo === "audio" && it.estado === "naoEntendeu" && <button onClick={() => mudarItem(it.id, { estado: "esperando", erro: null, tentativas: 0, proxima: null })} style={{ background: C.navy, color: "#fff", border: "none", borderRadius: 8, padding: "4px 9px", fontWeight: 800, fontSize: 11.5 }}>🔁 tentar de novo</button>}
+      </div>
+      {(it.fotos || []).length > 0 && <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 5 }}>{it.fotos.map((f, j) => <FotoNuvem key={j} src={f} alt="" style={{ width: 84, height: 84, objectFit: "cover", borderRadius: 8 }} />)}</div>}
+    </div>
+  );
+
+  const cabecalho = (
+    <div style={{ background: C.navy, color: "#fff", padding: "10px 12px", display: "flex", alignItems: "center", gap: 8 }}>
+      <button onClick={d.etapa === "pre" ? () => mudar((x) => ({ ...x, etapa: "campo" })) : fechar} style={{ background: "rgba(255,255,255,.15)", color: "#fff", border: "none", borderRadius: 8, padding: "7px 10px", fontWeight: 800, fontSize: 13, flex: "none" }}>{d.etapa === "pre" ? "← Campo" : "⏸ Sair"}</button>
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div style={{ fontWeight: 900, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{d.etapa === "pre" ? "Pré-relatório" : "Visita"} — {fazenda.nome}</div>
+        <div style={{ fontSize: 11, opacity: 0.85 }}>guardada no celular até você finalizar{online ? "" : " · 📵 sem sinal"}</div>
+      </div>
+      {d.etapa === "campo" && <button disabled={!d.itens.length} onClick={() => { if (gravando) return; mudar((x) => ({ ...x, etapa: "pre" })); setModo(null); }} style={{ background: C.verde, color: "#fff", border: "none", borderRadius: 8, padding: "8px 10px", fontWeight: 900, fontSize: 12.5, flex: "none", opacity: d.itens.length ? 1 : 0.5 }}>📋 Pré-relatório ({Object.keys(contagem).length})</button>}
+    </div>
+  );
+
+  // ===== etapa 2: pré-relatório por talhão =====
+  if (d.etapa === "pre") return (
+    <div style={{ position: "fixed", inset: 0, background: C.fundo, zIndex: 60, display: "flex", flexDirection: "column" }}>
+      {cabecalho}
+      <div style={{ flex: 1, overflowY: "auto", padding: "10px 12px 140px" }}>
+        <div style={{ fontSize: 12.5, color: C.cinza, marginBottom: 8 }}>Cada cartão é o pré-relatório de um talhão. Marque os que estão na <b>mesma situação</b> e toque em <b>Unir</b>: vira um resumo só. Depois escreva o resumo (ou peça à IA) e finalize.</div>
+        {pendentes.length > 0 && <div style={{ background: C.amareloBg, borderRadius: 10, padding: "8px 12px", fontSize: 12.5, fontWeight: 700, color: "#7A5C00", marginBottom: 8 }}>⏳ {pendentes.length} áudio{pendentes.length === 1 ? "" : "s"} ainda {pendentes.length === 1 ? "vai virar" : "vão virar"} texto ({online ? "virando agora" : "sem sinal"}). Pode revisar e unir; o Finalizar libera quando terminar — ou escreva no lugar (✏️).</div>}
+        {online && grupos.some((g) => !String(g.resumo || "").trim()) && !pendentes.length && (
+          <button onClick={resumirTodos} disabled={Object.values(iaGrupo).includes("gerando")} style={{ width: "100%", padding: 10, background: C.verdeBg, color: C.verdeEscuro, border: "none", borderRadius: 10, fontWeight: 800, fontSize: 13, marginBottom: 8 }}>✨ Escrever com IA os resumos que faltam</button>
+        )}
+        {grupos.map((g) => {
+          const doGrupo = itensDoGrupo(d.itens, g);
+          const ia = iaGrupo[g.id];
+          const desatualizado = g.porIA && g.nItens && g.nItens !== doGrupo.length;
+          return (
+            <div key={g.id} style={{ background: "#fff", border: `2px solid ${sel[g.id] ? C.verde : C.borda}`, borderRadius: 14, padding: "10px 12px", marginBottom: 10 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, margin: 0, cursor: "pointer" }}>
+                <input type="checkbox" checked={!!sel[g.id]} onChange={(e) => setSel({ ...sel, [g.id]: e.target.checked })} style={{ width: 22, height: 22, margin: 0, flex: "none" }} />
+                <span style={{ flex: 1, minWidth: 0, fontWeight: 900, color: C.navy, fontSize: 14.5 }}>{tituloDoGrupo(g, d.itens, talhoes, lavoura)}</span>
+                {g.talhoes.length > 1 && <button onClick={(e) => { e.preventDefault(); separar(g); }} style={{ flex: "none", background: C.fundo, border: "none", borderRadius: 8, padding: "5px 9px", fontWeight: 800, fontSize: 12, color: C.navy }}>↩ Separar</button>}
+              </label>
+              <details style={{ marginTop: 6 }} open={g.talhoes.length === 1 && !String(g.resumo || "").trim()}>
+                <summary style={{ fontSize: 12.5, fontWeight: 800, color: C.cinza, cursor: "pointer" }}>O que foi lançado ({doGrupo.length})</summary>
+                <div style={{ marginTop: 6 }}>{doGrupo.map((it) => cartaoItem(it, g.talhoes.length > 1))}</div>
+              </details>
+              <label style={{ marginTop: 6 }}>Resumo {g.talhoes.length > 1 ? "destes talhões" : "deste talhão"}{g.porIA && String(g.resumo || "").trim() ? " · ✨ escrito pela IA (pode corrigir)" : ""}</label>
+              <textarea rows={Math.max(3, Math.min(10, String(g.resumo || "").split(/\n/).length + 1))} value={g.resumo || ""} onChange={(e) => mudarGrupo(g, { resumo: e.target.value })} placeholder="Escreva o resumo para o produtor — ou deixe em branco e vai a lista do que foi lançado." />
+              {desatualizado && <div style={{ fontSize: 11.5, color: "#7A5C00", fontWeight: 700 }}>Tem coisa nova lançada depois deste resumo — refaça se quiser.</div>}
+              <div style={{ display: "flex", gap: 6, marginTop: 6, flexWrap: "wrap" }}>
+                <button onClick={() => resumirGrupo(g)} disabled={ia === "gerando" || doGrupo.some(audioEsperando)} style={{ flex: 1, padding: 8, background: C.verdeBg, color: C.verdeEscuro, border: "none", borderRadius: 10, fontWeight: 800, fontSize: 12.5, opacity: doGrupo.some(audioEsperando) ? 0.5 : 1 }}>{ia === "gerando" ? "✍️ Escrevendo…" : String(g.resumo || "").trim() ? "✨ Refazer com IA" : "✨ Escrever com IA"}</button>
+                {!String(g.resumo || "").trim() && <button onClick={() => mudarGrupo(g, { resumo: doGrupo.map((it) => "• " + linhaItemVisita(it)).join("\n"), porIA: false })} style={{ flex: 1, padding: 8, background: "#fff", color: C.navy, border: `1.5px solid ${C.borda}`, borderRadius: 10, fontWeight: 800, fontSize: 12.5 }}>📝 Usar o que foi lançado</button>}
+              </div>
+              {ia && ia !== "gerando" && <div style={{ fontSize: 12, color: C.vermelho, fontWeight: 700, marginTop: 4 }}>{ia}</div>}
+            </div>
+          );
+        })}
+        <div style={{ textAlign: "center", marginTop: 6 }}><button onClick={descartar} style={{ background: "transparent", border: "none", color: C.cinza, fontSize: 12, fontWeight: 700 }}>🗑 descartar esta visita</button></div>
+      </div>
+      <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, background: "#fff", borderTop: `1.5px solid ${C.borda}`, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
+        {nSel >= 2 && <button onClick={unir} style={{ width: "100%", padding: 12, background: C.navy, color: "#fff", border: "none", borderRadius: 12, fontWeight: 900, fontSize: 15 }}>🔗 Unir {nSel} talhões num resumo só</button>}
+        {nSel === 1 && <div style={{ fontSize: 12, color: C.cinza, textAlign: "center" }}>Marque mais um talhão para unir.</div>}
+        <button onClick={finalizar} disabled={!!pendentes.length} style={{ width: "100%", padding: 13, background: C.verde, color: "#fff", border: "none", borderRadius: 12, fontWeight: 900, fontSize: 15.5, opacity: pendentes.length ? 0.5 : 1 }}>
+          {pendentes.length ? `⏳ Esperando ${pendentes.length} áudio${pendentes.length === 1 ? "" : "s"} virar texto` : `✓ Finalizar visita · ${grupos.length} ${grupos.length === 1 ? "parte" : "partes"} no relatório`}
+        </button>
+      </div>
+    </div>
+  );
+
+  // ===== etapa 1: no campo =====
   return (
     <div style={{ position: "fixed", inset: 0, background: C.fundo, zIndex: 60, display: "flex", flexDirection: "column" }}>
-      <div style={{ background: C.navy, color: "#fff", padding: "10px 14px", display: "flex", alignItems: "center", gap: 10 }}>
-        <button onClick={fecharGuardando} style={{ background: "rgba(255,255,255,.15)", color: "#fff", border: "none", borderRadius: 8, padding: "6px 10px", fontWeight: 800 }}>✕</button>
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontWeight: 900 }}>Visita — {fazenda.nome}</div>
-          <div style={{ fontSize: 11, opacity: 0.8 }}>fale, escreva ou toque nas opções · o GPS acha o talhão · fica guardado no aparelho</div>
-        </div>
-        <button disabled={!obs.length} onClick={finalizar}
-          style={{ marginLeft: "auto", background: C.verde, color: "#fff", border: "none", borderRadius: 8, padding: "8px 12px", fontWeight: 800, fontSize: 13, opacity: obs.length ? 1 : 0.5 }}>
-          ✓ Finalizar ({obs.length}{visitados.length ? ` · ${visitados.length} talh${visitados.length === 1 ? "ão" : "ões"}` : ""})
-        </button>
-      </div>
-
+      {cabecalho}
       <div style={{ padding: "8px 12px", background: "#fff", borderBottom: `1px solid ${C.borda}`, display: "flex", gap: 6, alignItems: "center" }}>
-        <select style={{ flex: 1 }} value={talhaoAtual || ""} onChange={(e) => { setTalhaoAtual(e.target.value || null); setAutoGps(false); }}>
-          <option value="">📍 Talhão…</option>
-          {talhoes.map((t) => <option key={t.id} value={t.id}>{obsPorTalhao[t.id] ? "✓ " : ""}{t.nome} · {fmtN(t.areaHa)} ha{obsPorTalhao[t.id] ? ` · ${obsPorTalhao[t.id]} obs` : ""}</option>)}
+        <select style={{ flex: 1, marginTop: 0 }} value={talhaoAtual || ""} onChange={(e) => { setTalhaoAtual(e.target.value || null); setAutoGps(false); }}>
+          <option value="">📍 Escolha o talhão…</option>
+          {talhoes.map((t) => { const n = d.itens.filter((it) => it.talhaoId === t.id).length; return <option key={t.id} value={t.id}>{n ? "✓ " : ""}{t.nome} · {fmtN(t.areaHa)} ha{n ? ` · ${n} ${n === 1 ? "item" : "itens"}` : ""}</option>; })}
         </select>
         {kml && kml.poligonos && (
-          <button onClick={() => setAutoGps(!autoGps)} style={{ flex: "none", background: autoGps ? "#1E88E5" : "#fff", color: autoGps ? "#fff" : "#1E88E5", border: "1.5px solid #1E88E5", borderRadius: 8, padding: "8px 10px", fontWeight: 800, fontSize: 12 }}>
-            {autoGps ? "GPS ✓" : "GPS"}
-          </button>
+          <button onClick={() => setAutoGps(!autoGps)} style={{ flex: "none", background: autoGps ? "#1E88E5" : "#fff", color: autoGps ? "#fff" : "#1E88E5", border: "1.5px solid #1E88E5", borderRadius: 8, padding: "8px 10px", fontWeight: 800, fontSize: 12 }}>{autoGps ? "GPS ✓" : "GPS"}</button>
         )}
       </div>
-      {tAtual && (
-        <div style={{ background: C.verdeBg, color: C.verdeEscuro, fontSize: 12, fontWeight: 800, padding: "5px 12px" }}>
-          📍 {tAtual.nome} — {contextoDe(tAtual)}{autoGps && gpsNome === tAtual.nome ? " · achado pelo GPS" : ""}{parteAtual ? ` · parte ${parteAtual}${(() => { const p = partesAtual.find((x) => x.nome === parteAtual); return p && p.dae != null ? ` (${p.dae} DAE)` : ""; })()}` : ""}
-        </div>
-      )}
-      {tAtual && partesAtual.length >= 2 && (
-        <div className="nao-imprimir" style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", padding: "5px 12px", background: "#fff", borderBottom: `1px solid ${C.borda}` }}>
-          <span style={{ fontSize: 11, fontWeight: 800, color: C.cinza }}>Parte do talhão:</span>
-          {partesAtual.map((p) => <button key={p.id} onClick={() => { setParteAtual(parteAtual === p.nome ? "" : p.nome); parteAtualRef.current = parteAtual === p.nome ? "" : p.nome; }} style={{ background: parteAtual === p.nome ? C.navy : C.verdeBg, color: parteAtual === p.nome ? "#fff" : C.verdeEscuro, border: "none", borderRadius: 8, padding: "4px 9px", fontWeight: 800, fontSize: 12 }}>{p.nome}{p.dae != null ? ` · ${p.dae} DAE` : " · sem emergência"}</button>)}
-        </div>
-      )}
-      {visitados.length > 0 && (
-        <div className="nao-imprimir" style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", padding: "6px 12px", background: "#fff", borderBottom: `1px solid ${C.borda}` }}>
-          <span style={{ fontSize: 11, fontWeight: 800, color: C.cinza }}>Já visitados · {visitados.length} de {talhoes.length}:</span>
-          {visitados.map((t) => (
-            <button key={t.id} onClick={() => { setTalhaoAtual(t.id); setAutoGps(false); }} title="voltar a este talhão"
-              style={{ background: t.id === talhaoAtual ? C.navy : C.verdeBg, color: t.id === talhaoAtual ? "#fff" : C.verdeEscuro, border: "none", borderRadius: 8, padding: "4px 9px", fontWeight: 800, fontSize: 12 }}>
-              ✓ {t.nome} · {obsPorTalhao[t.id]}
-            </button>
-          ))}
-        </div>
-      )}
-
-      <div style={{ padding: "8px 12px 0" }}>
-        <button onClick={falarObservacao} disabled={vozEstado === "ouvindo" || vozEstado === "processando"}
-          style={{
-            width: "100%", padding: 12, border: "none", borderRadius: 10, fontWeight: 900, fontSize: 15, color: "#fff",
-            background: vozEstado === "gravando" ? C.vermelho : vozEstado ? C.cinza : "#7B1FA2",
-          }}>
-          {vozEstado === "gravando" ? "⏹ PARAR gravação" : vozEstado === "ouvindo" ? "🎙 Ouvindo…" : vozEstado === "processando" ? "🤖 Resumindo…" : "🎙 Falar o que estou vendo"}
-        </button>
-        {vozMsg && <div style={{ fontSize: 12, fontWeight: 700, color: C.navyEscuro, background: "#F3E5F5", borderRadius: 8, padding: "6px 10px", marginTop: 6 }}>{vozMsg}</div>}
-        <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
-          <input value={anotacao} onChange={(e) => setAnotacao(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") anotar(); }} placeholder="✍️ Ou escreva um ponto aqui (ex.: falha de estande na cabeceira)" style={{ flex: 1, marginTop: 0 }} />
-          <button onClick={anotar} disabled={!anotacao.trim()} style={{ flex: "none", background: C.navy, color: "#fff", border: "none", borderRadius: 10, padding: "0 14px", fontWeight: 800, fontSize: 13, opacity: anotacao.trim() ? 1 : 0.5 }}>✓ Anotar</button>
-        </div>
-        {obs.length > 0 && <div style={{ textAlign: "right", marginTop: 4 }}><button onClick={descartarRascunho} style={{ background: "transparent", border: "none", color: C.cinza, fontSize: 11, fontWeight: 700 }}>🗑 descartar esta visita</button></div>}
-      </div>
-
       <div style={{ flex: 1, overflowY: "auto", padding: "10px 12px" }}>
-        {obs.length === 0 && !cat && (
-          <div style={{ textAlign: "center", color: C.cinza, fontSize: 13, padding: 24 }}>
-            Toque numa categoria abaixo e escolha o que viu — ou toque em
-            🎙 e FALE andando no talhão: a IA transforma a fala em observações.
-            Sem internet o áudio fica guardado e vira resumo quando o sinal volta.
-          </div>
-        )}
-        {obs.map((o) => (
-          <div key={o.id} style={{ background: "#fff", border: `1px solid ${C.borda}`, borderLeft: `5px solid ${o.acao === "Ação urgente" ? C.vermelho : o.pressao === "Alta" ? C.amarelo : C.verde}`, borderRadius: 10, padding: "8px 12px", marginBottom: 6 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 13 }}>
-              <b style={{ minWidth: 0 }}>{fraseDe(o)}</b>
-              <button onClick={() => setObs(obs.filter((x) => x.id !== o.id))} style={{ flex: "none", background: "transparent", border: "none", color: C.vermelho, fontSize: 12 }}>✕</button>
+        <div style={{ background: tAtual ? C.verdeBg : "#fff", border: `1.5px solid ${tAtual ? C.verde : C.borda}`, borderRadius: 14, padding: "10px 12px", marginBottom: 8 }}>
+          <div style={{ fontWeight: 900, fontSize: 18, color: C.navy }}>📍 {tAtual ? nomeAqui : "Sem talhão"}</div>
+          <div style={{ fontSize: 12.5, color: C.navyEscuro, marginTop: 2 }}>{tAtual ? contextoDoTalhao(tAtual, lavoura) + (autoGps && gpsNome === tAtual.nome ? " · achado pelo GPS" : "") : autoGps && kml && kml.poligonos ? "Ande até um talhão — o GPS acha sozinho. Ou escolha na lista acima." : "Escolha o talhão na lista acima."}</div>
+          {tAtual && partesAtual.length >= 2 && (
+            <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginTop: 6 }}>
+              <span style={{ fontSize: 11.5, fontWeight: 800, color: C.cinza }}>Parte:</span>
+              {partesAtual.map((p) => <button key={p.id} onClick={() => { const nv = parteAtual === p.nome ? "" : p.nome; setParteAtual(nv); parteAtualRef.current = nv; }} style={{ background: parteAtual === p.nome ? C.navy : "#fff", color: parteAtual === p.nome ? "#fff" : C.verdeEscuro, border: "none", borderRadius: 8, padding: "4px 9px", fontWeight: 800, fontSize: 12 }}>{p.nome}{p.dae != null ? ` · ${p.dae} DAE` : " · sem emergência"}</button>)}
             </div>
-            <div style={{ fontSize: 11, color: C.cinza }}>
-              {o.talhaoNome || "sem talhão"} · {o.hora}{o.porVoz ? " · 🎤 por voz" : ""}{o.porTexto ? " · ✍️ escrito" : ""}{o.pendente && !o.erro ? (navigator.onLine ? " · ⏳ transcrevendo…" : " · ⏳ aguardando internet") : ""}
-            </div>
-            {o.erro && (
-              <div style={{ fontSize: 11.5, color: C.vermelho, fontWeight: 700, marginTop: 3 }}>
-                ⚠ não transcreveu: {o.erro}{" "}
-                <button onClick={() => setObs(obs.map((x) => (x.id === o.id ? { ...x, erro: null } : x)))} style={{ background: C.navy, color: "#fff", border: "none", borderRadius: 6, padding: "2px 8px", fontWeight: 800, fontSize: 11 }}>tentar de novo</button>
-              </div>
-            )}
-            {o.audioB64 && <audio controls src={o.audioB64} style={{ width: "100%", marginTop: 4, height: 36 }} />}
-            {fotosDaObs(o).length > 0 && <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 4 }}>{fotosDaObs(o).map((f, j) => <FotoNuvem key={j} src={f} alt="" style={{ width: 84, height: 84, objectFit: "cover", borderRadius: 8 }} />)}</div>}
-          </div>
-        ))}
-      </div>
-
-      <div style={{ background: "#fff", borderTop: `1.5px solid ${C.borda}`, padding: "10px 12px", maxHeight: "55vh", overflowY: "auto" }}>
-        {!cat && (
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-            {Object.keys(OBS_CATALOGO).map((c) => (
-              <button key={c} onClick={() => { setCat(c); setItem(null); }} style={{ ...chip(false), flex: "1 1 30%" }}>{c}</button>
-            ))}
-          </div>
-        )}
-      {cat && (
-        <div className="nao-imprimir" style={{ display: "flex", gap: 6, padding: "0 12px 6px", flexWrap: "wrap" }}>
-          <button onClick={() => setIdentificando(true)} style={{ flex: 1, padding: "8px 10px", background: C.verdeBg, color: C.verdeEscuro, border: "none", borderRadius: 10, fontWeight: 800, fontSize: 12.5 }}>🔍 Não sei o que é — identificar pela foto</button>
-          {itemFinal && acharNoGuia(itemFinal) && <button onClick={() => setGuiaAberto(acharNoGuia(itemFinal))} style={{ flex: 1, padding: "8px 10px", background: "#fff", color: C.navy, border: `1.5px solid ${C.borda}`, borderRadius: 10, fontWeight: 800, fontSize: 12.5 }}>📖 Ver no guia: {acharNoGuia(itemFinal).nome}</button>}
+          )}
         </div>
-      )}
-        {cat && !item && (
-          <div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-              <b style={{ color: C.navy, fontSize: 13 }}>{cat} — o que você viu?</b>
-              <button onClick={() => setCat(null)} style={{ background: "transparent", border: "none", color: C.cinza, fontSize: 12, fontWeight: 700 }}>← voltar</button>
-            </div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-              {OBS_CATALOGO[cat].map((it) => (
-                <button key={it} onClick={() => setItem(/^Outra/.test(it) ? "__outro" : it)} style={{ ...chip(false), flex: "1 1 45%" }}>{it}</button>
-              ))}
-              {!OBS_CATALOGO[cat].some((it) => /^Outra/.test(it)) && (
-                <button onClick={() => setItem("__outro")} style={{ ...chip(false), flex: "1 1 100%", background: "#fff", border: `1.5px dashed ${C.navy}` }}>✍️ Outro — escrever o que vi</button>
-              )}
-            </div>
-            {(OBS_CATALOGO_MAIS[cat] || []).length > 0 && (
-              <div style={{ marginTop: 8 }}>
-                <button onClick={() => setMaisOpcoes(!maisOpcoes)} style={{ width: "100%", padding: "8px 10px", background: "#fff", color: C.navy, border: `1.5px solid ${C.navy}`, borderRadius: 10, fontWeight: 800, fontSize: 13 }}>
-                  {maisOpcoes ? "▴ menos opções" : `▾ mais opções (${OBS_CATALOGO_MAIS[cat].length})`}
-                </button>
-                {maisOpcoes && (
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
-                    {OBS_CATALOGO_MAIS[cat].map((it) => (
-                      <button key={it} onClick={() => setItem(it)} style={{ ...chip(false), flex: "1 1 45%" }}>{it}</button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
+        {visitados.length > 0 && (
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginBottom: 8 }}>
+            <span style={{ fontSize: 11.5, fontWeight: 800, color: C.cinza }}>Já feitos · {visitados.length} de {talhoes.length}:</span>
+            {visitados.map((t) => <button key={t.id} onClick={() => { setTalhaoAtual(t.id); setAutoGps(false); }} style={{ background: t.id === talhaoAtual ? C.navy : C.verdeBg, color: t.id === talhaoAtual ? "#fff" : C.verdeEscuro, border: "none", borderRadius: 8, padding: "4px 9px", fontWeight: 800, fontSize: 12 }}>✓ {t.nome}</button>)}
           </div>
         )}
-        {cat && item && (
-          <div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-              <b style={{ color: C.navy, fontSize: 13 }}>{cat} · {item === "__outro" ? "outro" : item}</b>
-              <button onClick={() => setItem(null)} style={{ background: "transparent", border: "none", color: C.cinza, fontSize: 12, fontWeight: 700 }}>← voltar</button>
-            </div>
-            {item === "__outro" && (
-              <textarea rows={2} value={outroTexto} onChange={(e) => setOutroTexto(e.target.value)} placeholder={/Praga|Doença|Daninha/.test(cat) ? "Qual?" : "Escreva o que você viu. Ex.: muita pedra e toco na área — fazer a catação antes de plantar"} style={{ marginBottom: 6 }} />
-            )}
-            {precisaGravidade && (
-              <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
-                {OBS_PRESSOES.map((s) => <button key={s} onClick={() => setPressao(s)} style={{ ...chip(pressao === s), flex: 1 }}>{s}</button>)}
-              </div>
-            )}
-            {precisaGravidade && (
-              <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
-                {OBS_ACOES.map((s) => <button key={s} onClick={() => setAcao(s)} style={{ ...chip(acao === s), flex: 1, fontSize: 11, background: acao === s ? (s === "Ação urgente" ? C.vermelho : C.navy) : C.fundo }}>{s}</button>)}
-              </div>
-            )}
-            <input value={nota} onChange={(e) => setNota(e.target.value)} placeholder="Detalhe curto (opcional)" style={{ marginBottom: 2 }} />
-            <FotosCampo fotos={fotosPend} onMudar={setFotosPend} max={10} jaUsado={contarFotos(obs.flatMap(fotosDaObs))} rotulo="foto da situação" />
-            <div style={{ height: 6 }} />
-            <button onClick={lancar} disabled={!itemFinal}
-              style={{ width: "100%", padding: 12, background: C.verde, color: "#fff", border: "none", borderRadius: 10, fontWeight: 900, fontSize: 15, opacity: itemFinal ? 1 : 0.5 }}>
-              ➤ Lançar no talhão {tAtual ? tAtual.nome : "(sem talhão)"}
-            </button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={gravar} style={botaoGrande(gravando ? C.vermelho : "#7B1FA2")}>{gravando ? <>⏹ PARAR<span style={{ display: "block", fontSize: 12, fontWeight: 700 }}>gravando {gravando} s (máx. 55)</span></> : <>🎙<span style={{ display: "block" }}>Falar</span></>}</button>
+          <button onClick={() => { setModo(modo === "foto" ? null : "foto"); setTexto(""); setFotosPend([]); }} disabled={!!gravando} style={botaoGrande(modo === "foto" ? C.navyEscuro : "#1E88E5")}>📷<span style={{ display: "block" }}>Foto</span></button>
+          <button onClick={() => { setModo(modo === "texto" ? null : "texto"); setTexto(""); }} disabled={!!gravando} style={botaoGrande(modo === "texto" ? C.navyEscuro : C.verde)}>✍️<span style={{ display: "block" }}>Escrever</span></button>
+        </div>
+        {msg && <div style={{ fontSize: 12.5, fontWeight: 700, color: C.navyEscuro, background: "#F3E5F5", borderRadius: 8, padding: "7px 10px", marginTop: 8 }}>{msg}</div>}
+        {modo === "foto" && (
+          <div style={{ background: "#fff", border: `1.5px solid #1E88E5`, borderRadius: 12, padding: 10, marginTop: 8 }}>
+            <b style={{ color: C.navy, fontSize: 13.5 }}>📷 Foto com comentário — {nomeAqui}</b>
+            <FotosCampo fotos={fotosPend} onMudar={setFotosPend} max={6} jaUsado={fotosUsadas} rotulo="tirar foto" />
+            <textarea rows={2} value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="O que é esta foto? Ex.: visual geral da lavoura, buva na cabeceira, falha de estande…" style={{ marginTop: 6 }} />
+            <button disabled={!fotosPend.length} onClick={() => { acrescentar(novoItem({ tipo: "foto", fotos: fotosPend, texto: texto.trim() })); setFotosPend([]); setTexto(""); setModo(null); setMsg("📷 Foto guardada em " + nomeAqui + "."); }} style={{ width: "100%", padding: 11, marginTop: 6, background: C.verde, color: "#fff", border: "none", borderRadius: 10, fontWeight: 900, fontSize: 14, opacity: fotosPend.length ? 1 : 0.5 }}>➤ Guardar no {nomeAqui}</button>
           </div>
         )}
+        {modo === "texto" && (
+          <div style={{ background: "#fff", border: `1.5px solid ${C.verde}`, borderRadius: 12, padding: 10, marginTop: 8 }}>
+            <b style={{ color: C.navy, fontSize: 13.5 }}>✍️ Escrever — {nomeAqui}</b>
+            <textarea rows={3} value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="Ex.: buva com pressão alta na cabeceira, 3 plantas por metro — programar aplicação" style={{ marginTop: 6 }} autoFocus />
+            <button disabled={!texto.trim()} onClick={() => { acrescentar(novoItem({ tipo: "texto", texto: texto.trim() })); setTexto(""); setModo(null); }} style={{ width: "100%", padding: 11, marginTop: 6, background: C.verde, color: "#fff", border: "none", borderRadius: 10, fontWeight: 900, fontSize: 14, opacity: texto.trim() ? 1 : 0.5 }}>➤ Guardar no {nomeAqui}</button>
+          </div>
+        )}
+        <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+          <button onClick={() => setIdentificando(true)} style={{ flex: 1, padding: "8px 10px", background: "#fff", color: C.verdeEscuro, border: `1.5px solid ${C.borda}`, borderRadius: 10, fontWeight: 800, fontSize: 12.5 }}>🔍 Não sei o que é — identificar pela foto</button>
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "12px 0 6px" }}>
+          <b style={{ color: C.navy, fontSize: 13.5 }}>{verTodos || !tAtual ? `Tudo desta visita (${d.itens.length})` : `Neste talhão (${doTalhao.length})`}</b>
+          {tAtual && d.itens.length > doTalhao.length + 0 && <button onClick={() => setVerTodos(!verTodos)} style={{ background: "transparent", border: "none", color: C.navy, fontWeight: 800, fontSize: 12, textDecoration: "underline" }}>{verTodos ? "só este talhão" : `ver tudo (${d.itens.length})`}</button>}
+        </div>
+        {doTalhao.length === 0 && <div style={{ textAlign: "center", color: C.cinza, fontSize: 13, padding: "14px 8px" }}>Nada lançado {tAtual ? "neste talhão" : ""} ainda. Toque em 🎙 e fale o que está vendo, tire uma 📷 foto e comente, ou ✍️ escreva. Sem sinal tudo fica guardado no celular.</div>}
+        {doTalhao.slice().reverse().map((it) => cartaoItem(it, verTodos || !tAtual))}
+        {d.itens.length > 0 && <div style={{ textAlign: "center", marginTop: 8 }}><button onClick={descartar} style={{ background: "transparent", border: "none", color: C.cinza, fontSize: 12, fontWeight: 700 }}>🗑 descartar esta visita</button></div>}
       </div>
       {identificando && <IdentificarPelaFoto cultura={tAtual ? (((lavoura || []).find((l) => l.talhaoId === tAtual.id) || {}).cultura || tAtual.cultura || "") : ""} onFechar={() => setIdentificando(false)}
-        onEscolher={(it) => { setIdentificando(false); const catDo = { daninha: "🌿 Daninha", praga: "🐛 Praga", doenca: "🦠 Doença", deficiencia: "🧪 Nutrição", inimigo: "🐛 Praga" }[it.tipo]; if (catDo) setCat(catDo); const lista = catDo ? [...(OBS_CATALOGO[catDo] || []), ...(OBS_CATALOGO_MAIS[catDo] || [])] : []; const igual = lista.find((n) => acharNoGuia(n) === it); if (igual) { setItem(igual); setOutroTexto(""); } else { setItem("__outro"); setOutroTexto(it.nome); } setGuiaAberto(it); }} />}
+        onEscolher={(it) => { setIdentificando(false); setGuiaAberto(it); setModo("texto"); setTexto((t) => t || it.nome); }} />}
       {guiaAberto && <ModalGuiaItem item={guiaAberto} usuario={usuario} fazenda={fazenda} naNuvem={!!window.AGROCR_FIREBASE} consultor={!!(usuario && usuario.tipo === "consultoria")} onFechar={() => setGuiaAberto(null)} />}
     </div>
   );
@@ -26212,7 +26372,8 @@ function SecaoVisitas({ podeApagar, fazenda, lavoura, kml, visitas, consultor, u
   const [niveisLocal, setNiveisLocal] = useState(() => Object.fromEntries(culturasNiveis.map((c) => [c, Object.fromEntries(pragasDe(c).map((p) => [p, (() => { const v = nivelDe(fazenda, c, p); return v == null ? "" : String(v); })()]))])));
   const salvarNiveis = () => { onAtualizarFazenda && onAtualizarFazenda({ ...fazenda, niveis: Object.fromEntries(Object.entries(niveisLocal).map(([c, m]) => [c, Object.fromEntries(Object.entries(m).map(([p, v]) => [p, num(v) > 0 ? num(v) : 0]))])) }); setEditandoNiveis(false); };
   const [modal, setModal] = useState(false);
-  const [chat, setChat] = useState(false);
+  const [chat, setChat] = useState(() => { if (ABRIR_VISITA.fid === fazenda.id) { ABRIR_VISITA.fid = null; return true; } return false; });
+  const emAndamento = useVisitaEmAndamento(fazenda.id);
   const [aberta, setAberta] = useState(null);
   const [editandoVisita, setEditandoVisita] = useState(false);   // ✏️ editar a visita aberta (texto, fotos)
   const [reg, setReg] = useState(null);   // qual ferramenta de regulagem está aberta
@@ -26285,9 +26446,11 @@ function SecaoVisitas({ podeApagar, fazenda, lavoura, kml, visitas, consultor, u
         <>
           {consultor && (
             <div style={{ marginBottom: 10 }}>
-              <button onClick={() => setChat(true)} style={{ width: "100%", padding: 14, background: C.verde, color: "#fff", border: "none", borderRadius: 12, fontSize: 16, fontWeight: 800 }}>
-                🧑‍🌾 Nova visita — modo campo (por toques, com GPS)
-              </button>
+              {emAndamento
+                ? <AvisoVisitaAndamento fazenda={fazenda} onAbrir={() => setChat(true)} />
+                : <button onClick={() => setChat(true)} style={{ width: "100%", padding: 14, background: C.verde, color: "#fff", border: "none", borderRadius: 12, fontSize: 16, fontWeight: 800 }}>
+                🧑‍🌾 Nova visita — fale, fotografe e escreva por talhão
+              </button>}
               <button onClick={() => setModal(true)} style={{ width: "100%", padding: 8, background: "transparent", color: C.navy, border: "none", fontSize: 12, fontWeight: 700 }}>
                 ou registrar pelo formulário clássico
               </button>
@@ -26488,10 +26651,12 @@ function RelatorioVisita({ fazenda, visita, lavoura, podeEditar, onAtualizar, on
   const subconjunto = !!(escolhidos && escolhidos.length && escolhidos.length < nomesVisita.length);
   const obsUsadas = subconjunto ? obsDosTalhoes(obsCampo, escolhidos) : obsCampo;
   const temTalhoes = obsCampo.some((o) => o.talhaoNome);
+  const v2 = visita.versao === 2;
   const itens = visao === "talhao" && temTalhoes ? itensPorTalhao({ obsCampo: obsUsadas }, fazenda.talhoes, lavoura)
+    : subconjunto && v2 ? (visita.itens || []).filter((it) => (it.talhoes || []).some((n) => escolhidos.includes(n)))
     : subconjunto ? montarItensVisita(obsUsadas, fazenda.talhoes || [], lavoura, resumoSelecao[chaveSel] || null)
     : (visita.itens || []);
-  const podeIA = !!(window.AGROCR_FIREBASE && obsCampo.length && !(num(visita.audiosPendentes) > 0));
+  const podeIA = !v2 && !!(window.AGROCR_FIREBASE && obsCampo.length && !(num(visita.audiosPendentes) > 0));
   const alternar = (n) => {
     const base = escolhidos || nomesVisita.slice();
     const nova = base.includes(n) ? base.filter((x) => x !== n) : [...base, n];
@@ -30098,14 +30263,14 @@ function ModalCompra({ inicial, fornecedores, onSalvarFornecedores, produtosCata
           <option value="">— não informado</option>
           {(fornecedores || []).map((f) => <option key={f.id} value={f.id}>{f.nome}</option>)}
         </select>
-        <button onClick={() => setFormForn(formForn ? null : { modo: "novo", nome: "", whats: "" })}
+        <button onClick={() => setFormForn(formForn ? null : { modo: "novo", nome: "", whats: "", categorias: ["insumo"] })}
           style={{ background: C.verdeBg, color: C.verdeEscuro, border: "none", borderRadius: 8, padding: "0 12px", fontWeight: 800, fontSize: 13, flex: "none" }}>
           + novo
         </button>
         {fornecedorId && (
           <button onClick={() => {
             const f = (fornecedores || []).find((x) => x.id === fornecedorId);
-            setFormForn(formForn && formForn.modo === "editar" ? null : { modo: "editar", nome: (f && f.nome) || "", whats: (f && f.whats) || "" });
+            setFormForn(formForn && formForn.modo === "editar" ? null : { modo: "editar", nome: (f && f.nome) || "", whats: (f && f.whats) || "", categorias: categoriasDoForn(f).length ? categoriasDoForn(f) : ["insumo"] });
           }} style={{ background: "#fff", color: C.navy, border: `1px solid ${C.borda}`, borderRadius: 8, padding: "0 10px", fontWeight: 800, fontSize: 13, flex: "none" }}>
             editar
           </button>
@@ -30117,12 +30282,13 @@ function ModalCompra({ inicial, fornecedores, onSalvarFornecedores, produtosCata
           <input value={formForn.nome} onChange={(e) => setFormForn({ ...formForn, nome: e.target.value })} placeholder="Ex.: Agro Insumos Gurupi" />
           <label>WhatsApp (com DDD) — atualize aqui quando mudar</label>
           <input inputMode="tel" value={formForn.whats} onChange={(e) => setFormForn({ ...formForn, whats: e.target.value })} placeholder="Ex.: 63 99999-9999" />
+          <EscolherCategoriasForn valor={formForn.categorias} onMudar={(v) => setFormForn({ ...formForn, categorias: v })} />
           <button disabled={!formForn.nome.trim() || String(formForn.whats).replace(/\D/g, "").length < 10} onClick={() => {
             const limpo = String(formForn.whats).replace(/\D/g, "");
             if (formForn.modo === "editar") {
-              onSalvarFornecedores((fornecedores || []).map((f) => (f.id === fornecedorId ? { ...f, nome: formForn.nome.trim(), whats: limpo } : f)));
+              onSalvarFornecedores((fornecedores || []).map((f) => (f.id === fornecedorId ? { ...f, nome: formForn.nome.trim(), whats: limpo, categorias: formForn.categorias || [] } : f)));
             } else {
-              const novo = { id: idNovo(), nome: formForn.nome.trim(), whats: limpo };
+              const novo = { id: idNovo(), nome: formForn.nome.trim(), whats: limpo, categorias: formForn.categorias || [] };
               onSalvarFornecedores([...(fornecedores || []), novo]);
               setFornecedorId(novo.id);
             }
