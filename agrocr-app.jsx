@@ -26639,6 +26639,14 @@ function ModalEditarVisita({ visita, onFechar, onSalvar }) {
     </Modal>
   );
 }
+// de qual talhão é a foto (e o que é): a mesma foto está nas observações da visita, com o talhão
+function legendaDaFoto(visita, f) {
+  const o = ((visita && visita.obsCampo) || []).find((x) => fotosDaObs(x).includes(f));
+  if (!o) return "";
+  const onde = o.talhaoNome || "Geral";
+  const oque = String(o.item || "").trim();
+  return oque && oque !== "foto" ? `${onde} — ${oque}` : onde;
+}
 function RelatorioVisita({ fazenda, visita, lavoura, podeEditar, onAtualizar, onVoltar }) {
   const [visao, setVisao] = useState("resumo");   // resumo (para enviar) · talhao (talhão por talhão)
   const [refazendo, setRefazendo] = useState("");
@@ -26725,7 +26733,12 @@ function RelatorioVisita({ fazenda, visita, lavoura, podeEditar, onAtualizar, on
             {it.texto && <div style={{ fontSize: 14, padding: "6px 10px", whiteSpace: "pre-wrap" }}>{it.texto}</div>}
             {(it.fotos || []).length > 0 && (
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", padding: "4px 10px" }}>
-                {it.fotos.map((f, j) => <FotoNuvem key={j} src={f} style={{ width: 160, borderRadius: 8 }} />)}
+                {it.fotos.map((f, j) => { const lg = legendaDaFoto(visita, f); return (
+                  <figure key={j} style={{ margin: 0, width: 160 }}>
+                    <FotoNuvem src={f} style={{ width: 160, borderRadius: 8, display: "block" }} />
+                    {lg && <figcaption style={{ fontSize: 11.5, color: C.navyEscuro, fontWeight: 700, lineHeight: 1.25, marginTop: 3 }}>📍 {lg}</figcaption>}
+                  </figure>
+                ); })}
               </div>
             )}
           </div>
