@@ -2783,6 +2783,7 @@ function TelaGrupoGeral({ grupo, fazendas, onFechar, usuario }) {
   const [estreito, setEstreito] = useState(() => typeof window !== "undefined" && window.innerWidth < 700);   // celular: lista em vez de tabela
   useEffect(() => { const f = () => setEstreito(window.innerWidth < 700); window.addEventListener("resize", f); return () => window.removeEventListener("resize", f); }, []);
   const [transf, setTransf] = useState(null);   // {origemId, produto}
+  const [editandoProd, setEditandoProd] = useState(null);   // {produto, base}: ✏️ editar a compra deste produto em todas as fazendas
   const [msgTransf, setMsgTransf] = useState("");
   const [dados, setDados] = useState({});   // {fazendaId: {prog, apls, ajustes, entregas, custos, colheita, combustivel}}
   useEffect(() => {
@@ -3080,7 +3081,7 @@ function TelaGrupoGeral({ grupo, fazendas, onFechar, usuario }) {
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 4 }}>
           <div style={{ fontWeight: 900, color: C.navy, fontSize: 14, flex: 1 }}>🛒 Compras por fazenda</div>
         </div>
-        <div style={{ fontSize: 11.5, color: C.cinza, marginBottom: 6 }}>Quanto cada fazenda COMPROU de cada produto (programação da safra atual); embaixo, o que veio da safra anterior (estoque anterior) e o que já recebeu. Toque em 🔁 para mover parte da compra para outra fazenda. O que chegou é estoque — fica dentro de cada fazenda.</div>
+        <div style={{ fontSize: 11.5, color: C.cinza, marginBottom: 6 }}>Quanto cada fazenda COMPROU de cada produto (programação da safra atual); embaixo, o que veio da safra anterior (estoque anterior) e o que já recebeu. Toque em ✏️ para corrigir a compra de um produto em todas as fazendas de uma vez (unidade, pagamento, nome, quantidade, preço) e em 🔁 para mover parte da compra para outra fazenda. O que chegou é estoque — fica dentro de cada fazenda.</div>
         {msgTransf && <div className="nao-imprimir" style={{ background: C.verdeBg, color: C.verdeEscuro, borderRadius: 10, padding: "8px 12px", fontSize: 13, fontWeight: 700, marginBottom: 8 }}>{msgTransf}</div>}
         {estoqueGeral.length === 0 ? (
           <div style={{ fontSize: 13, color: C.cinza }}>Ainda não há compras ou lançamentos nas fazendas deste grupo.</div>
@@ -3100,6 +3101,7 @@ function TelaGrupoGeral({ grupo, fazendas, onFechar, usuario }) {
                         <div style={{ fontWeight: 900, fontSize: 15, color: C.navy }}>{fmtN(Math.round(l.comprado * 100) / 100)} {l.base}</div>
                         <div style={{ fontSize: 10.5, color: C.cinza }}>comprado no grupo</div>
                       </div>
+                      <button onClick={() => setEditandoProd({ produto: l.produto, base: l.base })} title="Editar a compra deste produto em todas as fazendas" style={{ background: C.fundo, color: C.navy, border: "none", borderRadius: 10, padding: "9px 10px", fontWeight: 800, fontSize: 14, flex: "none" }}>✏️</button>
                       {l.comprado - l.entregue > 0.001 && <button onClick={() => setTransf({ origemId: origemSugerida(l), produto: l.produto })} style={{ background: C.navy, color: "#fff", border: "none", borderRadius: 10, padding: "9px 10px", fontWeight: 800, fontSize: 14, flex: "none" }}>🔁</button>}
                     </div>
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
@@ -3135,13 +3137,14 @@ function TelaGrupoGeral({ grupo, fazendas, onFechar, usuario }) {
                   <td style={{ ...td, fontWeight: 700 }}>{l.produto} <span style={{ color: C.cinza, fontWeight: 500, fontSize: 11.5 }}>({l.base})</span><div style={{ fontSize: 10.5, color: C.cinza, fontWeight: 500 }}>{l.antigo > 0 ? `compra ${fmtN(Math.round((l.comprado - l.antigo) * 100) / 100)} · estoque anterior ${fmtN(l.antigo)} · ` : ""}recebido {fmtN(l.entregue)} · usado {fmtN(l.usado)}</div></td>
                   {fazendas.map((f) => { const s = num(l.porId[f.id]), e = num(l.entreguePorId[f.id]); return <td key={f.id} style={{ ...td, textAlign: "right", fontWeight: Math.abs(s) > 0.001 ? 800 : 400, color: Math.abs(s) > 0.001 ? C.navy : C.cinza }}>{Math.abs(s) > 0.001 ? fmtN(Math.round(s * 100) / 100) : "—"}{num(l.antigoPorId[f.id]) > 0 ? <><div style={{ fontSize: 10, color: C.navyEscuro, fontWeight: 600 }}>compra {fmtN(Math.round((s - num(l.antigoPorId[f.id])) * 100) / 100)}</div><div style={{ fontSize: 10, color: "#7A5C00", fontWeight: 600 }}>estoque anterior {fmtN(Math.round(num(l.antigoPorId[f.id]) * 100) / 100)}</div></> : null}{e > 0 ? <div style={{ fontSize: 10, color: C.verdeEscuro, fontWeight: 600 }}>recebido {fmtN(Math.round(e * 100) / 100)}</div> : null}</td>; })}
                   <td style={{ ...td, textAlign: "right", fontWeight: 900, color: C.navy }}>{fmtN(Math.round(l.comprado * 100) / 100)}{l.antigo > 0 ? <div style={{ fontSize: 10, color: C.navyEscuro, fontWeight: 600 }}>compra {fmtN(Math.round((l.comprado - l.antigo) * 100) / 100)}</div> : null}</td>
-                  <td className="nao-imprimir" style={{ ...td, textAlign: "right" }}>{l.comprado - l.entregue > 0.001 && <button onClick={() => setTransf({ origemId: origemSugerida(l), produto: l.produto })} title="Mover parte desta compra para outra fazenda" style={{ background: C.fundo, border: "none", borderRadius: 8, padding: "5px 8px", fontWeight: 800, fontSize: 12, color: C.navy }}>🔁</button>}</td>
+                  <td className="nao-imprimir" style={{ ...td, textAlign: "right", whiteSpace: "nowrap" }}><button onClick={() => setEditandoProd({ produto: l.produto, base: l.base })} title="Editar a compra deste produto em todas as fazendas" style={{ background: C.fundo, border: "none", borderRadius: 8, padding: "5px 8px", fontWeight: 800, fontSize: 12, color: C.navy, marginRight: 4 }}>✏️</button>{l.comprado - l.entregue > 0.001 && <button onClick={() => setTransf({ origemId: origemSugerida(l), produto: l.produto })} title="Mover parte desta compra para outra fazenda" style={{ background: C.fundo, border: "none", borderRadius: 8, padding: "5px 8px", fontWeight: 800, fontSize: 12, color: C.navy }}>🔁</button>}</td>
                 </tr>
                 )),
               ])}
             </tbody>
           </table>
         )}
+        {editandoProd && <ModalEditarCompraGrupo produto={editandoProd.produto} base={editandoProd.base} fazendas={porFazenda} onFechar={() => setEditandoProd(null)} onGravou={setMsgTransf} />}
         {transf && <ModalMoverCompra fazendas={porFazenda} produto={transf.produto} origemInicial={transf.origemId} onFechar={() => setTransf(null)} onMover={(org, dst, q) => moverNoGrupo(org, dst, q, transf.produto)} />}
       </div>)}
       <div style={{ fontSize: 11, color: C.cinza, marginBottom: 16 }}>
@@ -3149,6 +3152,156 @@ function TelaGrupoGeral({ grupo, fazendas, onFechar, usuario }) {
       </div>
       </div>
     </div>
+  );
+}
+
+// =========================== EDITAR A COMPRA PELO GRUPO ===========================
+// Na tela "Insumos do grupo": um produto, todas as fazendas de uma vez. Unidade errada, forma de
+// pagamento, vencimento, nome, categoria → muda em todos os lançamentos; quantidade e preço → por
+// lançamento. Grava a compra de cada fazenda (na safra atual dela) sem precisar abrir uma por uma.
+const MANTER = "__manter";
+// aplica a edição num lançamento de compra. comum: campos para todos (MANTER/"" = não mexe); linha: {qtd, preco} deste lançamento
+function aplicarEdicaoCompra(p, comum, linha) {
+  const o = { ...p };
+  const c = comum || {};
+  if (c.produto && String(c.produto).trim()) o.produto = String(c.produto).trim();
+  if (c.unidade && c.unidade !== MANTER) o.unidade = c.unidade;
+  if (c.categoria && c.categoria !== MANTER) o.categoria = c.categoria;
+  if (!p.barter) {
+    if (c.pagamento !== undefined && c.pagamento !== MANTER) { o.pagamento = c.pagamento; o.vencimento = !c.pagamento || c.pagamento === "À vista" ? "" : (c.vencimento || p.vencimento || ""); }
+    else if (c.vencimento && p.pagamento && p.pagamento !== "À vista") o.vencimento = c.vencimento;
+  }
+  if (linha) {
+    if (linha.qtd !== undefined && String(linha.qtd).trim() !== "" && num(linha.qtd) >= 0) o.qtd = num(linha.qtd);
+    if (linha.preco !== undefined && String(linha.preco).trim() !== "" && !p.barter && p.moeda !== "US$") o.preco = num(linha.preco);
+  }
+  return o;
+}
+// O estoque liga compra, entrega, ajuste e recomendação PELO NOME do produto: trocar o nome ou a unidade
+// só na compra deixaria o resto solto. Isto leva a mesma troca para as entregas, os ajustes (nome e base)
+// e as receitas/execuções (nome) daquela fazenda. Devolve as listas novas (iguais quando nada muda).
+function ligarEdicaoProduto(d, produto, base, comum) {
+  const ch = chaveProduto(produto);
+  const novoNome = comum && comum.produto && String(comum.produto).trim() && String(comum.produto).trim() !== produto ? String(comum.produto).trim() : null;
+  const novaBase = comum && comum.unidade && comum.unidade !== MANTER ? normalizar(1, comum.unidade).base : null;
+  const troca = (n) => (novoNome && n && chaveProduto(n) === ch ? novoNome : n);
+  const mov = (x) => {
+    if (!x || chaveProduto(x.produto) !== ch || (x.base && x.base !== base)) return x;
+    if (!novoNome && !(novaBase && novaBase !== base)) return x;
+    const o = { ...x };
+    if (novoNome) o.produto = novoNome;
+    if (novaBase && novaBase !== base) o.base = novaBase;
+    return o;
+  };
+  const receita = (a) => {
+    if (!novoNome) return a;
+    const produtos = (a.produtos || []).map((p) => (p ? { ...p, nome: troca(p.nome), ...(p.continuacao ? { continuacao: { ...p.continuacao, nome: troca(p.continuacao.nome) } } : {}), ...(Array.isArray(p.variedades) ? { variedades: p.variedades.map((v) => ({ ...v, nome: troca(v.nome) })) } : {}) } : p));
+    const execucoes = Object.fromEntries(Object.entries(a.execucoes || {}).map(([tid, ex]) => [tid, ex ? { ...ex, ...(Array.isArray(ex.produtosReais) ? { produtosReais: ex.produtosReais.map((r) => ({ ...r, nome: troca(r.nome) })) } : {}), ...(Array.isArray(ex.etapas) ? { etapas: ex.etapas.map((e) => ({ ...e, ...(e.variedade ? { variedade: troca(e.variedade) } : {}) })) } : {}) } : ex]));
+    return { ...a, produtos, ...(a.execucoes ? { execucoes } : {}) };
+  };
+  return { entregas: (d.entregas || []).map(mov), ajustes: (d.ajustes || []).map(mov), apls: (d.apls || []).map(receita) };
+}
+const ehDaLinhaDoGrupo = (p, produto, base) => !!p && !!p.produto && chaveProduto(p.produto) === chaveProduto(produto) && normalizar(1, p.unidade).base === base;
+
+function ModalEditarCompraGrupo({ produto, base, fazendas, onFechar, onGravou }) {
+  const lancs = [];
+  for (const x of fazendas || []) for (const p of (x.d.prog || [])) if (ehDaLinhaDoGrupo(p, produto, base)) lancs.push({ x, p, k: `${x.f.id}|${p.id}` });
+  const [nome, setNome] = useState(produto);
+  const [unidade, setUnidade] = useState(MANTER);
+  const [categoria, setCategoria] = useState(MANTER);
+  const [pagamento, setPagamento] = useState(MANTER);
+  const [vencimento, setVencimento] = useState("");
+  const [linhas, setLinhas] = useState(() => Object.fromEntries(lancs.map(({ p, k }) => [k, { qtd: String(num(p.qtd)), preco: p.barter || p.moeda === "US$" ? "" : (num(p.preco) > 0 ? String(num(p.preco)) : ""), tirar: false }])));
+  const [gravando, setGravando] = useState(false);
+  const [erro, setErro] = useState("");
+  const muda = (k, campo, v) => setLinhas({ ...linhas, [k]: { ...linhas[k], [campo]: v } });
+  const unidades = [...new Set(lancs.map(({ p }) => p.unidade || "?"))];
+  const pagamentos = [...new Set(lancs.filter(({ p }) => !p.barter).map(({ p }) => p.pagamento || "não informado"))];
+  const comum = { produto: nome.trim() !== produto ? nome : "", unidade, categoria, pagamento, vencimento };
+  const nTirar = Object.values(linhas).filter((l) => l.tirar).length;
+  async function salvar() {
+    if (nTirar && !window.confirm(`Tirar ${nTirar} lançamento${nTirar === 1 ? "" : "s"} de compra? Não dá para desfazer.`)) return;
+    setGravando(true); setErro("");
+    let feitas = 0;
+    try {
+      for (const x of fazendas || []) {
+        const antes = x.d.prog || [];
+        if (!antes.some((p) => ehDaLinhaDoGrupo(p, produto, base))) continue;
+        const depois = antes.flatMap((p) => { if (!ehDaLinhaDoGrupo(p, produto, base)) return [p]; const l = linhas[`${x.f.id}|${p.id}`]; if (l && l.tirar) return []; return [aplicarEdicaoCompra(p, comum, l)]; });
+        // o resto da fazenda acompanha (nome e unidade): entregas, ajustes e receitas continuam ligados à compra
+        const lig = ligarEdicaoProduto(x.d, produto, base, comum);
+        let mudou = false;
+        if (JSON.stringify(depois) !== JSON.stringify(antes)) { await NuvemDados.gravarColecao(x.f.id, "compras", x.safra, antes, depois); mudou = true; }
+        if (JSON.stringify(lig.entregas) !== JSON.stringify(x.d.entregas || [])) { await NuvemDados.gravarColecao(x.f.id, "entregas", x.safra, x.d.entregas || [], lig.entregas); mudou = true; }
+        if (JSON.stringify(lig.ajustes) !== JSON.stringify(x.d.ajustes || [])) { await NuvemDados.gravarColecao(x.f.id, "ajustes", x.safra, x.d.ajustes || [], lig.ajustes); mudou = true; }
+        if (JSON.stringify(lig.apls) !== JSON.stringify(x.d.apls || [])) { await NuvemDados.gravarRecomendacoes(x.f.id, x.safra, x.d.apls || [], lig.apls); mudou = true; }
+        if (mudou) feitas++;
+      }
+      onGravou && onGravou(feitas ? `✓ ${nome.trim() || produto}: compra ajustada em ${feitas} fazenda${feitas === 1 ? "" : "s"}.` : "Nada mudou.");
+      onFechar();
+    } catch (e) { setErro("Não consegui gravar — confira a internet e tente de novo. " + String((e && e.message) || "")); setGravando(false); }
+  }
+  const selVal = (v) => (v === MANTER ? "" : v);
+  return (
+    <Modal titulo={`✏️ ${produto} — todas as fazendas`} onFechar={onFechar}>
+      <div style={{ fontSize: 12.5, color: C.cinza }}>{lancs.length} lançamento{lancs.length === 1 ? "" : "s"} de compra em {new Set(lancs.map(({ x }) => x.f.id)).size} fazenda{new Set(lancs.map(({ x }) => x.f.id)).size === 1 ? "" : "s"} (safra atual de cada uma). O que mudar aqui grava direto na compra de cada fazenda.</div>
+      <div style={{ background: C.verdeBg, borderRadius: 12, padding: "8px 12px", marginTop: 8 }}>
+        <b style={{ color: C.navy, fontSize: 13.5 }}>Mudar em todos de uma vez</b>
+        <label>Nome do produto</label>
+        <input value={nome} onChange={(e) => setNome(e.target.value)} />
+        <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ flex: 1 }}>
+            <label>Unidade <span style={{ fontWeight: 500, color: C.cinza }}>(hoje: {unidades.join(", ")})</span></label>
+            <select value={unidade} onChange={(e) => setUnidade(e.target.value)}><option value={MANTER}>— manter —</option>{UNIDADES.map((u) => <option key={u}>{u}</option>)}</select>
+          </div>
+          <div style={{ flex: 1.2 }}>
+            <label>Categoria</label>
+            <select value={categoria} onChange={(e) => setCategoria(e.target.value)}><option value={MANTER}>— manter —</option>{CATEGORIAS.map((c) => <option key={c}>{c}</option>)}</select>
+          </div>
+        </div>
+        {unidade !== MANTER && <div style={{ fontSize: 11.5, color: C.navyEscuro, fontWeight: 700 }}>Só troca a unidade — o número de cada lançamento continua o mesmo (ex.: 297 kg vira 297 {unidade}). Se precisar, ajuste a quantidade embaixo.</div>}
+        <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ flex: 1.3 }}>
+            <label>Como vai pagar <span style={{ fontWeight: 500, color: C.cinza }}>(hoje: {pagamentos.join(", ") || "—"})</span></label>
+            <select value={pagamento} onChange={(e) => { const p = e.target.value; setPagamento(p); if (p === "Pagamento na safra" && !vencimento) setVencimento(proximo30Abril()); }}>
+              <option value={MANTER}>— manter —</option>
+              <option value="">não informado</option>
+              <option>À vista</option>
+              <option>Boleto / prazo</option>
+              <option>Pagamento na safra</option>
+            </select>
+          </div>
+          {selVal(pagamento) !== "À vista" && pagamento !== "" && (
+            <div style={{ flex: 1 }}><label>Vencimento</label><input type="date" value={vencimento} onChange={(e) => setVencimento(e.target.value)} /></div>
+          )}
+        </div>
+        {lancs.some(({ p }) => p.barter) && <div style={{ fontSize: 11.5, color: C.cinza }}>Lançamentos em barter não mudam a forma de pagamento.</div>}
+      </div>
+      <div style={{ fontWeight: 900, color: C.navy, fontSize: 13.5, marginTop: 10 }}>Cada lançamento</div>
+      {(fazendas || []).filter((x) => lancs.some((l) => l.x === x)).map((x) => (
+        <div key={x.f.id} style={{ border: `1.5px solid ${C.borda}`, borderRadius: 12, padding: "8px 10px", marginTop: 6 }}>
+          <b style={{ color: C.navyEscuro }}>{x.f.nome}</b>
+          {lancs.filter((l) => l.x === x).map(({ p, k }) => {
+            const l = linhas[k];
+            const un = unidade !== MANTER ? unidade : p.unidade;
+            return (
+              <div key={k} style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 6, opacity: l.tirar ? 0.45 : 1 }}>
+                <div style={{ flex: 1.3, minWidth: 0, fontSize: 11.5, color: C.cinza, lineHeight: 1.25 }}>{fmtD(String(p.data || "").slice(0, 10)) || "sem data"}{p.origem === "anterior" ? " · estoque anterior" : ""}{p.obs ? ` · ${String(p.obs).slice(0, 50)}` : ""}</div>
+                <input type="number" inputMode="decimal" disabled={l.tirar} value={l.qtd} onChange={(e) => muda(k, "qtd", e.target.value)} style={{ flex: 1, marginTop: 0, padding: "6px 8px" }} />
+                <span style={{ flex: "none", fontSize: 12, fontWeight: 800, color: C.navyEscuro, minWidth: 26 }}>{un}</span>
+                {p.barter ? <span style={{ flex: 1, fontSize: 11.5, color: C.cinza }}>barter</span>
+                  : p.moeda === "US$" ? <span style={{ flex: 1, fontSize: 11.5, color: C.cinza }}>US$ {fmtN(num(p.precoMoeda))}/{p.unidade}</span>
+                  : <input type="number" inputMode="decimal" disabled={l.tirar} value={l.preco} onChange={(e) => muda(k, "preco", e.target.value)} placeholder="R$/un" style={{ flex: 1, marginTop: 0, padding: "6px 8px" }} />}
+                <button onClick={() => muda(k, "tirar", !l.tirar)} title={l.tirar ? "manter este lançamento" : "tirar este lançamento"} style={{ flex: "none", background: l.tirar ? C.vermelho : "transparent", color: l.tirar ? "#fff" : C.vermelho, border: `1.5px solid ${C.vermelho}`, borderRadius: 8, padding: "4px 7px", fontWeight: 800, fontSize: 12 }}>{l.tirar ? "↩" : "🗑"}</button>
+              </div>
+            );
+          })}
+        </div>
+      ))}
+      {(comum.produto || unidade !== MANTER) && (() => { let ne = 0, na = 0, nr = 0; for (const x of fazendas || []) { if (!(x.d.prog || []).some((p) => ehDaLinhaDoGrupo(p, produto, base))) continue; const l = ligarEdicaoProduto(x.d, produto, base, comum); ne += l.entregas.filter((e, i) => e !== (x.d.entregas || [])[i]).length; na += l.ajustes.filter((e, i) => e !== (x.d.ajustes || [])[i]).length; nr += l.apls.filter((a, i) => JSON.stringify(a) !== JSON.stringify((x.d.apls || [])[i])).length; } return <div style={{ background: "#EEF2F7", borderRadius: 10, padding: "7px 10px", marginTop: 8, fontSize: 12, color: C.navyEscuro, fontWeight: 700 }}>🔗 Tudo continua ligado: vai junto para {ne} entrega{ne === 1 ? "" : "s"}, {na} ajuste{na === 1 ? "" : "s"} de estoque{comum.produto ? ` e ${nr} recomendaç${nr === 1 ? "ão" : "ões"}` : ""} deste produto.</div>; })()}
+      {erro && <div style={{ color: C.vermelho, fontWeight: 700, fontSize: 12.5, marginTop: 8 }}>{erro}</div>}
+      <BotaoSalvar disabled={gravando || !lancs.length} texto={gravando ? "Gravando…" : `Salvar nas fazendas${nTirar ? ` (tirando ${nTirar})` : ""}`} onClick={salvar} />
+    </Modal>
   );
 }
 
@@ -29359,6 +29512,48 @@ const SeloTelaAcesa = ({ acesa, ativo }) => (!ativo || acesa == null ? null : (
 ));
 
 // A janela só fecha no × (ou nos botões dela). Tocar fora NÃO fecha: quem está preenchendo não perde nada.
+// Lista longa (produtos do estoque…): toca e DIGITA — filtra pelas letras, cada palavra digitada precisa
+// aparecer no nome (sem acento, maiúscula ou minúscula). grupos: [[titulo, [{ valor, rotulo }]]].
+function filtrarOpcoes(grupos, busca) {
+  const termos = semAcento(String(busca || "")).toLowerCase().split(/\s+/).filter(Boolean);
+  const bate = (r) => { const s = semAcento(String(r || "")).toLowerCase(); return termos.every((x) => s.includes(x)); };
+  return (grupos || []).map(([g, l]) => [g, (l || []).filter((o) => bate(o.rotulo))]).filter(([, l]) => l.length);
+}
+function EscolherComBusca({ valor, rotuloValor, onEscolher, grupos, vazio, disabled, style, titulo }) {
+  const [aberto, setAberto] = useState(false);
+  const [busca, setBusca] = useState("");
+  const filtrados = filtrarOpcoes(grupos, busca);
+  const n = filtrados.reduce((s, [, l]) => s + l.length, 0);
+  const fechar = () => { setAberto(false); setBusca(""); };
+  const escolher = (v) => { onEscolher(v); fechar(); };
+  return (
+    <>
+      <button type="button" disabled={disabled} onClick={() => setAberto(true)} style={{ textAlign: "left", background: "#fff", border: `1.5px solid ${C.borda}`, borderRadius: 10, padding: "10px 10px", fontSize: 14, color: valor ? C.navyEscuro : C.cinza, fontWeight: valor ? 700 : 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", opacity: disabled ? 0.6 : 1, marginTop: 4, ...style }}>🔎 {valor ? (rotuloValor || valor) : (vazio || "— escolha —")}</button>
+      {aberto && (
+        <div className="nao-imprimir" style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(14,34,66,.55)", display: "flex", alignItems: "flex-start", justifyContent: "center" }}>
+          <div style={{ background: "#fff", width: "100%", maxWidth: 560, maxHeight: "88vh", marginTop: "3vh", borderRadius: 14, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+            <div style={{ padding: "10px 12px", borderBottom: `1.5px solid ${C.borda}` }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                <b style={{ color: C.navy, fontSize: 15 }}>{titulo || "Escolher"}</b>
+                <button onClick={fechar} aria-label="Fechar" style={{ border: "none", background: C.fundo, borderRadius: 20, width: 36, height: 36, fontSize: 20, color: C.navyEscuro }}>×</button>
+              </div>
+              <input autoFocus value={busca} onChange={(e) => setBusca(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && n === 1) escolher(filtrados[0][1][0].valor); }} placeholder="Digite o nome… (ex.: glif, clet)" style={{ marginTop: 0, fontSize: 16 }} />
+            </div>
+            <div style={{ overflowY: "auto", padding: "2px 8px 12px" }}>
+              {n === 0 && <div style={{ padding: 16, fontSize: 13.5, color: C.cinza, textAlign: "center" }}>Nada com “{busca}”. Confira se o produto foi comprado neste ciclo.</div>}
+              {filtrados.map(([g, l]) => (
+                <div key={g || "_"}>
+                  {g && <div style={{ fontSize: 11, fontWeight: 900, color: C.cinza, margin: "10px 4px 2px", letterSpacing: 0.3 }}>{String(g).toUpperCase()}</div>}
+                  {l.map((o) => <button key={o.valor + "|" + o.rotulo} onClick={() => escolher(o.valor)} style={{ display: "block", width: "100%", textAlign: "left", padding: "11px 10px", border: "none", borderBottom: `1px solid ${C.fundo}`, background: o.valor === valor ? C.verdeBg : "#fff", fontSize: 14, color: C.navyEscuro, fontWeight: o.valor === valor ? 800 : 600 }}>{o.rotulo}</button>)}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
 function Modal({ titulo, children, onFechar }) {
   return (
     <div className="nao-imprimir" style={{ position: "fixed", inset: 0, background: "rgba(14,34,66,.6)", display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 50 }}>
@@ -31070,16 +31265,8 @@ function ModalRecomendacao({ talhoes, estoque, mod, inicial, usuario, lavoura, e
                     </div>
                   </>
                 )}
-                <select style={{ flex: 2, minWidth: 0 }} value={p.nome} disabled={travado} onChange={(e) => escolherProduto(i, e.target.value)}>
-                  <option value="">— escolha o produto —</option>
-                  {porCategoria(disponiveis, (d) => d.categoria).map(([cat, itens]) => (
-                    <optgroup key={cat} label={cat}>
-                      {itens.map((d) => (
-                        <option key={d.produto + d.ciclo} value={d.produto}>{d.produto} · {d.ciclo} · saldo {fmtN(saldoDe(d))} {d.base}</option>
-                      ))}
-                    </optgroup>
-                  ))}
-                </select>
+                <EscolherComBusca style={{ flex: 2, minWidth: 0 }} valor={p.nome} disabled={travado} titulo={`Produto ${i + 1}`} vazio="— escolha o produto —" onEscolher={(v) => escolherProduto(i, v)}
+                  grupos={porCategoria(disponiveis, (d) => d.categoria).map(([cat, itens]) => [cat, itens.map((d) => ({ valor: d.produto, rotulo: `${d.produto} · ${d.ciclo} · saldo ${fmtN(saldoDe(d))} ${d.base}` }))])} />
                 <input style={{ flex: 1, minWidth: 0, background: doseSemente(p) != null ? "#EEF2EC" : "#fff" }}
                   type="number" inputMode="decimal" value={doseDe(p)} readOnly={travado || doseSemente(p) != null}
                   title={p.unidade === "bag" ? "calculado pela população" : ""}
@@ -31149,12 +31336,8 @@ function ModalRecomendacao({ talhoes, estoque, mod, inicial, usuario, lavoura, e
             return (
               <div key={i} style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 6 }}>
                 <span style={{ fontWeight: 900, color: C.cinza, fontSize: 13, width: 18, flex: "none" }}>{i + 1}º</span>
-                <select style={{ flex: 2, minWidth: 0, marginTop: 0 }} value={p.nome} disabled={travado} onChange={(e) => { const it = acharProduto(e.target.value); const u = it ? unidadesDaBase(it.base) : ["L"]; setProdutosSulco(produtosSulco.map((x, j) => (j === i ? { ...x, nome: e.target.value, unidade: u.includes(x.unidade) ? x.unidade : u[0] } : x))); }}>
-                  <option value="">— escolha o produto —</option>
-                  {porCategoria(disponiveis, (d) => d.categoria).map(([cat, itens]) => (
-                    <optgroup key={cat} label={cat}>{itens.map((d) => <option key={d.produto + d.ciclo} value={d.produto}>{d.produto} · {d.ciclo} · saldo {fmtN(saldoDe(d))} {d.base}</option>)}</optgroup>
-                  ))}
-                </select>
+                <EscolherComBusca style={{ flex: 2, minWidth: 0, marginTop: 0 }} valor={p.nome} disabled={travado} titulo="Produto no sulco" vazio="— escolha o produto —" onEscolher={(v) => { const it = acharProduto(v); const u = it ? unidadesDaBase(it.base) : ["L"]; setProdutosSulco(produtosSulco.map((x, j) => (j === i ? { ...x, nome: v, unidade: u.includes(x.unidade) ? x.unidade : u[0] } : x))); }}
+                  grupos={porCategoria(disponiveis, (d) => d.categoria).map(([cat, itens]) => [cat, itens.map((d) => ({ valor: d.produto, rotulo: `${d.produto} · ${d.ciclo} · saldo ${fmtN(saldoDe(d))} ${d.base}` }))])} />
                 <input style={{ flex: 1, minWidth: 0, marginTop: 0 }} type="number" inputMode="decimal" value={p.dose} readOnly={travado} onChange={(e) => setProdSulco(i, "dose", e.target.value)} placeholder="Dose" />
                 <select style={{ flex: 1, minWidth: 0, marginTop: 0 }} value={p.unidade} disabled={travado} onChange={(e) => setProdSulco(i, "unidade", e.target.value)}>{uns.map((u) => <option key={u}>{u}</option>)}</select>
                 {p.unidade === "dose" && <input type="number" inputMode="decimal" value={p.mlPorDose || (acharProduto(p.nome) || {}).mlPorDose || ""} readOnly={travado} onChange={(e) => setProdSulco(i, "mlPorDose", e.target.value)} placeholder="mL/dose" title="quantos mL tem 1 dose (vem da compra)" style={{ width: 84, flex: "none", marginTop: 0 }} />}
@@ -31441,11 +31624,8 @@ function ModalRecomendacao({ talhoes, estoque, mod, inicial, usuario, lavoura, e
             return (
               <div style={{ background: "#fff", border: `1.5px solid ${C.verdeEscuro}`, borderRadius: 10, padding: "10px 12px", marginTop: 8, color: C.navyEscuro }}>
                 <div style={{ fontWeight: 800, fontSize: 13 }}>Usar <b>{pA.nome}</b> até acabar e continuar com:</div>
-                <select style={{ marginTop: 6 }} value={continuando.nome} onChange={(e) => setContinuando(sugerirContinuacao(continuando.i, e.target.value))}>
-                  <option value="">— produto do estoque —</option>
-                  {mesmos.length > 0 && <optgroup label="Mesmo ativo">{mesmos.map((d) => <option key={d.produto + d.ciclo} value={d.produto}>{d.produto} · saldo {fmtN(saldoDe(d))} {d.base}{ativoDoProduto(d.produto) ? ` · ${ativoDoProduto(d.produto)}` : ""}</option>)}</optgroup>}
-                  <optgroup label={mesmos.length ? "Outros" : "Produtos"}>{outros.map((d) => <option key={d.produto + d.ciclo} value={d.produto}>{d.produto} · saldo {fmtN(saldoDe(d))} {d.base}</option>)}</optgroup>
-                </select>
+                <EscolherComBusca style={{ marginTop: 6, width: "100%" }} valor={continuando.nome} titulo="Continuar com" vazio="— produto do estoque —" onEscolher={(v) => setContinuando(sugerirContinuacao(continuando.i, v))}
+                  grupos={[...(mesmos.length ? [["Mesmo ativo", mesmos.map((d) => ({ valor: d.produto, rotulo: `${d.produto} · saldo ${fmtN(saldoDe(d))} ${d.base}${ativoDoProduto(d.produto) ? ` · ${ativoDoProduto(d.produto)}` : ""}` }))]] : []), [mesmos.length ? "Outros" : "Produtos", outros.map((d) => ({ valor: d.produto, rotulo: `${d.produto} · saldo ${fmtN(saldoDe(d))} ${d.base}` }))]]} />
                 {continuando.nome && (
                   <div style={{ fontSize: 12.5, marginTop: 6, fontWeight: 700, color: mesmoAtivo ? C.verdeEscuro : C.amarelo }}>
                     {mesmoAtivo
@@ -31482,12 +31662,8 @@ function ModalRecomendacao({ talhoes, estoque, mod, inicial, usuario, lavoura, e
               <div style={{ background: "#fff", border: `1.5px solid ${C.navy}`, borderRadius: 10, padding: "10px 12px", marginTop: 8, color: C.navyEscuro }}>
                 <div style={{ fontWeight: 800, fontSize: 13 }}>No lugar de <b>{alvo.nome}</b> ({fmtN(num(doseDe(alvo)))} {alvo.unidade}/ha), usar:</div>
                 <div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 6 }}>
-                  <select style={{ flex: 2, minWidth: 0, marginTop: 0 }} value={substituindo.nome} onChange={(e) => { const it = acharProduto(e.target.value); const u = it ? unidadesDaBase(it.base) : ["L"]; setSubstituindo({ ...substituindo, nome: e.target.value, unidade: u.includes(substituindo.unidade) ? substituindo.unidade : u[0] }); }}>
-                    <option value="">— produto do estoque —</option>
-                    {porCategoria(disponiveis.filter((d) => d.produto !== alvo.nome), (d) => d.categoria).map(([cat, itens]) => (
-                      <optgroup key={cat} label={cat}>{itens.map((d) => <option key={d.produto + d.ciclo} value={d.produto}>{d.produto} · saldo {fmtN(saldoDe(d))} {d.base}</option>)}</optgroup>
-                    ))}
-                  </select>
+                  <EscolherComBusca style={{ flex: 2, minWidth: 0, marginTop: 0 }} valor={substituindo.nome} titulo="Trocar por" vazio="— produto do estoque —" onEscolher={(v) => { const it = acharProduto(v); const u = it ? unidadesDaBase(it.base) : ["L"]; setSubstituindo({ ...substituindo, nome: v, unidade: u.includes(substituindo.unidade) ? substituindo.unidade : u[0] }); }}
+                    grupos={porCategoria(disponiveis.filter((d) => d.produto !== alvo.nome), (d) => d.categoria).map(([cat, itens]) => [cat, itens.map((d) => ({ valor: d.produto, rotulo: `${d.produto} · saldo ${fmtN(saldoDe(d))} ${d.base}` }))])} />
                   <input type="number" inputMode="decimal" style={{ flex: 1, minWidth: 0, marginTop: 0 }} value={substituindo.dose} onChange={(e) => setSubstituindo({ ...substituindo, dose: e.target.value })} placeholder="dose/ha" />
                   <select style={{ flex: 1, minWidth: 0, marginTop: 0 }} value={substituindo.unidade} onChange={(e) => setSubstituindo({ ...substituindo, unidade: e.target.value })}>{unsNovo.map((u) => <option key={u}>{u}</option>)}</select>
                 </div>
