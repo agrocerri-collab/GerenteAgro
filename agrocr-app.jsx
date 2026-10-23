@@ -3178,14 +3178,15 @@ function TelaGrupoPanorama({ grupo, fazendas, onFechar }) {
   const porFazenda = fazendas.map((f) => {
     const d = dados[f.id] || {};
     const talhoes = f.talhoes || [];
-    // hectares por cultura: a lavoura da safra manda; sem lavoura, vale o cadastro do talhão
+    // hectares por cultura, SAFRA e SAFRINHA separadas (milho safrinha não soma com milho safra):
+    // na safra a lavoura manda; sem lavoura, vale o cadastro do talhão. Na safrinha, a cultura safrinha do talhão.
     const culturas = {};
-    const safrinhaDe = {};   // cultura → é safrinha (para o rótulo)
+    const safrinha = {};
     for (const t of talhoes) {
       const lv = (d.lavoura || []).find((l) => l.talhaoId === t.id);
       const c = (lv && lv.cultura) || t.cultura || "Sem cultura";
       culturas[c] = (culturas[c] || 0) + num(t.areaHa);
-      if (t.culturaSafrinha && t.culturaSafrinha !== c) { culturas[t.culturaSafrinha] = (culturas[t.culturaSafrinha] || 0) + num(t.areaHa); safrinhaDe[t.culturaSafrinha] = true; }
+      if (t.culturaSafrinha) safrinha[t.culturaSafrinha] = (safrinha[t.culturaSafrinha] || 0) + num(t.areaHa);
     }
     // colheita por cultura: % da área colhida e média (sc/ha) do que já foi descarregado
     const colheita = {};
@@ -3241,13 +3242,15 @@ function TelaGrupoPanorama({ grupo, fazendas, onFechar }) {
     }
     return {
       f, safra: safraAtualDe(f), areaHa: talhoes.reduce((s, t) => s + num(t.areaHa), 0),
-      culturas, safrinhaDe, colheita, mmTotal, rotuloChuva, seca, diasFung, statusFung, pendencias, idade,
+      culturas, safrinha, colheita, mmTotal, rotuloChuva, seca, diasFung, statusFung, pendencias, idade,
       linhasLavoura: linhasDaLavoura(talhoes, d.lavoura || []),
     };
   });
 
   const culturasGeral = {};
   for (const x of porFazenda) for (const c of Object.keys(x.culturas)) culturasGeral[c] = (culturasGeral[c] || 0) + x.culturas[c];
+  const safrinhaGeral = {};
+  for (const x of porFazenda) for (const c of Object.keys(x.safrinha)) safrinhaGeral[c] = (safrinhaGeral[c] || 0) + x.safrinha[c];
   const totPend = porFazenda.reduce((s, x) => s + x.pendencias, 0);
   const atrasadas = porFazenda.filter((x) => x.statusFung === "atrasada").length;
   const emAlerta = porFazenda.filter((x) => x.statusFung === "alerta").length;
@@ -3282,8 +3285,13 @@ function TelaGrupoPanorama({ grupo, fazendas, onFechar }) {
         <div style={cartao}>
           <div style={{ fontSize: 11, color: C.cinza, fontWeight: 800 }}>🌱 CULTURAS (todas)</div>
           <div style={{ fontSize: 13, fontWeight: 800, color: C.navy, marginTop: 2 }}>
-            {Object.keys(culturasGeral).filter((c) => c !== "Sem cultura").map((c) => `${c} ${fmtN(culturasGeral[c])} ha`).join(" · ") || "cadastre as lavouras"}
+            <span style={{ color: C.verdeEscuro }}>Safra:</span> {Object.keys(culturasGeral).filter((c) => c !== "Sem cultura").map((c) => `${c} ${fmtN(culturasGeral[c])} ha`).join(" · ") || "cadastre as lavouras"}
           </div>
+          {Object.keys(safrinhaGeral).length > 0 && (
+            <div style={{ fontSize: 13, fontWeight: 800, color: C.navy, marginTop: 2 }}>
+              <span style={{ color: "#7A5C00" }}>Safrinha:</span> {Object.keys(safrinhaGeral).map((c) => `${c} ${fmtN(safrinhaGeral[c])} ha`).join(" · ")}
+            </div>
+          )}
         </div>
         <div style={{ ...cartao, background: atrasadas ? "#FFF0F0" : "#fff", borderColor: atrasadas ? "#E8B4B4" : C.borda }}>
           <div style={{ fontSize: 11, color: C.cinza, fontWeight: 800 }}>🚿 FUNGICIDA</div>
@@ -3330,8 +3338,9 @@ function TelaGrupoPanorama({ grupo, fazendas, onFechar }) {
                 {cults.map((c) => {
                   const k = x.colheita[c] || {}, i = x.idade[c];
                   const resto = k.colhida ? " · colhida ✓" : k.pct > 0 ? ` · ${k.pct.toFixed(0)}% colhida` : i ? ` · ${i.novo.dae === i.velho.dae ? i.novo.dae : `${i.novo.dae}–${i.velho.dae}`} DAE` : "";
-                  return etiqueta("c" + c, "lavoura", `🌱 ${c} ${fmtN(x.culturas[c])} ha${resto}`, C.verdeEscuro, C.verdeBg);
+                  return etiqueta("c" + c, "lavoura", `🌱 Safra: ${c} ${fmtN(x.culturas[c])} ha${resto}`, C.verdeEscuro, C.verdeBg);
                 })}
+                {Object.keys(x.safrinha).map((c) => etiqueta("s" + c, "lavoura", `🌽 Safrinha: ${c} ${fmtN(x.safrinha[c])} ha`, "#7A5C00", "#FFF7E0"))}
                 {comPrev.length > 0 && !tudoColhido && etiqueta("col", "lavoura", `🌾 colheita ${fmtD(comPrev[0].previsao.data)}`, "#7A5C00", "#FFF7E0")}
                 {etiqueta("chuva", "chuva", `🌧️ ${fmtN(x.mmTotal)} mm`, "#1F6FA8", "#E3F0FA")}
                 {etiqueta("fung", "fung", `🚿 ${txFung}`, tudoColhido ? C.cinza : corFung(x.statusFung), !tudoColhido && x.statusFung === "atrasada" ? "#FFF0F0" : C.fundo)}
@@ -3344,7 +3353,7 @@ function TelaGrupoPanorama({ grupo, fazendas, onFechar }) {
                   const i = x.idade[c];
                   return (
                     <div key={c} style={linha}>
-                      <span style={{ flex: "none", minWidth: 150 }}>🌱 <b>{c}</b>{x.safrinhaDe[c] ? <span style={{ color: C.cinza, fontSize: 11.5 }}> safrinha</span> : null} <span style={{ color: C.cinza }}>· {fmtN(x.culturas[c])} ha</span></span>
+                      <span style={{ flex: "none", minWidth: 150 }}>🌱 <span style={{ color: C.verdeEscuro, fontSize: 11.5, fontWeight: 800 }}>SAFRA</span> <b>{c}</b> <span style={{ color: C.cinza }}>· {fmtN(x.culturas[c])} ha</span></span>
                       <span style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                         {k.pct > 0 && chip(`${k.pct.toFixed(0)}% colhida${k.colhida ? " ✓" : ""}`, k.colhida ? C.verdeEscuro : "#7A5C00", k.colhida ? C.verdeBg : "#FFF7E0")}
                         {k.media != null && chip(`média ${k.media.toFixed(1)} ${k.unid || "sc"}/ha`, C.navy, "#EEF2F7")}
@@ -3354,6 +3363,11 @@ function TelaGrupoPanorama({ grupo, fazendas, onFechar }) {
                     </div>
                   );
                 })}
+                {Object.keys(x.safrinha).map((c) => (
+                  <div key={"s" + c} style={linha}>
+                    <span style={{ flex: "none", minWidth: 150 }}>🌽 <span style={{ color: "#7A5C00", fontSize: 11.5, fontWeight: 800 }}>SAFRINHA</span> <b>{c}</b> <span style={{ color: C.cinza }}>· {fmtN(x.safrinha[c])} ha</span></span>
+                  </div>
+                ))}
                 {x.linhasLavoura.length > 0 && (
                   <div style={{ overflowX: "auto", borderTop: `1px solid ${C.fundo}`, paddingTop: 4 }}>
                     <table style={{ borderCollapse: "collapse", minWidth: "100%", fontSize: 12.5 }}>
