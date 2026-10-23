@@ -5785,7 +5785,7 @@ function TelaFazenda({ fazenda, fazendas, grupos, papel, usuario, naNuvem, equip
       .filter((x) => x.areaHa > 0);
     const areaAqui = (fazenda.talhoes || []).reduce((s, t) => s + num(t.areaHa), 0);
     if (!irmas.length || !(areaAqui > 0)) return null;
-    return { irmas, areaAqui, areaTotal: areaAqui + irmas.reduce((s, x) => s + x.areaHa, 0), nomeGrupo: ((grupos || []).find((g) => fazendaNoGrupo(fazenda, g)) || {}).nome || "grupo" };
+    return { irmas, areaAqui, talhoesAqui: fazenda.talhoes || [], nomeAqui: fazenda.nome, areaTotal: areaAqui + irmas.reduce((s, x) => s + x.areaHa, 0), nomeGrupo: ((grupos || []).find((g) => fazendaNoGrupo(fazenda, g)) || {}).nome || "grupo" };
   })();
   useEffect(() => { const k = SECAO_PERMISSAO[secao]; if (k && !mostrar(k)) setSecao("inicio"); }, [secao, usuario]);
   useEffect(() => { FOTOS_FAZENDA.id = fazenda.id; }, [fazenda.id]);
@@ -6354,7 +6354,7 @@ function TelaFazenda({ fazenda, fazendas, grupos, papel, usuario, naNuvem, equip
           const areaAqui = (fazenda.talhoes || []).reduce((s, t) => s + num(t.areaHa), 0);
           if (!(areaAqui > 0)) return null;
           const areaTotal = areaAqui + irmas.reduce((s, x) => s + x.areaHa, 0);
-          return { irmas, areaAqui, areaTotal, nomeAqui: fazenda.nome, nomeGrupo: ((grupos || []).find((g) => fazendaNoGrupo(fazenda, g)) || {}).nome || "grupo" };
+          return { irmas, areaAqui, areaTotal, talhoesAqui: fazenda.talhoes || [], nomeAqui: fazenda.nome, nomeGrupo: ((grupos || []).find((g) => fazendaNoGrupo(fazenda, g)) || {}).nome || "grupo" };
         })()}
         onSalvar={(v) => {
           gravar(kProg(fazenda.id, safra), v, setProg, prog);
@@ -9575,15 +9575,28 @@ function FolhaDeCompras({ onVoltar }) {
   );
 }
 
-// comprado ÷ área: por produto (e ciclo), a "dose" que o volume comprado dá na área da cultura da
-// compra — ou na área toda da fazenda quando a compra não diz a cultura
-function doseDoComprado(itens, talhoes) {
-  const area = (cultura, ciclo) => (talhoes || []).reduce((s, tal) => {
+// área dos talhões que levam a cultura no ciclo (sem cultura = área toda)
+function areaDaCultura(talhoes, cultura, ciclo) {
+  return (talhoes || []).reduce((s, tal) => {
     if (!cultura) return s + num(tal.areaHa);
     const c = ciclo === "Safrinha" ? tal.culturaSafrinha : ciclo === "Ambas" ? (tal.cultura || tal.culturaSafrinha) : tal.cultura;
     const bate = String(c || "").trim().toLowerCase() === String(cultura).trim().toLowerCase() || (ciclo === "Ambas" && String(tal.culturaSafrinha || "").trim().toLowerCase() === String(cultura).trim().toLowerCase());
     return s + (bate ? num(tal.areaHa) : 0);
   }, 0);
+}
+// Rateio de compra pelo grupo: cada fazenda entra com a área da CULTURA da compra (soja → só a área de soja);
+// fazenda que não planta a cultura fica de fora. Se nenhuma tiver a cultura cadastrada, volta para a área toda.
+// fazendas: [{key, talhoes, areaTotal}] → [{...f, areaHa, semCultura?}]
+function areasDoRateio(fazendas, cultura, ciclo) {
+  const cult = String(cultura || "").trim();
+  if (!cult) return (fazendas || []).map((f) => ({ ...f, areaHa: num(f.areaTotal) }));
+  const l = (fazendas || []).map((f) => ({ ...f, areaHa: areaDaCultura(f.talhoes, cult, ciclo || "Safra") }));
+  return l.some((f) => f.areaHa > 0) ? l : (fazendas || []).map((f) => ({ ...f, areaHa: num(f.areaTotal), semCultura: true }));
+}
+// comprado ÷ área: por produto (e ciclo), a "dose" que o volume comprado dá na área da cultura da
+// compra — ou na área toda da fazenda quando a compra não diz a cultura
+function doseDoComprado(itens, talhoes) {
+  const area = (cultura, ciclo) => areaDaCultura(talhoes, cultura, ciclo);
   const g = {};
   for (const it of itens || []) {
     if (!it.produto || !(num(it.qtd) > 0)) continue;
@@ -19589,10 +19602,13 @@ function distribuirPorArea(qtd, fazendas) {
 }
 // Quadro do rateio: cada item com a quantidade por fazenda. onConfirmar(matriz) recebe {itemIdx: {key: qtd}}.
 function ModalRateioItens({ itens, rateio, onConfirmar, onCancelar }) {
-  const fazendas = [{ key: "aqui", nome: rateio.nomeAqui || "Esta fazenda", areaHa: rateio.areaAqui }, ...rateio.irmas.map((ir) => ({ key: ir.f.id, nome: ir.f.nome, areaHa: ir.areaHa }))];
-  const porArea = (it, incl) => distribuirPorArea(it.qtd, fazendas.map((f) => ({ ...f, incluir: !incl || incl[f.key] !== false })));
-  const [inc, setInc] = useState(() => itens.map(() => Object.fromEntries(fazendas.map((f) => [f.key, true]))));
-  const [dist, setDist] = useState(() => itens.map((it) => { const d = porArea(it); return Object.fromEntries(fazendas.map((f) => [f.key, String(d[f.key])])); }));
+  const fazendas = [{ key: "aqui", nome: rateio.nomeAqui || "Esta fazenda", talhoes: rateio.talhoesAqui, areaTotal: rateio.areaAqui }, ...rateio.irmas.map((ir) => ({ key: ir.f.id, nome: ir.f.nome, talhoes: ir.f.talhoes, areaTotal: ir.areaHa }))];
+  // soja vai só para quem planta soja, pela área de soja de cada fazenda
+  const porItem = itens.map((it) => areasDoRateio(fazendas, it.cultura, it.ciclo));
+  const itemIdx = (it) => itens.indexOf(it);
+  const porArea = (it, incl) => distribuirPorArea(it.qtd, porItem[itemIdx(it)].map((f) => ({ ...f, incluir: (!incl || incl[f.key] !== false) && f.areaHa > 0 })));
+  const [inc, setInc] = useState(() => itens.map((it, i) => Object.fromEntries(porItem[i].map((f) => [f.key, f.areaHa > 0]))));
+  const [dist, setDist] = useState(() => itens.map((it, i) => { const d = porArea(it, Object.fromEntries(porItem[i].map((f) => [f.key, f.areaHa > 0]))); return Object.fromEntries(fazendas.map((f) => [f.key, String(d[f.key])])); }));
   const somaDe = (i) => Math.round(fazendas.reduce((s, f) => s + (inc[i][f.key] ? num(dist[i][f.key]) : 0), 0) * 100) / 100;
   const bate = (i) => Math.abs(somaDe(i) - num(itens[i].qtd)) < 0.011;
   const alternar = (i, key) => {
@@ -19620,11 +19636,13 @@ function ModalRateioItens({ itens, rateio, onConfirmar, onCancelar }) {
             <b style={{ color: C.navy, fontSize: 14 }}>{it.produto}</b>
             <span style={{ fontSize: 13, fontWeight: 800, color: C.navyEscuro, whiteSpace: "nowrap" }}>{fmtN(num(it.qtd))} {it.unidade}</span>
           </div>
+          {it.cultura && !porItem[i][0].semCultura && <div style={{ fontSize: 12, color: C.verdeEscuro, fontWeight: 700, marginTop: 2 }}>🌱 {it.cultura}{it.ciclo && it.ciclo !== "Safra" ? ` (${it.ciclo.toLowerCase()})` : ""}: dividido só entre as fazendas que plantam {it.cultura.toLowerCase()}, pela área de {it.cultura.toLowerCase()} de cada uma.</div>}
+          {it.cultura && porItem[i][0].semCultura && <div style={{ fontSize: 12, color: "#7A5C00", fontWeight: 700, marginTop: 2 }}>⚠ Nenhuma fazenda tem {it.cultura.toLowerCase()} cadastrada nos talhões — dividido pela área toda. Confira.</div>}
           {ehSemente(it) && <div style={{ fontSize: 12, color: "#7A5C00", fontWeight: 700, marginTop: 2 }}>🌱 Variedade: confira quais fazendas plantam esta — tire as que não plantam.</div>}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 6, marginTop: 8 }}>
-            {fazendas.map((f) => (
+            {porItem[i].map((f) => (
               <div key={f.key} style={{ border: `1.5px solid ${inc[i][f.key] ? C.verde : C.borda}`, borderRadius: 10, padding: "6px 8px", background: inc[i][f.key] ? "#fff" : C.fundo, opacity: inc[i][f.key] ? 1 : 0.6 }}>
-                <button onClick={() => alternar(i, f.key)} style={{ width: "100%", textAlign: "left", background: "transparent", border: "none", padding: 0, fontWeight: 800, fontSize: 12.5, color: inc[i][f.key] ? C.verdeEscuro : C.cinza, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{inc[i][f.key] ? "✓ " : "✕ "}{f.nome} <span style={{ fontWeight: 600, color: C.cinza }}>· {fmtN(f.areaHa)} ha</span></button>
+                <button onClick={() => alternar(i, f.key)} style={{ width: "100%", textAlign: "left", background: "transparent", border: "none", padding: 0, fontWeight: 800, fontSize: 12.5, color: inc[i][f.key] ? C.verdeEscuro : C.cinza, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{inc[i][f.key] ? "✓ " : "✕ "}{f.nome} <span style={{ fontWeight: 600, color: C.cinza }}>· {f.areaHa > 0 ? `${fmtN(f.areaHa)} ha` : `sem ${String(it.cultura || "").toLowerCase()}`}</span></button>
                 <input type="number" inputMode="decimal" disabled={!inc[i][f.key]} value={inc[i][f.key] ? dist[i][f.key] : "0"} onChange={(e) => digitar(i, f.key, e.target.value)} style={{ marginTop: 4, padding: "6px 8px", fontSize: 13 }} />
               </div>
             ))}
@@ -29758,9 +29776,7 @@ function ModalLerNota({ produtosCatalogo, fornecedores, onSalvarFornecedores, ra
               </div>
               {quererRateio && (
                 <div style={{ fontSize: 12, color: C.verdeEscuro, fontWeight: 700, marginTop: 4 }}>
-                  As quantidades serão divididas pela área: {fmtN(rateio.areaAqui)} ha aqui
-                  {rateio.irmas.map((ir) => ` · ${ir.f.nome} ${fmtN(ir.areaHa)} ha`).join("")} ({fmtN(rateio.areaTotal)} ha no total).
-                  Depois é só editar na fazenda que usar diferente.
+                  Cada produto vai só para as fazendas que plantam a cultura dele, pela área dessa cultura em cada uma (soja → área de soja). No próximo passo dá para conferir item por item.
                 </div>
               )}
             </div>
@@ -30395,15 +30411,17 @@ function ModalCompra({ inicial, fornecedores, onSalvarFornecedores, produtosCata
         <label style={{ display: "flex", alignItems: "flex-start", gap: 8, cursor: "pointer", fontWeight: 400, color: C.navyEscuro, background: C.verdeBg, borderRadius: 10, padding: "10px 12px" }}>
           <input type="checkbox" checked={ratear} onChange={(e) => setRatear(e.target.checked)} style={{ width: "auto", marginTop: 2 }} />
           <span>
-            👥 <b>Ratear pelo grupo</b> — divide esta quantidade entre as {rateio.irmas.length + 1} fazendas
-            do {rateio.nomeGrupo}, na proporção da área ({fmtN(rateio.areaTotal)} ha no total). Depois é só
-            editar na fazenda que usar mais ou menos.
-            {num(qtd) > 0 && ratear && (
-              <span style={{ display: "block", fontSize: 12, color: C.verdeEscuro, fontWeight: 700, marginTop: 4 }}>
-                Aqui ficam {fmtN(Math.round(num(qtd) * (rateio.areaAqui / rateio.areaTotal) * 100) / 100)} {unidade}
-                {rateio.irmas.map((ir) => ` · ${ir.f.nome}: ${fmtN(Math.round(num(qtd) * (ir.areaHa / rateio.areaTotal) * 100) / 100)} ${unidade}`).join("")}
-              </span>
-            )}
+            👥 <b>Ratear pelo grupo</b> — divide esta quantidade entre as fazendas do {rateio.nomeGrupo}{cultura ? <> que plantam <b>{String(cultura).toLowerCase()}</b>, pela área de {String(cultura).toLowerCase()} de cada uma</> : ", na proporção da área"}. No próximo passo dá para conferir e mudar.
+            {num(qtd) > 0 && ratear && (() => {
+              const fz = [{ key: "aqui", nome: "Aqui", talhoes: rateio.talhoesAqui, areaTotal: rateio.areaAqui }, ...rateio.irmas.map((ir) => ({ key: ir.f.id, nome: ir.f.nome, talhoes: ir.f.talhoes, areaTotal: ir.areaHa }))];
+              const ar = areasDoRateio(fz, cultura, ciclo);
+              const d = distribuirPorArea(num(qtd), ar.map((f) => ({ ...f, incluir: f.areaHa > 0 })));
+              return (
+                <span style={{ display: "block", fontSize: 12, color: C.verdeEscuro, fontWeight: 700, marginTop: 4 }}>
+                  {ar.map((f) => `${f.nome}: ${f.areaHa > 0 ? `${fmtN(d[f.key])} ${unidade}` : `nada (sem ${String(cultura || "").toLowerCase()})`}`).join(" · ")}
+                </span>
+              );
+            })()}
           </span>
         </label>
       )}
