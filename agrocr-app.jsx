@@ -9576,7 +9576,7 @@ function FolhaDeCompras({ onVoltar }) {
 }
 
 // área dos talhões que levam a cultura no ciclo (sem cultura = área toda)
-function areaDaCultura(talhoes, cultura, ciclo) {
+function areaDaCulturaNoCiclo(talhoes, cultura, ciclo) {
   return (talhoes || []).reduce((s, tal) => {
     if (!cultura) return s + num(tal.areaHa);
     const c = ciclo === "Safrinha" ? tal.culturaSafrinha : ciclo === "Ambas" ? (tal.cultura || tal.culturaSafrinha) : tal.cultura;
@@ -9590,13 +9590,13 @@ function areaDaCultura(talhoes, cultura, ciclo) {
 function areasDoRateio(fazendas, cultura, ciclo) {
   const cult = String(cultura || "").trim();
   if (!cult) return (fazendas || []).map((f) => ({ ...f, areaHa: num(f.areaTotal) }));
-  const l = (fazendas || []).map((f) => ({ ...f, areaHa: areaDaCultura(f.talhoes, cult, ciclo || "Safra") }));
+  const l = (fazendas || []).map((f) => ({ ...f, areaHa: areaDaCulturaNoCiclo(f.talhoes, cult, ciclo || "Safra") }));
   return l.some((f) => f.areaHa > 0) ? l : (fazendas || []).map((f) => ({ ...f, areaHa: num(f.areaTotal), semCultura: true }));
 }
 // comprado ÷ área: por produto (e ciclo), a "dose" que o volume comprado dá na área da cultura da
 // compra — ou na área toda da fazenda quando a compra não diz a cultura
 function doseDoComprado(itens, talhoes) {
-  const area = (cultura, ciclo) => areaDaCultura(talhoes, cultura, ciclo);
+  const area = (cultura, ciclo) => areaDaCulturaNoCiclo(talhoes, cultura, ciclo);
   const g = {};
   for (const it of itens || []) {
     if (!it.produto || !(num(it.qtd) > 0)) continue;
@@ -29258,7 +29258,7 @@ function SecaoAplicacoes({ maquinas, podeApagar, fazenda, apls, modulo, estoque,
       })}
 
       {modal && (
-        <ModalRecomendacao kml={kml} maquinas={maquinas} talhoes={talhoes} estoque={estoque} mod={mod} usuario={usuario} lavoura={lavoura} equipe={equipe} apls={apls}
+        <ModalRecomendacao kml={kml} maquinas={maquinas} talhoes={talhoes} estoque={estoque} mod={mod} usuario={usuario} lavoura={lavoura} equipe={equipe} apls={apls} anteriores={recomendacoesAnteriores(apls, modulo)}
           passosPrograma={(() => {
             // passos do programa prévio desta operação, de todas as culturas da fazenda (guardados no aparelho)
             const culturas = [...new Set(talhoes.flatMap((t) => [t.cultura, t.culturaSafrinha]).filter(Boolean))];
@@ -30597,7 +30597,13 @@ function ModalVisita({ onFechar, onSalvar }) {
   );
 }
 
-function ModalRecomendacao({ talhoes, estoque, mod, inicial, usuario, lavoura, equipe, onFechar, onSalvar, passosPrograma, apls, maquinas, kml }) {
+// recomendações anteriores da mesma operação, a mais nova primeiro (data; no mesmo dia, a lançada por último)
+function recomendacoesAnteriores(apls, modulo) {
+  return (apls || []).map((a, i) => ({ a, i })).filter(({ a }) => moduloDe(a) === modulo && (a.produtos || []).some((p) => p && p.nome))
+    .sort((x, y) => String(y.a.dataRecomendada || "").localeCompare(String(x.a.dataRecomendada || "")) || y.i - x.i).map(({ a }) => a);
+}
+const resumoRecomendacao = (a, talhoes) => [fmtD(a.dataRecomendada || ""), `${a.tipo || ""}${a.alvo ? ` — ${a.alvo}` : ""}`, (a.produtos || []).filter((p) => p.nome && p.uso !== "sulco").map((p) => `${p.nome} ${fmtN(num(p.dose))} ${p.unidade || ""}`.trim()).join(" + "), (a.talhaoIds || []).map((id) => ((talhoes || []).find((x) => x.id === id) || {}).nome).filter(Boolean).join(", ")].filter(Boolean).join(" · ");
+function ModalRecomendacao({ talhoes, estoque, mod, inicial, usuario, lavoura, equipe, onFechar, onSalvar, passosPrograma, apls, maquinas, kml, anteriores }) {
   // pulverizadores cadastrados em Máquinas: escolher um preenche o tanque e oferece os bicos dele (opcional)
   const pulverizadores = (maquinas || []).filter(ehPulverizador);
   const distribuidores = (maquinas || []).filter(ehDistribuidor);
@@ -30724,6 +30730,28 @@ function ModalRecomendacao({ talhoes, estoque, mod, inicial, usuario, lavoura, e
     setProdutos(produtos.map((p, j) => (j === i ? { ...p, nome, unidade: uns.includes(p.unidade) ? p.unidade : uns[0] } : p)));
   }
 
+  // 🔁 repetir uma recomendação anterior (sequência de dessecação…): vem tudo, menos talhões e data
+  const [repetida, setRepetida] = useState(null);
+  function repetirDe(a) {
+    if (!a) return;
+    if (a.tipo) setTipo(a.tipo);
+    setAlvo(a.alvo || "");
+    if (mod.extra && a.extra) setExtra(a.extra);
+    if (a.ciclo) setCiclo(a.ciclo);
+    if (mod.usaCalda) { setVazao(a.vazao || ""); setBico(a.bico || ""); setCapacidadeTanque(a.capacidadeTanque || ""); setPulverizadorId(a.pulverizadorId || ""); setFecharPorTalhao(!!a.fecharPorTalhao); setHaTanqueTxt(haDeVazao(a.capacidadeTanque, a.vazao)); }
+    if (mod.usaCarga) { setCargaKg(a.cargaKg || ""); setDistribuidorId(a.distribuidorId || ""); }
+    if (mod.usaSemeadura) {
+      setEspacamento(a.espacamento || ""); setPopulacao(a.populacao || "");
+      setProdutosSulco((a.produtos || []).filter((p) => p.uso === "sulco").map((p) => ({ ...p, dose: String(p.dose) })));
+      setVazaoSulco((a.sulco && a.sulco.vazao) || ""); setTanqueSulco((a.sulco && a.sulco.tanque) || ""); setPulverizadorSulcoId((a.sulco && a.sulco.pulverizadorId) || "");
+    }
+    const ps = (a.produtos || []).filter((p) => p && p.nome && p.uso !== "sulco").map((p) => ({ nome: p.nome, dose: String(p.dose == null ? "" : p.dose), unidade: p.unidade || "L", ...(p.uso ? { uso: p.uso } : {}), ...(num(p.mlPorDose) > 0 ? { mlPorDose: num(p.mlPorDose) } : {}) }));
+    setProdutos(ps.length ? ps : [{ nome: "", dose: "", unidade: "L" }]);
+    setObservacao(a.observacao || "");
+    setRepetida(a);
+    const semEstoque = ps.filter((p) => !(estoque || []).some((l) => chaveProduto(l.produto) === chaveProduto(p.nome))).map((p) => p.nome);
+    setMsgIA(`🔁 Copiado da recomendação de ${fmtD(a.dataRecomendada || "")}. Agora escolha os talhões desta vez e mude o que for diferente.` + (semEstoque.length ? ` ⚠ Sem compra no estoque: ${semEstoque.join(", ")}.` : ""));
+  }
   function aplicarLeitura(r, origem) {
     const rotulo = origem === "programa" ? "Passo do programa puxado" : "Receita lida";
     if (r.tipo) setTipo(r.tipo);
@@ -30878,6 +30906,26 @@ function ModalRecomendacao({ talhoes, estoque, mod, inicial, usuario, lavoura, e
 
   return (
     <Modal titulo={`${inicial ? "Editar" : "Nova"} recomendação — ${mod.nome}`} onFechar={onFechar}>
+      {!inicial && (anteriores || []).length > 0 && (
+        <div style={{ background: C.verdeBg, borderRadius: 12, padding: "8px 10px", marginBottom: 8 }}>
+          <button onClick={() => repetirDe(anteriores[0])} style={{ width: "100%", padding: "11px 12px", background: C.verde, color: "#fff", border: "none", borderRadius: 10, fontWeight: 900, fontSize: 14.5, textAlign: "left" }}>
+            🔁 Repetir a última recomendação
+            <span style={{ display: "block", fontWeight: 600, fontSize: 12, opacity: 0.95, marginTop: 2 }}>{resumoRecomendacao(anteriores[0], talhoes)}</span>
+          </button>
+          {anteriores.length > 1 && (
+            <select value="" onChange={(e) => repetirDe(anteriores[Number(e.target.value)])} style={{ marginTop: 6 }}>
+              <option value="">ou repetir outra anterior…</option>
+              {anteriores.slice(0, 25).map((a, i) => <option key={a.id || i} value={i}>{resumoRecomendacao(a, talhoes)}</option>)}
+            </select>
+          )}
+          {repetida && (repetida.talhaoIds || []).some((tid) => talhoes.some((x) => x.id === tid)) && (
+            <button onClick={() => setSel(Object.fromEntries((repetida.talhaoIds || []).filter((tid) => talhoes.some((x) => x.id === tid)).map((tid) => [tid, true])))} style={{ marginTop: 6, padding: "6px 10px", background: "#fff", color: C.navy, border: `1.5px solid ${C.borda}`, borderRadius: 8, fontWeight: 800, fontSize: 12 }}>
+              usar os mesmos talhões ({(repetida.talhaoIds || []).map((id) => (talhoes.find((x) => x.id === id) || {}).nome).filter(Boolean).join(", ")})
+            </button>
+          )}
+          <div style={{ fontSize: 11, color: C.cinza, marginTop: 4 }}>Copia tipo, alvo, produtos, doses, vazão e tanque. Talhões e data você escolhe de novo — depois é só alterar o que mudou.</div>
+        </div>
+      )}
       {!inicial && (passosPrograma || []).length > 0 && (
         <div style={{ background: "#EEF2F7", borderRadius: 10, padding: "8px 10px", marginBottom: 8 }}>
           <label style={{ marginTop: 0 }}>📅 Puxar do programa prévio (preenche tipo, alvo e produtos)</label>
