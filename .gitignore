@@ -30,3 +30,6 @@ web/app-compilado.js
 
 # área de trabalho do Claude
 .claude/
+
+# cópias de segurança de dados apagados (ficam só neste computador)
+ferramentas/copia-*.json
