@@ -1074,6 +1074,17 @@ window.NuvemDados = (function () {
     for (const id of apagarIds || []) ops.push({ caminho: `fazendas/${fazendaId}/fotos/${id}`, dados: null });
     if (ops.length) await Nuvem.executarOps(ops, "fotos");
   }
+  // arquivos da ficha de contratação (RH): um registro por arquivo, lido só quando a pessoa abre
+  async function gravarAnexoRH(fazendaId, id, funcionarioId, dados) {
+    await Nuvem.executarOps([{ caminho: `fazendas/${fazendaId}/rhAnexos/${id}`, dados: { funcionarioId: funcionarioId || "", dados, criadoEm: new Date().toISOString() } }], "arquivo da contratação");
+  }
+  async function lerAnexoRH(fazendaId, id) {
+    const s = await db().collection("fazendas").doc(fazendaId).collection("rhAnexos").doc(id).get();
+    return s.exists ? (s.data().dados || null) : null;
+  }
+  async function apagarAnexoRH(fazendaId, id) {
+    await Nuvem.executarOps([{ caminho: `fazendas/${fazendaId}/rhAnexos/${id}`, dados: null }], "arquivo da contratação");
+  }
   async function lerFoto(fazendaId, id) {
     const s = await db().collection("fazendas").doc(fazendaId).collection("fotos").doc(id).get();
     return s.exists ? (s.data().dados || null) : null;
@@ -1428,7 +1439,7 @@ window.NuvemDados = (function () {
   async function baixarTudo() {
     const db2 = db();
     const SUBCOLECOES = ["talhoes", "compras", "recomendacoes", "execucoes", "chuvas",
-      "colheita", "ajustes", "entregas", "historico", "lavoura", "visitas", "fotos", "mapa", "documentos", "arquivos", "cotacoesPecas", "ponto"];
+      "colheita", "ajustes", "entregas", "historico", "lavoura", "visitas", "fotos", "mapa", "documentos", "arquivos", "cotacoesPecas", "ponto", "rhAnexos"];
     const fazendas = [];
     const snapF = await db2.collection("fazendas").get();
     for (const f of snapF.docs) {
@@ -1472,5 +1483,5 @@ window.NuvemDados = (function () {
     await db().collection("fazendas").doc(fazendaId).delete();
   }
 
-  return { observarColecao, gravarColecao, criarFazendaModelo, observarRecomendacoes, gravarRecomendacoes, observarDoc, gravarDoc, mesclarDocJson, apagarFazendaInteira, baixarTudo, gravarFotos, lerFoto };
+  return { observarColecao, gravarColecao, criarFazendaModelo, observarRecomendacoes, gravarRecomendacoes, observarDoc, gravarDoc, mesclarDocJson, apagarFazendaInteira, baixarTudo, gravarFotos, lerFoto, gravarAnexoRH, lerAnexoRH, apagarAnexoRH };
 })();

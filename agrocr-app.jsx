@@ -12111,8 +12111,152 @@ function brutoParaLiquido(liquidoAlvo, dependentes) {
   return Math.round(hi * 100) / 100;
 }
 
+// =========================== FICHA DE CONTRATAÇÃO (RH) ===========================
+// Documentos da admissão, CPF conferido na Receita, certidão de antecedentes SÓ quando o cargo
+// justifica (TST) e anexos (PDF/foto) que só quem vê o RH enxerga — o arquivo vai para a coleção
+// rhAnexos (regra igual à dos funcionários); na ficha fica só o nome do arquivo.
+// Não existe busca de processo trabalhista: usar isso para não contratar é discriminação (Lei 9.029/95).
+const DOCS_ADMISSAO = [
+  ["docs", "RG, CPF, título de eleitor, PIS/NIS e comprovante de endereço"],
+  ["ctps", "Carteira de trabalho digital — admissão registrada no eSocial"],
+  ["aso", "Exame médico admissional (ASO)"],
+  ["contrato", "Contrato de trabalho assinado"],
+  ["dependentes", "Certidões dos dependentes (salário-família / IR)"],
+  ["epi", "Ficha de entrega de EPI assinada"],
+  ["banco", "Acordo de banco de horas assinado (se usar)"],
+  ["vt", "Opção pelo vale-transporte"],
+  ["foto", "Foto 3x4"],
+];
+// CPF com os dígitos verificadores certos (só a conta — quem diz se está regular é a Receita)
+function cpfValido(cpf) {
+  const d = String(cpf || "").replace(/\D/g, "");
+  if (d.length !== 11 || /^(\d)\1{10}$/.test(d)) return false;
+  const dv = (n) => { let s = 0; for (let i = 0; i < n; i++) s += Number(d[i]) * (n + 1 - i); const r = (s * 10) % 11; return r === 10 ? 0 : r; };
+  return dv(9) === Number(d[9]) && dv(10) === Number(d[10]);
+}
+const fmtCpf = (cpf) => { const d = String(cpf || "").replace(/\D/g, "").slice(0, 11); return d.length === 11 ? `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}` : d; };
+const MAX_ANEXO_RH = 700 * 1024;   // o arquivo vira texto (base64) e precisa caber num registro da nuvem
+const andamentoContratacao = (c) => { const ch = (c && c.docs) || {}; return { feitos: DOCS_ADMISSAO.filter(([id]) => ch[id]).length, total: DOCS_ADMISSAO.length }; };
+
+function ModalContratacao({ funcionario, fazenda, usuario, naNuvem, onSalvarFuncionario, registrar, onFechar }) {
+  const f = funcionario;
+  const c0 = f.contratacao || {};
+  const [cpf, setCpf] = useState(c0.cpf || "");
+  const [admissao, setAdmissao] = useState(c0.admissao || "");
+  const [docs, setDocs] = useState(c0.docs || {});
+  const [justifica, setJustifica] = useState(!!c0.antecedentesJustifica);
+  const [porque, setPorque] = useState(c0.antecedentesMotivo || "");
+  const [anexos, setAnexos] = useState(c0.anexos || []);
+  const [msg, setMsg] = useState("");
+  const [enviando, setEnviando] = useState(false);
+  const quem = (usuario && usuario.nomeUsuario) || "";
+  const cpfOk = !cpf || cpfValido(cpf);
+  const salvar = (extra) => {
+    const contratacao = { cpf: String(cpf).replace(/\D/g, ""), admissao: admissao || "", docs, antecedentesJustifica: justifica, antecedentesMotivo: justifica ? porque.trim() : "", anexos, ...(extra || {}) };
+    onSalvarFuncionario({ ...f, contratacao });
+    return contratacao;
+  };
+  const marcar = (id) => setDocs({ ...docs, [id]: docs[id] ? null : diaLocal() });
+  async function anexar(e) {
+    const arq = e.target.files && e.target.files[0]; e.target.value = "";
+    if (!arq) return;
+    setMsg(""); setEnviando(true);
+    try {
+      let dados;
+      if (/^image\//.test(arq.type)) dados = await comprimirFoto(arq, 1600, 0.75);
+      else {
+        if (arq.size > MAX_ANEXO_RH) throw new Error(`o arquivo tem ${fmtN(arq.size / 1024)} KB — o máximo é ${fmtN(MAX_ANEXO_RH / 1024)} KB. Mande uma versão menor (ou uma foto da página).`);
+        dados = await new Promise((ok, err) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = () => err(r.error); r.readAsDataURL(arq); });
+      }
+      const id = idNovo();
+      try { await idbSet("rhanexo:" + id, dados); } catch (er) {}
+      if (naNuvem && window.NuvemDados && NuvemDados.gravarAnexoRH) await NuvemDados.gravarAnexoRH(fazenda.id, id, f.id, dados);
+      const novo = { id, nome: arq.name || "arquivo", tipo: arq.type || "", kb: Math.round(String(dados).length * 0.75 / 1024), em: new Date().toISOString(), quem };
+      const lista = [...anexos, novo];
+      setAnexos(lista);
+      salvar({ anexos: lista });
+      registrar && registrar("Documento anexado na ficha de contratação", `${f.nome} · ${novo.nome}`);
+    } catch (er) { setMsg("Não consegui anexar: " + ((er && er.message) || er)); }
+    setEnviando(false);
+  }
+  async function abrir(a) {
+    setMsg("");
+    let dados = null;
+    try { dados = await idbGet("rhanexo:" + a.id); } catch (er) {}
+    if (!dados && naNuvem && window.NuvemDados && NuvemDados.lerAnexoRH) { try { dados = await NuvemDados.lerAnexoRH(fazenda.id, a.id); if (dados) idbSet("rhanexo:" + a.id, dados); } catch (er) {} }
+    if (!dados) { setMsg("Este arquivo não está neste aparelho e não consegui baixar da nuvem (confira a internet)."); return; }
+    try { const blob = await (await fetch(dados)).blob(); const url = URL.createObjectURL(blob); window.open(url, "_blank"); setTimeout(() => URL.revokeObjectURL(url), 60000); }
+    catch (er) { setMsg("Não consegui abrir o arquivo neste aparelho."); }
+  }
+  function tirarAnexo(a) {
+    if (!window.confirm(`Tirar "${a.nome}" da ficha? O arquivo é apagado.`)) return;
+    const lista = anexos.filter((x) => x.id !== a.id);
+    setAnexos(lista); salvar({ anexos: lista });
+    idbDel("rhanexo:" + a.id);
+    if (naNuvem && window.NuvemDados && NuvemDados.apagarAnexoRH) NuvemDados.apagarAnexoRH(fazenda.id, a.id).catch(() => {});
+  }
+  const { feitos, total } = andamentoContratacao({ docs });
+  const link = (href, rot) => <a href={href} target="_blank" rel="noreferrer" style={{ display: "inline-block", marginTop: 6, padding: "7px 11px", borderRadius: 10, background: C.verdeBg, color: C.verdeEscuro, fontWeight: 800, fontSize: 12.5, textDecoration: "none" }}>{rot}</a>;
+  return (
+    <Modal titulo={`📁 Contratação — ${f.nome}`} onFechar={() => { salvar(); onFechar(); }}>
+      <div style={{ fontSize: 12, color: C.cinza }}>{f.cargo || "sem cargo"} · só quem vê o RH enxerga esta ficha.</div>
+      <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ flex: 1.2 }}>
+          <label>CPF</label>
+          <input inputMode="numeric" value={fmtCpf(cpf)} onChange={(e) => setCpf(e.target.value.replace(/\D/g, "").slice(0, 11))} placeholder="000.000.000-00" style={{ borderColor: cpfOk ? undefined : C.vermelho }} />
+        </div>
+        <div style={{ flex: 1 }}><label>Admissão</label><input type="date" value={admissao} onChange={(e) => setAdmissao(e.target.value)} /></div>
+      </div>
+      {!cpfOk && <div style={{ fontSize: 12, color: C.vermelho, fontWeight: 700 }}>Este CPF não fecha a conta dos dígitos — confira o número.</div>}
+      {cpf && cpfOk && <div style={{ fontSize: 12, color: C.verdeEscuro, fontWeight: 700 }}>✓ Número de CPF válido. Confira na Receita se está regular (pede a data de nascimento):</div>}
+      {link("https://servicos.receita.fazenda.gov.br/servicos/cpf/consultasituacao/consultapublica.asp", "🔎 Situação do CPF na Receita")}
+
+      <div style={{ fontWeight: 900, color: C.navy, fontSize: 14, marginTop: 14 }}>Documentos da admissão <span style={{ fontWeight: 700, fontSize: 12, color: feitos === total ? C.verdeEscuro : C.cinza }}>· {feitos} de {total}</span></div>
+      {DOCS_ADMISSAO.map(([id, rot]) => (
+        <label key={id} style={{ display: "flex", alignItems: "center", gap: 8, margin: "6px 0 0", fontWeight: 600, fontSize: 13.5, color: C.navyEscuro, cursor: "pointer" }}>
+          <input type="checkbox" checked={!!docs[id]} onChange={() => marcar(id)} style={{ width: 20, height: 20, margin: 0, flex: "none" }} />
+          <span style={{ flex: 1 }}>{rot}{docs[id] ? <span style={{ color: C.cinza, fontWeight: 500, fontSize: 11.5 }}> · {fmtD(docs[id])}</span> : null}</span>
+        </label>
+      ))}
+
+      <div style={{ background: C.fundo, borderRadius: 12, padding: "10px 12px", marginTop: 14 }}>
+        <label style={{ display: "flex", alignItems: "flex-start", gap: 8, margin: 0, cursor: "pointer", fontWeight: 800, color: C.navyEscuro, fontSize: 13.5 }}>
+          <input type="checkbox" checked={justifica} onChange={(e) => setJustifica(e.target.checked)} style={{ width: 20, height: 20, margin: 0, flex: "none" }} />
+          <span>O cargo justifica pedir certidão de antecedentes criminais</span>
+        </label>
+        <div style={{ fontSize: 11.5, color: C.cinza, marginTop: 4, lineHeight: 1.4 }}>Pela Justiça do Trabalho (TST), só pode pedir quando a lei manda ou o cargo exige: motorista de carga, vigilante, quem lida com armas, dinheiro ou valores, cuida de crianças, idosos ou doentes, ou tem acesso a informação sigilosa. Pedir de todo mundo dá indenização por dano moral.</div>
+        {justifica && (
+          <>
+            <input value={porque} onChange={(e) => setPorque(e.target.value)} placeholder="Por que este cargo justifica? (ex.: motorista de carga — transporte da produção)" style={{ marginTop: 6 }} />
+            {link("https://servicos.pf.gov.br/epol-sinic-publico/", "📄 Certidão de antecedentes — Polícia Federal")}
+          </>
+        )}
+      </div>
+
+      <div style={{ fontWeight: 900, color: C.navy, fontSize: 14, marginTop: 14 }}>Arquivos da contratação</div>
+      <div style={{ fontSize: 11.5, color: C.cinza }}>Certidões, ASO, contrato digitalizado… PDF de até {fmtN(MAX_ANEXO_RH / 1024)} KB ou foto.</div>
+      {anexos.map((a) => (
+        <div key={a.id} style={{ display: "flex", gap: 8, alignItems: "center", padding: "6px 0", borderTop: `1px solid ${C.fundo}`, fontSize: 13 }}>
+          <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{/pdf/i.test(a.tipo) ? "📄" : "🖼"} {a.nome} <span style={{ color: C.cinza, fontSize: 11.5 }}>· {fmtD(String(a.em).slice(0, 10))}</span></span>
+          <button onClick={() => abrir(a)} style={{ background: C.fundo, border: "none", borderRadius: 8, padding: "5px 10px", fontWeight: 800, fontSize: 12, color: C.navy }}>abrir</button>
+          <button onClick={() => tirarAnexo(a)} style={{ background: "transparent", border: "none", color: C.vermelho, fontSize: 13 }}>✕</button>
+        </div>
+      ))}
+      <label style={{ display: "inline-block", marginTop: 8, padding: "9px 14px", borderRadius: 10, background: enviando ? C.cinza : C.navy, color: "#fff", fontWeight: 800, fontSize: 13, cursor: "pointer" }}>
+        {enviando ? "Anexando…" : "📎 Anexar PDF ou foto"}
+        <input type="file" accept="application/pdf,image/*" onChange={anexar} disabled={enviando} style={{ display: "none" }} />
+      </label>
+      {msg && <div style={{ color: C.vermelho, fontWeight: 700, fontSize: 12.5, marginTop: 8 }}>{msg}</div>}
+
+      <div style={{ fontSize: 11, color: C.cinza, marginTop: 12, lineHeight: 1.4, borderTop: `1px solid ${C.borda}`, paddingTop: 8 }}>LGPD: guarde só o que a contratação precisa. Processo trabalhista que a pessoa moveu contra outro patrão não pode pesar na contratação — é discriminação (Lei 9.029/95) e dá indenização.</div>
+      <BotaoSalvar texto="Salvar a ficha" disabled={!cpfOk || (justifica && !porque.trim())} onClick={() => { salvar(); registrar && registrar("Ficha de contratação atualizada", f.nome); onFechar(); }} />
+    </Modal>
+  );
+}
+
 function SecaoFuncionarios({ fazenda, funcionarios, usuario, registrar, onSalvar, onLancarCusto, pontoCfg, onSalvarPontoCfg, podeAcessoPonto, naNuvem }) {
   const [form, setForm] = useState(null);
+  const [fichaDe, setFichaDe] = useState(null);   // funcionário com a ficha de contratação aberta
   const [acessoDe, setAcessoDe] = useState(null);   // funcionário com o "app do ponto" aberto
   // todo funcionário do quadro já entra no ponto (com a senha de 4 números do celular da sede)
   const garantirNoPonto = (f) => {
@@ -12354,7 +12498,7 @@ function SecaoFuncionarios({ fazenda, funcionarios, usuario, registrar, onSalvar
               const doc = { id: form.id || idNovo(), nome: form.nome.trim(), cargo: form.cargo.trim(), salario: num(form.salario) || null, dependentes: Math.max(0, Math.floor(num(form.dependentes))) || 0,
                 comissaoMensal: num(form.comissaoMensal) || 0, comissaoAnual: num(form.comissaoAnual) || 0, comissaoData: (num(form.comissaoAnual) > 0 && form.comissaoData) || null,
                 comissao: null, comissaoPeriodo: null, obs: form.obs.trim() || null,
-                celular: String(form.celular || "").trim() || null, acessoPonto: ((form.id && todos.find((x) => x.id === form.id)) || {}).acessoPonto || null };
+                celular: String(form.celular || "").trim() || null, acessoPonto: ((form.id && todos.find((x) => x.id === form.id)) || {}).acessoPonto || null, contratacao: ((form.id && todos.find((x) => x.id === form.id)) || {}).contratacao || null };
               onSalvar(form.id ? todos.map((x) => (x.id === form.id ? doc : x)) : [...todos, doc]);
               garantirNoPonto(doc);
               registrar && registrar(form.id ? "Funcionário editado" : "Funcionário cadastrado", `${doc.nome} · ${doc.cargo || ""}`);
@@ -12379,6 +12523,8 @@ function SecaoFuncionarios({ fazenda, funcionarios, usuario, registrar, onSalvar
                   {premMensalDe(f) > 0 ? `premiação ${fmtMoeda(premMensalDe(f))}/mês · ` : ""}{premAnualDe(f) > 0 ? `premiação ${fmtMoeda(premAnualDe(f))}/ano${f.comissaoData ? ` em ${fmtD(f.comissaoData)}` : ""} · ` : ""}
                   {f.obs ? `${f.obs} · ` : ""}
                   <button onClick={() => setDetalhe(detalhe === f.id ? null : f.id)} className="nao-imprimir" style={{ background: "transparent", border: "none", color: C.navy, fontSize: 11, fontWeight: 700, padding: 0 }}>{detalhe === f.id ? "fechar conta" : "ver conta"}</button>
+                  {" · "}
+                  {(() => { const a = andamentoContratacao(f.contratacao); return <button onClick={() => setFichaDe(f)} className="nao-imprimir" style={{ background: "transparent", border: "none", color: a.feitos === a.total ? C.verdeEscuro : C.navy, fontSize: 11, fontWeight: 700, padding: 0 }}>📁 contratação {a.feitos}/{a.total}</button>; })()}
                   {" · "}
                   <button onClick={() => setForm({ ...f, salario: f.salario != null ? String(f.salario) : "", dependentes: String(f.dependentes || 0), comissaoMensal: premMensalDe(f) ? String(premMensalDe(f)) : "", comissaoAnual: premAnualDe(f) ? String(premAnualDe(f)) : "", comissaoData: f.comissaoData || "", obs: f.obs || "", cargo: f.cargo || "" })}
                     className="nao-imprimir" style={{ background: "transparent", border: "none", color: C.navy, fontSize: 11, fontWeight: 700, padding: 0 }}>editar</button>
@@ -12430,6 +12576,8 @@ function SecaoFuncionarios({ fazenda, funcionarios, usuario, registrar, onSalvar
       <div style={{ fontSize: 11, color: C.cinza, marginTop: 8 }}>
         Comissão variável (ex.: % da produtividade)? Coloque a estimativa e anote a regra na observação; ajuste quando fechar a conta. Só quem vê dinheiro enxerga esta tela.
       </div>
+      {fichaDe && <ModalContratacao funcionario={fichaDe} fazenda={fazenda} usuario={usuario} naNuvem={naNuvem} registrar={registrar} onFechar={() => setFichaDe(null)}
+        onSalvarFuncionario={(nf) => { onSalvar(todos.map((x) => (x.id === nf.id ? nf : x))); setFichaDe(nf); }} />}
       {acessoDe && <ModalAcessoPonto funcionario={acessoDe} fazenda={fazenda} garantirNoPonto={garantirNoPonto} registrar={registrar} onFechar={() => setAcessoDe(null)}
         onSalvarFuncionario={(nf) => { onSalvar(todos.map((x) => (x.id === nf.id ? nf : x))); setAcessoDe(nf); }} />}
     </div>

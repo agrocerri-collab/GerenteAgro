@@ -441,6 +441,11 @@ service cloud.firestore {
         allow read, write: if (consultorNaFazenda(fazendaId) && podeC('custos'))
           || ehProdutorNa(fazendaId);
       }
+      // arquivos da ficha de contratação (certidões, ASO, contrato): só quem vê o RH
+      match /rhAnexos/{doc} {
+        allow read, write: if (consultorNaFazenda(fazendaId) && podeC('custos'))
+          || ehProdutorNa(fazendaId);
+      }
       // notas fiscais (R$, destinadas a custos/compras): dinheiro — mesmas
       // permissões dos custos
       // NF-e emitidas pela fazenda: quem tem acesso lê; só a função (servidor) grava
