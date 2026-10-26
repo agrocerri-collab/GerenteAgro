@@ -118,7 +118,7 @@ const ITENS_ACESSO = [
   ["diesel", "⛽ Máquinas, diesel e manutenção", "Máquinas"],
   ["almoxarifado", "🔩 Almoxarifado (peças, filtros, óleo)", "Máquinas"],
   ["ponto", "⏰ Ponto (bater o ponto)", "Máquinas"],
-  ["financeiro", "💰 Financeiro (custos, compras, vendas, DRE, notas, funcionários)", "Dinheiro"],
+  ["financeiro", "💰 Financeiro (custos, compras, vendas, DRE, notas) e 👥 RH (funcionários)", "Dinheiro"],
   ["custos", "💵 Ver e lançar valores em R$ dentro do Financeiro", "Dinheiro", true],
   ["cotacoes", "💹 Cotações", "Dinheiro"],
   ["simulacoes", "🧮 Simulações de custo", "Dinheiro", true],
@@ -429,7 +429,7 @@ const ICONE_DE = {
   panorama: "panorama", geral: "resumo", dados: "fazenda", lavoura: "lavoura", apl: "trator", fungicidas: "escudo", estoque: "caixa", mapa: "sat", chuva: "chuva", previsao: "previsao",
   colheita: "colheita", visitas: "visita", cotacoes: "cotacoes", fin: "carteira", diesel: "diesel", ponto: "relogio", rel: "relatorio", comunidade: "comunidade", suporte: "suporte", guia: "guia",
   doc: "documentos", documentos: "documentos", safras: "safras",
-  planocompras: "lista", cotacao: "cotacao", prog: "carrinho", notas: "nota", func: "pessoas", maq: "ferramenta", cotpecas: "cotacao", custos: "cifrao", caixa: "caixaFluxo", vendas: "vendas", dre: "dre", plano: "plano", relfin: "relatorio",
+  planocompras: "lista", cotacao: "cotacao", prog: "carrinho", notas: "nota", func: "pessoas", rh: "pessoas", maq: "ferramenta", cotpecas: "cotacao", custos: "cifrao", caixa: "caixaFluxo", vendas: "vendas", dre: "dre", plano: "plano", relfin: "relatorio",
 };
 const ICONE_VERDE = ["lavoura", "colheita", "panorama"];
 function Icone({ nome, tam = 26, cor, grosso, style }) {
@@ -470,7 +470,7 @@ const CLASSE_DO_CARTAO = {
   chuva: "agua", previsao: "agua",
   diesel: "maquinas", colheita: "maquinas", maq: "maquinas", ponto: "maquinas",
   estoque: "insumos", prog: "insumos", planocompras: "insumos", cotacao: "insumos", cotpecas: "maquinas",
-  fin: "dinheiro", geral: "dinheiro", cotacoes: "dinheiro", custos: "dinheiro", caixa: "dinheiro", vendas: "dinheiro", dre: "dinheiro", notas: "dinheiro", plano: "dinheiro", func: "dinheiro",
+  fin: "dinheiro", geral: "dinheiro", cotacoes: "dinheiro", custos: "dinheiro", caixa: "dinheiro", vendas: "dinheiro", dre: "dinheiro", notas: "dinheiro", plano: "dinheiro", func: "dinheiro", rh: "dinheiro",
   rel: "apoio", relfin: "apoio", comunidade: "apoio", suporte: "apoio", guia: "apoio", doc: "apoio", documentos: "apoio", safras: "apoio",
 };
 // ícone do cartão: de linha quando existe, senão o emoji de sempre — sobre o fundinho da cor da classe
@@ -5738,7 +5738,7 @@ function TelaFazenda({ fazenda, fazendas, grupos, papel, usuario, naNuvem, equip
   const [cotPecas, setCotPecas] = useState([]);
   const [ponto, setPonto] = useState([]);
   const [pontoCfg, setPontoCfg] = useState(null);
-  const SECAO_PERMISSAO = { panorama: "panorama", dados: "dadosfazenda", lavoura: "lavoura", solo: "solo", apl: "operacoes", fungicidas: "fungicidas", estoque: "estoque", mapa: "ndvi", chuva: "pluviometria", previsao: "previsao", colheita: "colheita", visitas: "visitas", diesel: "diesel", rel: "relatorios", doc: "documentos", comunidade: "comunidade", suporte: "suporte", cotacoes: "cotacoes", guia: "guia", ponto: "ponto" };
+  const SECAO_PERMISSAO = { rh: "financeiro", panorama: "panorama", dados: "dadosfazenda", lavoura: "lavoura", solo: "solo", apl: "operacoes", fungicidas: "fungicidas", estoque: "estoque", mapa: "ndvi", chuva: "pluviometria", previsao: "previsao", colheita: "colheita", visitas: "visitas", diesel: "diesel", rel: "relatorios", doc: "documentos", comunidade: "comunidade", suporte: "suporte", cotacoes: "cotacoes", guia: "guia", ponto: "ponto" };
   const almoxPendRef = useRef("");
   const [funcionarios, setFuncionarios] = useState([]);
   const [notas, setNotas] = useState([]);
@@ -6042,6 +6042,7 @@ function TelaFazenda({ fazenda, fazendas, grupos, papel, usuario, naNuvem, equip
     // cotações do mercado moram dentro do Financeiro; só aparecem aqui para quem vê cotação mas não vê dinheiro
     ...(mostrar("cotacoes") && !veFinanceiro ? [["cotacoes", "💹", "Cotações", "Dólar, mercado e preços da região"]] : []),
     ...(veFinanceiro ? [["fin", "💰", "Financeiro", "O que comprar · o que pagar · quanto sobrou"]] : []),
+    ...(veFinanceiro && veCustos ? [["rh", "👥", "Recursos humanos (RH)", `Funcionários, salários e comissões${(funcionarios || []).length ? ` · ${funcionarios.length} pessoa${funcionarios.length === 1 ? "" : "s"}` : ""}`]] : []),
     // máquinas e diesel: lançamento de campo — todo mundo usa (o inventário fica lá dentro)
     ...(mostrar("diesel") ? [["diesel", "⛽", "Máquinas e diesel", (() => {
       const entradas = combustivel.filter((c) => c.tipo === "entrada").reduce((s, c) => s + num(c.litros), 0);
@@ -6066,7 +6067,6 @@ function TelaFazenda({ fazenda, fazendas, grupos, papel, usuario, naNuvem, equip
       ["vendas", "🌾", "Venda e travamento", "Soja comprometida e livre para negociar"],
       ["planocompras", "📝", "Planejamento de insumos", "O que falta comprar, por talhão e cultura"],
       ["cotacao", "🧾", "Pedido de cotação", "Volumes somados · PDF e WhatsApp para o fornecedor"],
-      ["func", "👷", "Funcionários", `Quadro, salários e comissões${(funcionarios || []).length ? ` (${funcionarios.length})` : ""}`],
       ["notas", "🧾", "Notas fiscais", (() => { const p = (notas || []).filter((n) => n.status !== "destinada").length; const v = (notas || []).filter((n) => !n.pago && n.vencimento && n.vencimento < hojeISO()).length; const partes = []; if (p) partes.push(`${p} para destinar`); if (v) partes.push(`⚠️ ${v} vencida${v > 1 ? "s" : ""}`); return partes.length ? partes.join(" · ") : "SEFAZ, XML, foto → custo por categoria"; })()],
     ] : []),
     ["prog", "🛒", "Compras de insumos", `${prog.length} itens comprados`],
@@ -6080,9 +6080,9 @@ function TelaFazenda({ fazenda, fazendas, grupos, papel, usuario, naNuvem, equip
     <div style={{ maxWidth: 760, margin: "0 auto", padding: 16 }}>
       <div className="nao-imprimir" style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
         {secao !== "inicio" ? (
-          <button onClick={() => { if (voltarPara) { const v = voltarPara; setVoltarPara(null); setSecao(v.secao); setAbaFin(v.aba || null); setModulo(null); } else if (secao === "apl" && modulo) { setModulo(null); } else if (secao === "fin" && abaFin) { setAbaFin(null); } else { setSecao("inicio"); } }}
+          <button onClick={() => { if (voltarPara) { const v = voltarPara; setVoltarPara(null); setSecao(v.secao); setAbaFin(v.aba || null); setModulo(null); } else if (secao === "apl" && modulo) { setModulo(null); } else if ((secao === "fin" || secao === "rh") && abaFin) { setAbaFin(null); } else { setSecao("inicio"); } }}
             style={{ background: "#fff", border: `1.5px solid ${C.borda}`, borderRadius: 10, padding: "8px 12px", fontWeight: 800, color: C.navy }}>
-            ← {voltarPara ? voltarPara.rotulo : secao === "apl" && modulo ? "Operações" : secao === "fin" && abaFin ? "Financeiro" : "Início"}
+            ← {voltarPara ? voltarPara.rotulo : secao === "apl" && modulo ? "Operações" : secao === "fin" && abaFin ? "Financeiro" : secao === "rh" && abaFin ? "RH" : "Início"}
           </button>
         ) : onVoltar ? (
           <button onClick={onVoltar} style={{ background: "#fff", border: `1.5px solid ${C.borda}`, borderRadius: 10, padding: "8px 12px", fontWeight: 800, color: C.navy }}>← {rotuloVoltar || "Fazendas"}</button>
@@ -6181,7 +6181,7 @@ function TelaFazenda({ fazenda, fazendas, grupos, papel, usuario, naNuvem, equip
               ["Operações e insumos", ["apl", "estoque", "diesel", "ponto"]],
               ["Técnico", ["visitas", "fungicidas", "mapa", "solo", "guia"]],
               ["Clima", ["chuva", "previsao"]],
-              ["Dinheiro", ["cotacoes", "fin"]],
+              ["Dinheiro", ["cotacoes", "fin", "rh"]],
               ["Acompanhamento e ajuda", ["rel", "comunidade", "suporte"]],
             ];
             const grupoDe = (id) => GRUPOS.findIndex(([, ids]) => ids.includes(id));
@@ -6256,7 +6256,7 @@ function TelaFazenda({ fazenda, fazendas, grupos, papel, usuario, naNuvem, equip
             // mesmo jeito do menu da fazenda: blocos com um título fino, para não ficar tudo misturado
             const GRUPOS_FIN = [
               ["O que comprar", ["planocompras", "cotacao", "prog", "cotacoes"]],
-              ["O que pagar", ["notas", "func", "maq"]],
+              ["O que pagar", ["notas", "maq"]],
               ["Quanto sobrou", ["custos", "caixa", "vendas", "dre", "plano", "relfin"]],
             ];
             const grupoDe = (id) => { const g = GRUPOS_FIN.findIndex(([, ids]) => ids.includes(id)); return g < 0 ? GRUPOS_FIN.length - 1 : g; };
@@ -6342,7 +6342,22 @@ function TelaFazenda({ fazenda, fazendas, grupos, papel, usuario, naNuvem, equip
           onLancarCusto={(c) => gravar(kCusto(fazenda.id, safra), [...(custos || []), { id: idNovo(), ...c }], setCustos, custos)} />
       )}
 
-      {secao === "fin" && veFinanceiro && abaFin === "func" && veCustos && (
+      {secao === "rh" && veFinanceiro && veCustos && !abaFin && (
+        <div>
+          <div style={{ fontWeight: 900, fontSize: 18, color: C.navy }}>👥 Recursos humanos</div>
+          <div style={{ fontSize: 12.5, color: C.cinza, marginBottom: 10 }}>Quem trabalha na fazenda, salários, comissões e o ponto.</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            {[["func", "👷", "Funcionários", `Quadro, salários e comissões${(funcionarios || []).length ? ` (${funcionarios.length})` : ""}`], ...(mostrar("ponto") ? [["ponto", "⏰", "Ponto", "Quem está trabalhando, espelho do mês"]] : [])].map(([id, ico, titulo, sub]) => (
+              <button key={id} onClick={() => { if (id === "ponto") { setVoltarPara({ secao: "rh", rotulo: "RH" }); setSecao("ponto"); } else setAbaFin(id); }} style={{ background: "#fff", border: `1.5px solid ${C.borda}`, borderRadius: 16, padding: "18px 14px", textAlign: "left", minHeight: 110 }}>
+                <IconeCartao id={id} ico={ico} tam={28} />
+                <div className="titulo" style={{ fontWeight: 800, fontSize: 15, color: C.navy, marginTop: 8, lineHeight: 1.15 }}>{titulo}</div>
+                <div style={{ fontSize: 12, color: C.cinza, marginTop: 2 }}>{sub}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      {(secao === "rh" || secao === "fin") && veFinanceiro && abaFin === "func" && veCustos && (
         <SecaoFuncionarios fazenda={fazenda} funcionarios={funcionarios} usuario={usuario} registrar={registrar}
           onSalvar={(v) => gravar(kFunc(fazenda.id), v, setFuncionarios, funcionarios)}
           onLancarCusto={(c) => gravar(kCusto(fazenda.id, safra), [...(custos || []), { id: idNovo(), ...c }], setCustos, custos)} />
@@ -7654,9 +7669,9 @@ function PrimeirosPassos({ fazenda, lavoura, apls, prog, custos, maquinas, kml, 
     { id: "kml", icone: "🗺️", titulo: "Importar o mapa dos talhões (KML), se tiver", feito: !!(kml && kml.poligonos && kml.poligonos.length) || !!manuais.kml, manual: true, secao: "dados",
       curto: "Arquivo do Google Earth ou do trator. Liga mapa de chuva, satélite, visitas e monitoramento. Sem KML, marque como feito e siga.",
       longo: "Em Dados da fazenda → Mapa, toque em \"Importar mapa (.kml)\" e escolha um ou vários arquivos. Os talhões desenhados entram com a área certa e passam a aparecer no mapa de chuva, no NDVI, nas visitas e no monitoramento de pragas com GPS. Se a fazenda não tem o KML ainda, marque este passo como feito e peça o arquivo ao piloto do trator ou desenhe depois." },
-    { id: "func", icone: "👷", titulo: "Cadastrar os funcionários", feito: (funcionarios || []).length > 0 || !!manuais.func, manual: true, secao: "fin", aba: "func", precisaDinheiro: true,
+    { id: "func", icone: "👷", titulo: "Cadastrar os funcionários", feito: (funcionarios || []).length > 0 || !!manuais.func, manual: true, secao: "rh", aba: "func", precisaDinheiro: true,
       curto: "Nome, função e salário. A folha entra sozinha no custo da safra.",
-      longo: "Em Financeiro → Funcionários, cadastre cada pessoa com função e salário (e comissão, se houver). Todo mês a folha vira um lançamento de custo \"Ambas\", rateado por hectare. Quem for operar o app ganha o acesso dele em Dados da fazenda → Acessos." },
+      longo: "Em RH → Funcionários, cadastre cada pessoa com função e salário (e comissão, se houver). Todo mês a folha vira um lançamento de custo \"Ambas\", rateado por hectare. Quem for operar o app ganha o acesso dele em Dados da fazenda → Acessos." },
     { id: "maquinas", icone: "🚜", titulo: "Cadastrar o inventário de máquinas", feito: (maquinas || []).length > 0, secao: "fin", aba: "maq", precisaDinheiro: true,
       curto: "Tratores, pulverizador, plantadeira (com as engrenagens), colheitadeira e caminhões. Por foto, PDF ou voz.",
       longo: "Em Financeiro → Inventário de máquinas, toque em \"Cadastrar por foto ou PDF\" com a lista das máquinas, ou fale os nomes. Na plantadeira, cadastre as engrenagens motoras, movidas e a Z: a regulagem passa a sugerir a combinação para a dose e registra qual Z está na máquina. Com as máquinas cadastradas, o Diesel e manutenção registra abastecimento por máquina, horímetro e trocas de óleo." },
