@@ -349,7 +349,10 @@ service cloud.firestore {
       match /documentos/{doc}   { allow read: if temAcessoAFazenda(fazendaId);
                                   allow write: if consultorNaFazenda(fazendaId); }
       match /lavoura/{doc}      { allow read: if temAcessoAFazenda(fazendaId);
-                                  allow write: if consultorNaFazenda(fazendaId); }
+                                  allow write: if consultorNaFazenda(fazendaId);
+        // semeadura executada por quem é da fazenda preenche o PLANTIO em Dados da lavoura (datas, variedade, partes) — mais nada
+        allow create: if temAcessoAFazenda(fazendaId) && request.resource.data.keys().hasOnly(['talhaoId', 'cultura', 'variedade', 'dataPlantio', 'dataPlantioFim', 'dataEmergencia', 'emergenciaAuto', 'partes', 'safra']);
+        allow update: if temAcessoAFazenda(fazendaId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['cultura', 'variedade', 'dataPlantio', 'dataPlantioFim', 'dataEmergencia', 'emergenciaAuto', 'partes']); }
       // fertilidade do solo: laudos resumidos e pontos de coleta — quem tem acesso à
       // fazenda lê e lança (o produtor manda o laudo dele); só a consultoria apaga
       match /solo/{doc}         { allow read, create, update: if temAcessoAFazenda(fazendaId);

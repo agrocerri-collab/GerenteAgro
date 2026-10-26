@@ -639,7 +639,8 @@ const chaveProduto = (nome) => (nome || "").trim().toLowerCase();
 const sementeDaReceita = (a) => (a && a.produtos || []).find((p) => p && (p.uso === "semente" || p.unidade === "bag")) || ((a && a.produtos) || [])[0] || null;
 // Plantio marcado como feito → emergência PREVISTA 4 dias depois do fim do plantio (a pessoa edita se
 // for diferente). Com etapas (plantio que parou e voltou), cada parte ganha a sua emergência.
-// Só preenche o que está vazio na lavoura; devolve null quando não há o que mudar.
+// A data REAL do plantio (da execução) vence a que estava planejada; a emergência é refeita quando ainda
+// era a prevista (ou vazia) — a que a pessoa digitou fica. Devolve null quando não há o que mudar.
 const DIAS_ATE_EMERGENCIA = 4;
 function lavouraComEmergenciaDoPlantio(lavoura, t, apl, ex, novoId) {
   if (!t || !apl || !ex || moduloDe(apl) !== "semeadura") return null;
@@ -653,14 +654,15 @@ function lavouraComEmergenciaDoPlantio(lavoura, t, apl, ex, novoId) {
   const fimDe = (e) => dia(e.fim) || dia(e.inicio);
   const inicio = etapas.map((e) => dia(e.inicio)).filter(Boolean).sort()[0] || "";
   const fim = etapas.map(fimDe).filter(Boolean).sort().pop() || inicio;
-  const nova = { ...atual, cultura: atual.cultura || apl.cultura || t.cultura || "", variedade: atual.variedade || variedadeRec, dataPlantio: atual.dataPlantio || inicio, dataPlantioFim: fim || atual.dataPlantioFim || "" };
-  if (!atual.dataEmergencia && fimDe(etapas[0])) { nova.dataEmergencia = somarDias(fimDe(etapas[0]), DIAS_ATE_EMERGENCIA); nova.emergenciaAuto = true; }
+  const nova = { ...atual, cultura: atual.cultura || apl.cultura || t.cultura || "", variedade: atual.variedade || variedadeRec, dataPlantio: inicio || atual.dataPlantio || "", dataPlantioFim: fim || atual.dataPlantioFim || "" };
+  if ((!atual.dataEmergencia || atual.emergenciaAuto) && fimDe(etapas[0])) { nova.dataEmergencia = somarDias(fimDe(etapas[0]), DIAS_ATE_EMERGENCIA); nova.emergenciaAuto = true; }
   if (etapas.length >= 2) {
     const antes = Array.isArray(atual.partes) ? atual.partes : [];
     nova.partes = etapas.map((e, k) => {
       const p = antes[k] || {}; const f = fimDe(e);
-      return { ...p, id: p.id || `p${k}`, variedade: p.variedade || e.variedade || variedadeRec, areaHa: num(e.areaHa) || num(p.areaHa), dataPlantio: p.dataPlantio || dia(e.inicio), dataPlantioFim: f || p.dataPlantioFim || "",
-        dataEmergencia: p.dataEmergencia || (f ? somarDias(f, DIAS_ATE_EMERGENCIA) : ""), emergenciaAuto: p.dataEmergencia ? !!p.emergenciaAuto : !!f };
+      const manual = !!p.dataEmergencia && !p.emergenciaAuto;
+      return { ...p, id: p.id || `p${k}`, variedade: p.variedade || e.variedade || variedadeRec, areaHa: num(e.areaHa) || num(p.areaHa), dataPlantio: dia(e.inicio) || p.dataPlantio || "", dataPlantioFim: f || p.dataPlantioFim || "",
+        dataEmergencia: manual ? p.dataEmergencia : (f ? somarDias(f, DIAS_ATE_EMERGENCIA) : (p.dataEmergencia || "")), emergenciaAuto: manual ? false : !!f || !!p.emergenciaAuto };
     });
   }
   if (JSON.stringify(nova) === JSON.stringify(atual)) return null;
@@ -6620,7 +6622,7 @@ function TelaFazenda({ fazenda, fazendas, grupos, papel, usuario, naNuvem, equip
           lavoura={lavoura} equipe={equipe} onSalvar={(v) => gravar(kApl(fazenda.id, safra), v, setApls, apls)} onAtualizarLavoura={(v) => gravar(kLavoura(fazenda.id, safra), v, setLavoura, lavoura)} />
       )}
       {secao === "rel" && (
-        <SecaoRelatorios fazenda={fazenda} prog={prog} apls={apls} ajustes={ajustes} consultor={consultor} maquinas={maquinas} programas={programas}
+        <SecaoRelatorios fazenda={fazenda} prog={prog} apls={apls} ajustes={ajustes} consultor={consultor} maquinas={maquinas} programas={programas} lavoura={lavoura}
           chuvas={chuvas} visitas={visitas} kml={kml} estoque={calcularEstoque()}
           historico={historico} fotosMapa={fotosMapa} colheitas={colheitas} entregas={entregas}
           comandoIA={comandoRel} aoConsumirComando={() => setComandoRel(null)} />
@@ -20389,7 +20391,7 @@ function SecaoLavoura({ fazenda, lavoura, apls, prog, consultor, registrar, onSa
                       <div style={{ margin: "4px 0", display: "grid", gap: 3 }}>
                         {l.partes.map((p, k) => { const d = diasDesde(p.dataEmergencia); return (
                           <div key={p.id || k} style={{ background: C.fundo, borderRadius: 8, padding: "4px 8px", fontSize: 12.5, display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
-                            <span><b style={{ color: C.navy }}>{p.nome || NOMES_PARTES[k] || k + 1}</b> · {p.variedade || "variedade?"} · {fmtN(num(p.areaHa))} ha{p.anel ? " 🗺️" : ""}{p.dataPlantio ? ` · plantio ${fmtD(p.dataPlantio)}${p.dataPlantioFim && p.dataPlantioFim !== p.dataPlantio ? " a " + fmtD(p.dataPlantioFim) : ""}` : ""}{p.dataEmergencia ? ` · emergência ${fmtD(p.dataEmergencia)}` : " · emergência não informada"}</span>
+                            <span><b style={{ color: C.navy }}>{p.nome || NOMES_PARTES[k] || k + 1}</b> · {p.variedade || "variedade?"} · {fmtN(num(p.areaHa))} ha{p.anel ? " 🗺️" : ""}{p.dataPlantio ? ` · plantio ${fmtD(p.dataPlantio)}${p.dataPlantioFim && p.dataPlantioFim !== p.dataPlantio ? " a " + fmtD(p.dataPlantioFim) : ""}` : ""}{p.dataEmergencia ? ` · emergência ${fmtD(p.dataEmergencia)}` : " · emergência não informada"}{num(p.estandeFinal) > 0 ? ` · estande ${fmtN(num(p.estandeFinal))} pl/ha` : ""}</span>
                             {d != null && <b style={{ color: C.verdeEscuro }}>{d} DAE</b>}
                           </div>
                         ); })}
@@ -20624,6 +20626,9 @@ function ModalLavoura({ talhao, inicial, sugestao, variedades, onFechar, onSalva
                   <div style={{ flex: "none", width: 78 }}><label>Ciclo (dias)</label><input type="number" inputMode="numeric" value={p.cicloDias || ""} onChange={(e) => mudarParte(p.id, "cicloDias", e.target.value)} placeholder={cicloConhecido(p.variedade) || "110"} /></div>
                   {d != null && <div style={{ flex: "none", background: C.verdeBg, borderRadius: 8, padding: "6px 10px", textAlign: "center" }}><div style={{ fontSize: 16, fontWeight: 900, color: C.verdeEscuro, lineHeight: 1 }}>{d}</div><div style={{ fontSize: 10, fontWeight: 800, color: C.verdeEscuro }}>DAE</div></div>}
                 </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <div style={{ flex: 1 }}><label>Estande final desta parte (plantas/ha)</label><input type="number" inputMode="decimal" value={p.estandeFinal || ""} onChange={(e) => mudarParte(p.id, "estandeFinal", e.target.value)} placeholder="Ex.: 280000 — o monitoramento preenche" /></div>
+                </div>
               </div>
             );
           })}
@@ -20716,7 +20721,7 @@ function ModalLavoura({ talhao, inicial, sugestao, variedades, onFechar, onSalva
           cultura, variedade: variedadeFinal, dataPlantio: plantioFinal, dataEmergencia: emergenciaFinal,
           dataPlantioFim: partesOk.length ? (partesOk.map((p) => p.dataPlantioFim).filter(Boolean).sort().pop() || "") : (dataPlantioFim || ""),
           cicloDias: partesOk.length ? null : (num(cicloDias) > 0 ? Math.round(num(cicloDias)) : null),
-          partes: partesOk.length ? partesOk.map((p) => ({ id: p.id, variedade: (p.variedade || "").trim(), areaHa: num(p.areaHa), dataPlantio: p.dataPlantio || "", dataPlantioFim: p.dataPlantioFim || "", dataEmergencia: p.dataEmergencia || "", cicloDias: num(p.cicloDias) > 0 ? Math.round(num(p.cicloDias)) : (num(cicloConhecido(p.variedade)) || null), nome: p.nome || "", anel: Array.isArray(p.anel) ? p.anel : null })) : [],
+          partes: partesOk.length ? partesOk.map((p) => ({ id: p.id, variedade: (p.variedade || "").trim(), areaHa: num(p.areaHa), dataPlantio: p.dataPlantio || "", dataPlantioFim: p.dataPlantioFim || "", dataEmergencia: p.dataEmergencia || "", cicloDias: num(p.cicloDias) > 0 ? Math.round(num(p.cicloDias)) : (num(cicloConhecido(p.variedade)) || null), nome: p.nome || "", anel: Array.isArray(p.anel) ? p.anel : null, estandeFinal: num(p.estandeFinal) > 0 ? String(Math.round(num(p.estandeFinal))) : "" })) : [],
           estandeFinal, espacamento, populacaoSemeada, obs: obs.trim(),
           culturaAnterior, variedadeAnterior: variedadeAnterior.trim(), tecnologia, tecnologiaAnterior: culturaAnterior ? tecnologiaAnterior : "",
         })} />
@@ -22025,7 +22030,46 @@ function SecaoSafras({ fazenda, safra, consultor, registrar, onAbrirSafra, onAtu
 }
 
 // =========================== RELATÓRIOS ===========================
+// Panorama da lavoura: uma linha por talhão (ou por parte A/B) com DAE, estande, última aplicação,
+// fungicidas feitos e a próxima, último monitoramento (em dia ou atrasado, praga acima do nível) e pendências.
+function panoramaDaLavoura(fazenda, lavoura, apls, visitas, hoje) {
+  const fung = resumoFungicidas(fazenda, apls, lavoura, hoje);
+  const mons = (visitas || []).filter((v) => v && v.ehMonitoramento);
+  const linhas = [];
+  for (const t of (fazenda && fazenda.talhoes) || []) {
+    const lv = (lavoura || []).find((l) => l.talhaoId === t.id) || null;
+    const cultura = (lv && lv.cultura) || t.cultura || "";
+    const pl = partesDaLavoura(lv, t, hoje);
+    const alvos = pl.length
+      ? pl.map((p) => ({ parte: p.nome, areaHa: p.areaHa || num(t.areaHa), variedade: p.variedade || (lv && lv.variedade) || "", plantio: p.dataPlantio || "", emergencia: p.dataEmergencia || "", estande: num(p.estandeFinal) }))
+      : [{ parte: null, areaHa: num(t.areaHa), variedade: (lv && lv.variedade) || "", plantio: (lv && lv.dataPlantio) || "", emergencia: (lv && lv.dataEmergencia) || "", estande: num(lv && lv.estandeFinal) }];
+    for (const al of alvos) {
+      const vale = (a) => !(al.parte && a.partesAlvo && a.partesAlvo[t.id] && a.partesAlvo[t.id] !== al.parte);
+      const feitas = [];
+      let pendencias = 0;
+      for (const a of apls || []) {
+        if (!(a.talhaoIds || []).includes(t.id) || !vale(a)) continue;
+        const ex = (a.execucoes || {})[t.id];
+        if (ex && ex.data && !ex.aberto) feitas.push({ data: String(ex.data).slice(0, 10), modulo: moduloDe(a), tipo: a.tipo || "", alvo: a.alvo || "", produtos: (a.produtos || []).filter((p) => p && p.nome && p.uso !== "sulco").map((p) => p.nome).join(" + "), fungicida: ehFungicida(a) });
+        else if (!a.prevista) pendencias++;
+      }
+      feitas.sort((x, y) => x.data.localeCompare(y.data));
+      const doMon = mons.filter((m) => m.talhaoId === t.id && (!al.parte || !m.parteNome || m.parteNome === al.parte)).sort((x, y) => String(x.data || "").localeCompare(String(y.data || "")));
+      const um = doMon[doMon.length - 1] || null;
+      const dae = al.emergencia ? diasEntreISO(al.emergencia, hoje) : null;
+      const intervalo = intervaloMonitoramento(cultura);
+      const diasMon = um ? diasEntreISO(String(um.data).slice(0, 10), hoje) : null;
+      const fz = fung.find((x) => x.t.id === t.id && (x.parte || null) === (al.parte || null)) || null;
+      linhas.push({ talhaoId: t.id, talhao: t.nome, parte: al.parte, areaHa: al.areaHa, cultura, variedade: al.variedade, plantio: al.plantio, emergencia: al.emergencia, dae, estande: al.estande,
+        ultima: feitas[feitas.length - 1] || null, fungicidas: feitas.filter((f) => f.fungicida).length, proxFungicida: fz && !fz.encerrado ? { data: fz.proxima, status: fz.status } : null,
+        monitoramento: um ? { data: String(um.data).slice(0, 10), dias: diasMon, emDia: diasMon < intervalo, acima: pragasAcima(fazenda, um) } : null,
+        monitorar: dae != null && dae >= 0 && dae <= 240, intervalo, pendencias });
+    }
+  }
+  return linhas.sort((a, b) => String(a.talhao).localeCompare(String(b.talhao), "pt-BR", { numeric: true }) || String(a.parte || "").localeCompare(String(b.parte || "")));
+}
 const RELATORIOS = [
+  ["lavoura", "🌱", "Panorama da lavoura", "Cada talhão: DAE, estande, última aplicação, fungicidas e monitoramento"],
   ["geral", "📚", "Planejamento geral", "Tudo o que aconteceu, em ordem de data"],
   ["pulverizacao", "🚿", "Pulverizações", "Acompanhamento técnico"],
   ["semeadura", "🌱", "Semeadura", "Acompanhamento técnico"],
@@ -22074,7 +22118,7 @@ const TituloRel = ({ children }) => (
   <div style={{ fontWeight: 800, background: C.verdeBg, color: C.navy, padding: "5px 10px", borderRadius: 6, fontSize: 14, marginTop: 12 }}>{children}</div>
 );
 
-function SecaoRelatorios({ fazenda, prog, apls, ajustes, chuvas, visitas, kml, estoque, historico, fotosMapa, consultor, maquinas, colheitas, comandoIA, aoConsumirComando, programas, entregas }) {
+function SecaoRelatorios({ fazenda, prog, apls, ajustes, chuvas, visitas, kml, estoque, historico, fotosMapa, consultor, maquinas, colheitas, comandoIA, aoConsumirComando, programas, entregas, lavoura }) {
   const [aberto, setAberto] = useState(null);
   const [culturaRel, setCulturaRel] = useState("todas");   // relatório do programa de compra: cultura escolhida
   // filtro de talhões do Planejamento geral: vale escolher DOIS ou mais
@@ -22130,6 +22174,52 @@ function SecaoRelatorios({ fazenda, prog, apls, ajustes, chuvas, visitas, kml, e
   // ao sair, a escolha de talhões volta ao normal: senão um filtro feito na
   // pulverização apareceria depois na semeadura sem ninguém entender por quê
   const voltar = () => { setAberto(null); setSelRel(null); };
+
+  // ---------- panorama da lavoura: o retrato de hoje, talhão por talhão ----------
+  if (aberto === "lavoura") {
+    const hoje = hojeISO();
+    const linhas = panoramaDaLavoura(fazenda, lavoura, apls, visitas, hoje);
+    const nomeMod = (m) => (MODULOS[m] || MODULOS.pulverizacao).nome;
+    const fungAtras = linhas.filter((l) => l.proxFungicida && l.proxFungicida.status === "vencida").length;
+    const monAtras = linhas.filter((l) => l.monitorar && (!l.monitoramento || !l.monitoramento.emDia)).length;
+    const acimaNivel = linhas.filter((l) => l.monitoramento && l.monitoramento.acima.length).length;
+    const pend = linhas.reduce((s, l) => s + l.pendencias, 0);
+    const area = linhas.reduce((s, l) => s + num(l.areaHa), 0);
+    const ini = (() => { const m = String(safraDaData(hoje) || "").match(/^(\d{4})/); return m ? `${m[1]}-07-01` : `${hoje.slice(0, 4)}-07-01`; })();
+    const chuvaSafra = mediaChuva((chuvas || []).filter((c) => (c.data || "") >= ini && (c.data || "") <= hoje));
+    const chuva30 = mediaChuva((chuvas || []).filter((c) => (c.data || "") >= somarDias(hoje, -30) && (c.data || "") <= hoje));
+    const caixa = (rot, v, cor) => <div style={{ flex: "1 1 120px", background: C.fundo, borderRadius: 10, padding: "6px 10px" }}><div style={{ fontSize: 10.5, fontWeight: 800, color: C.cinza }}>{rot}</div><div style={{ fontSize: 16, fontWeight: 900, color: cor || C.navy }}>{v}</div></div>;
+    return (
+      <Folha fazenda={fazenda} titulo="Panorama da lavoura" subtitulo={`Retrato de ${fmtD(hoje)} · ${linhas.length} ${linhas.length === 1 ? "talhão" : "talhões e partes"} · ${fmtN(area)} ha`} onVoltar={voltar}>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+          {caixa("FUNGICIDA ATRASADO", fungAtras, fungAtras ? C.vermelho : C.verdeEscuro)}
+          {caixa("MONITORAMENTO ATRASADO", monAtras, monAtras ? C.vermelho : C.verdeEscuro)}
+          {caixa("PRAGA ACIMA DO NÍVEL", acimaNivel, acimaNivel ? C.vermelho : C.verdeEscuro)}
+          {caixa("RECOMENDAÇÕES PENDENTES", pend, pend ? "#7A5C00" : C.verdeEscuro)}
+          {caixa("CHUVA 30 DIAS · SAFRA", `${fmtN(chuva30)} · ${fmtN(chuvaSafra)} mm`)}
+        </div>
+        {linhas.length === 0 && <div style={{ fontSize: 13, color: C.cinza }}>Cadastre os talhões e a lavoura (Dados da lavoura) para o panorama sair.</div>}
+        {linhas.map((l) => {
+          const m = l.monitoramento; const f = l.proxFungicida;
+          const alerta = (f && f.status === "vencida") || (l.monitorar && (!m || !m.emDia)) || (m && m.acima.length);
+          return (
+            <div key={l.talhaoId + (l.parte || "")} style={{ border: `1.5px solid ${alerta ? "#E8B4B4" : C.borda}`, borderLeft: `6px solid ${alerta ? C.vermelho : C.verde}`, borderRadius: 10, padding: "7px 10px", marginBottom: 7, breakInside: "avoid", pageBreakInside: "avoid", fontSize: 12.5, lineHeight: 1.45 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
+                <b style={{ color: C.navy, fontSize: 14 }}>{l.talhao}{l.parte ? ` · parte ${l.parte}` : ""} <span style={{ fontWeight: 600, color: C.navyEscuro, fontSize: 12.5 }}>— {l.cultura || "sem cultura"}{l.variedade ? ` · ${l.variedade}` : ""} · {fmtN(l.areaHa)} ha</span></b>
+                <b style={{ color: C.verdeEscuro, fontSize: 14 }}>{l.dae != null ? `${l.dae} DAE` : "sem emergência"}</b>
+              </div>
+              <div style={{ color: C.cinza }}>{l.plantio ? `Plantio ${fmtD(l.plantio)}` : "Plantio não lançado"}{l.emergencia ? ` · emergência ${fmtD(l.emergencia)}` : ""}{l.estande > 0 ? ` · estande ${fmtN(l.estande)} pl/ha` : " · estande não contado"}</div>
+              <div><b>Última aplicação:</b> {l.ultima ? `${fmtD(l.ultima.data)} — ${nomeMod(l.ultima.modulo)}${l.ultima.tipo ? ` ${l.ultima.tipo}` : ""}${l.ultima.alvo ? ` (${l.ultima.alvo})` : ""}${l.ultima.produtos ? `: ${l.ultima.produtos}` : ""}` : "nenhuma executada"}</div>
+              <div><b>Fungicidas:</b> {l.fungicidas} {l.fungicidas === 1 ? "aplicação feita" : "aplicações feitas"}{f ? <span style={{ color: f.status === "vencida" ? C.vermelho : f.status === "proxima" ? "#7A5C00" : C.verdeEscuro, fontWeight: 800 }}> · próxima {fmtD(f.data)}{f.status === "vencida" ? " (ATRASADA)" : f.status === "proxima" ? " (chegando)" : ""}</span> : null}</div>
+              <div><b>Monitoramento:</b> {m ? <>{fmtD(m.data)} (há {m.dias} dia{m.dias === 1 ? "" : "s"}) <span style={{ color: m.emDia ? C.verdeEscuro : C.vermelho, fontWeight: 800 }}>{m.emDia ? "✓ em dia" : `⚠ atrasado (a cada ${l.intervalo} dias)`}</span></> : <span style={{ color: l.monitorar ? C.vermelho : C.cinza, fontWeight: l.monitorar ? 800 : 500 }}>{l.monitorar ? "⚠ nunca monitorado" : "—"}</span>}
+                {m && m.acima.length > 0 && <span style={{ color: C.vermelho, fontWeight: 800 }}> · acima do nível: {m.acima.map((a) => `${a.nome} ${fmtN(a.valor)}${a.unidade}`).join(", ")}</span>}</div>
+              {l.pendencias > 0 && <div style={{ color: "#7A5C00", fontWeight: 700 }}>⏳ {l.pendencias} {l.pendencias === 1 ? "recomendação esperando" : "recomendações esperando"} execução</div>}
+            </div>
+          );
+        })}
+      </Folha>
+    );
+  }
 
   // ---------- colheita: cargas, média por talhão, caminhões e perdas ----------
   if (aberto === "colheita") {
@@ -26477,7 +26567,7 @@ function MonitoramentoPragas({ fazenda, lavoura, kml, usuario, onFechar, onSalva
   const trocarCultura = (c) => { const m = metodoPadraoDe(c); const f = fichaDe(c, m); setCulturaSel(c); setMetodo(m); setItens(f); setPragas(f.map((x) => x.chave)); };
   const poligonoDo = (tid) => (kml && kml.poligonos ? kml.poligonos.find((g) => g.talhaoId === tid) : null);
   // estande: se a lavoura do talhão não tem, abre a contagem em cada ponto
-  const semEstande = !!t && !(num(lv && lv.estandeFinal) > 0);
+  const semEstande = !!t && (parteObj ? !(num(parteObj.estandeFinal) > 0) : !(num(lv && lv.estandeFinal) > 0));
   const espacamentoPadrao = (lv && num(lv.espacamento) > 0) ? String(lv.espacamento) : (cultura === "Algodão" ? "76" : cultura === "Milho" ? "50" : "45");
   const plantasHaDe = (e) => { const esp = num(e && e.espacamento) / 100, m = num(e && e.metros), pl = num(e && e.plantas); return esp > 0 && m > 0 && pl > 0 ? (pl / m) * (10000 / esp) : 0; };
   // GPS ao vivo enquanto o monitoramento está aberto (para guiar até o ponto)
@@ -26595,7 +26685,10 @@ function MonitoramentoPragas({ fazenda, lavoura, kml, usuario, onFechar, onSalva
       const lista = lavoura || [];
       const idx = lista.findIndex((l) => l.talhaoId === t.id);
       const base = idx >= 0 ? lista[idx] : { id: idNovo(), talhaoId: t.id, cultura };
-      const novo = { ...base, estandeFinal: String(Math.round(estandeMedio)), espacamento: base.espacamento || (esp > 0 ? String(esp) : "") };
+      // talhão em partes (A/B): o estande contado é o da parte do monitoramento
+      const novo = parteSel && Array.isArray(base.partes) && base.partes.length
+        ? { ...base, partes: base.partes.map((p, k) => ((p.nome || NOMES_PARTES[k]) === parteSel ? { ...p, estandeFinal: String(Math.round(estandeMedio)) } : p)), espacamento: base.espacamento || (esp > 0 ? String(esp) : "") }
+        : { ...base, estandeFinal: String(Math.round(estandeMedio)), espacamento: base.espacamento || (esp > 0 ? String(esp) : "") };
       onAtualizarLavoura(idx >= 0 ? lista.map((l, i) => (i === idx ? novo : l)) : [...lista, novo]);
     }
   };
