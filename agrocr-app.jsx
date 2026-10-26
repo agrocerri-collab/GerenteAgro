@@ -6349,7 +6349,7 @@ function TelaFazenda({ fazenda, fazendas, grupos, papel, usuario, naNuvem, equip
           <div style={{ fontWeight: 900, fontSize: 18, color: C.navy }}>👥 Recursos humanos</div>
           <div style={{ fontSize: 12.5, color: C.cinza, marginBottom: 10 }}>Quem trabalha na fazenda, salários, comissões e o ponto.</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            {[["func", "👷", "Funcionários", `Quadro, salários e comissões${(funcionarios || []).length ? ` (${funcionarios.length})` : ""}`], ...(mostrar("ponto") ? [["ponto", "⏰", "Ponto", "Quem está trabalhando, espelho do mês"]] : [])].map(([id, ico, titulo, sub]) => (
+            {[["func", "👷", "Funcionários", `Quadro, salários e comissões${(funcionarios || []).length ? ` (${funcionarios.length})` : ""}`], ...(mostrar("ponto") ? [["ponto", "⏰", "Ponto", "Quem está trabalhando, espelho do mês"], ["banco", "🏦", "Banco de horas", pontoCfg && pontoCfg.banco && pontoCfg.banco.ativo ? "Saldo de cada um: extras, faltas, folgas" : "Opcional — ligar e acompanhar o saldo"]] : [])].map(([id, ico, titulo, sub]) => (
               <button key={id} onClick={() => { if (id === "ponto") { setVoltarPara({ secao: "rh", rotulo: "RH" }); setSecao("ponto"); } else setAbaFin(id); }} style={{ background: "#fff", border: `1.5px solid ${C.borda}`, borderRadius: 16, padding: "18px 14px", textAlign: "left", minHeight: 110 }}>
                 <IconeCartao id={id} ico={ico} tam={28} />
                 <div className="titulo" style={{ fontWeight: 800, fontSize: 15, color: C.navy, marginTop: 8, lineHeight: 1.15 }}>{titulo}</div>
@@ -6358,6 +6358,10 @@ function TelaFazenda({ fazenda, fazendas, grupos, papel, usuario, naNuvem, equip
             ))}
           </div>
         </div>
+      )}
+      {secao === "rh" && veFinanceiro && veCustos && abaFin === "banco" && (
+        <SecaoBancoHoras fazenda={fazenda} batidas={ponto} config={pontoCfg} usuario={usuario} registrar={registrar}
+          onSalvarConfig={(v) => gravar(kPontoCfg(fazenda.id), v, setPontoCfg, pontoCfg)} />
       )}
       {(secao === "rh" || secao === "fin") && veFinanceiro && abaFin === "func" && veCustos && (
         <SecaoFuncionarios fazenda={fazenda} funcionarios={funcionarios} usuario={usuario} registrar={registrar} naNuvem={naNuvem} podeAcessoPonto={!!(consultor || ehProdutor)}
@@ -20639,7 +20643,7 @@ function horasDoDia(doDia) {
   if (aberto != null) incompleto = true;
   return { trabalhadoMin: total, incompleto };
 }
-const jornadaDoDia = (dia, jornada) => { const j = { ...PONTO_PADRAO.jornada, ...(jornada || {}) }; const w = new Date(dia + "T12:00:00").getDay(); return w === 0 ? num(j.domingo) : w === 6 ? num(j.sabado) : num(j.semana); };
+const jornadaDoDia = (dia, jornada) => { const j = { ...PONTO_PADRAO.jornada, ...(jornada || {}) }; if (Array.isArray(j.feriados) && j.feriados.includes(dia)) return 0; const w = new Date(dia + "T12:00:00").getDay(); return w === 0 ? num(j.domingo) : w === 6 ? num(j.sabado) : num(j.semana); };
 // espelho do mês de uma pessoa: um registro por dia até hoje
 function espelhoDoMes(batidas, pessoaId, mes, jornada, hoje) {
   const validas = batidasValidas((batidas || []).filter((b) => b.pessoaId === pessoaId && String(b.dia || "").startsWith(mes)));
@@ -20863,6 +20867,175 @@ function ModalAcessoPonto({ funcionario, fazenda, garantirNoPonto, onSalvarFunci
   );
 }
 
+// =========================== BANCO DE HORAS (RH) ===========================
+// Opcional. Liga numa data; dali em diante cada dia de ponto soma a hora extra e desconta a falta,
+// pela jornada do ponto (feriado não conta). Folga/compensação, horas pagas e abono entram como
+// lançamentos com motivo e quem lançou. Fica na config do ponto (arquivos/pontoConfig → banco).
+const TIPOS_LANC_BANCO = [["folga", "🏖 Folga / compensação", -1], ["pagamento", "💵 Horas pagas na folha", -1], ["abono", "📄 Abono (atestado, dispensa)", 1], ["ajuste", "✍️ Saldo anterior / ajuste", 0]];
+const proximoMes = (m) => { const [a, b] = m.split("-").map(Number); return b === 12 ? `${a + 1}-01` : `${a}-${String(b + 1).padStart(2, "0")}`; };
+const fmtSaldo = (min) => `${num(min) < 0 ? "−" : "+"}${fmtHM(Math.abs(num(min)))}`;
+// saldo do banco de uma pessoa, mês a mês, desde o início do banco
+function bancoDeHoras(batidas, pessoaId, cfg, hoje) {
+  const b = (cfg && cfg.banco) || {};
+  // conta a partir da 1ª batida da pessoa (quem entrou depois não leva falta dos dias de antes)
+  const primeira = (batidas || []).filter((x) => x && x.pessoaId === pessoaId && x.dia).map((x) => x.dia).sort()[0] || null;
+  const inicioBanco = b.inicio || hoje;
+  const inicio = primeira && primeira > inicioBanco ? primeira : inicioBanco;
+  const jor = { ...PONTO_PADRAO.jornada, ...((cfg && cfg.jornada) || {}), feriados: (cfg && cfg.feriados) || [] };
+  const lancs = (b.lanc || []).filter((l) => l.pessoaId === pessoaId && l.dia);
+  const meses = []; let saldo = 0;
+  const mIni = [inicio.slice(0, 7), ...lancs.map((l) => String(l.dia).slice(0, 7))].sort()[0];
+  for (let m = mIni, voltas = 0; m <= hoje.slice(0, 7) && voltas < 120; m = proximoMes(m), voltas++) {
+    let ex = 0, fa = 0;
+    if (primeira) {
+      const e = espelhoDoMes(batidas, pessoaId, m, jor, hoje);
+      for (const d of e.dias) if (d.dia >= inicio) { ex += d.extraMin; fa += d.faltaMin; }
+    }
+    const lm = lancs.filter((l) => String(l.dia || "").slice(0, 7) === m).reduce((s, l) => s + num(l.min), 0);
+    saldo += ex - fa + lm;
+    meses.push({ mes: m, extraMin: ex, faltaMin: fa, lancMin: lm, saldoMin: saldo });
+  }
+  return { meses, saldoMin: saldo, lancamentos: lancs.slice().sort((x, y) => String(y.dia).localeCompare(String(x.dia))) };
+}
+
+function SecaoBancoHoras({ fazenda, batidas, config, onSalvarConfig, usuario, registrar }) {
+  const cfg = { ...PONTO_PADRAO, ...(config || {}), jornada: { ...PONTO_PADRAO.jornada, ...((config || {}).jornada || {}) } };
+  const banco = cfg.banco || null;
+  const ativo = !!(banco && banco.ativo);
+  const pessoas = (cfg.pessoas || []).filter((p) => !p.inativa);
+  const hoje = diaLocal();
+  const [ligar, setLigar] = useState({ inicio: hoje.slice(0, 8) + "01", prazo: "6" });
+  const [aberto, setAberto] = useState(null);   // pessoa com o extrato aberto
+  const [lanc, setLanc] = useState(null);       // {pessoaId, tipo, horas, sinal, motivo, dia}
+  const [feriado, setFeriado] = useState("");
+  const quem = (usuario && usuario.nomeUsuario) || "";
+  const salvarBanco = (mud, txt) => { onSalvarConfig({ ...cfg, banco: { ...(banco || {}), ...mud } }); if (registrar && txt) registrar("Banco de horas", txt); };
+  const prazo = num(banco && banco.prazoMeses) || 6;
+  const limite = (() => { const d = new Date(hoje + "T12:00:00"); d.setMonth(d.getMonth() - prazo); return diaLocal(d); })();
+  const cartao = { background: "#fff", border: `1.5px solid ${C.borda}`, borderRadius: 12, padding: "10px 12px", marginBottom: 10 };
+  if (!ativo) return (
+    <div>
+      <div style={{ fontWeight: 900, fontSize: 18, color: C.navy }}>🏦 Banco de horas</div>
+      <div style={{ fontSize: 13, color: C.navyEscuro, margin: "6px 0 10px", lineHeight: 1.4 }}>Opcional. Ligado, o app soma a <b>hora extra</b> e desconta a <b>falta</b> de cada um pelo ponto, todo dia, contra a jornada do ponto. Folga, horas pagas e atestado entram como lançamento.</div>
+      <div style={cartao}>
+        <label style={{ marginTop: 0 }}>Começa a contar em</label>
+        <input type="date" value={ligar.inicio} onChange={(e) => setLigar({ ...ligar, inicio: e.target.value })} />
+        <label>Prazo para compensar</label>
+        <select value={ligar.prazo} onChange={(e) => setLigar({ ...ligar, prazo: e.target.value })}>
+          <option value="6">6 meses — acordo individual por escrito</option>
+          <option value="12">12 meses — acordo ou convenção coletiva</option>
+          <option value="1">no mesmo mês — acordo individual (tácito)</option>
+        </select>
+        <div style={{ fontSize: 11.5, color: C.cinza, marginTop: 4 }}>CLT art. 59: hora do banco que não for compensada no prazo tem que ser paga como hora extra. O acordo com o funcionário precisa existir — o app só faz a conta.</div>
+        <BotaoSalvar disabled={!ligar.inicio} texto="Ligar o banco de horas" onClick={() => salvarBanco({ ativo: true, inicio: ligar.inicio, prazoMeses: num(ligar.prazo), lanc: (banco && banco.lanc) || [] }, `ligado a partir de ${fmtD(ligar.inicio)}`)} />
+      </div>
+      {pessoas.length === 0 && <div style={{ fontSize: 12.5, color: C.cinza }}>Cadastre os funcionários em RH → Funcionários — eles entram no ponto e no banco sozinhos.</div>}
+    </div>
+  );
+  const linhas = pessoas.map((p) => ({ p, b: bancoDeHoras(batidas, p.id, cfg, hoje) })).sort((x, y) => x.p.nome.localeCompare(y.p.nome));
+  const salvarLanc = () => {
+    const t = TIPOS_LANC_BANCO.find((x) => x[0] === lanc.tipo) || TIPOS_LANC_BANCO[0];
+    const [h, m] = String(lanc.horas || "").split(":").map((x) => num(x));
+    const min = Math.round(h * 60 + (m || 0));
+    if (!(min > 0)) return;
+    const sinal = t[2] !== 0 ? t[2] : (lanc.sinal === "-" ? -1 : 1);
+    const novo = { id: idNovo(), pessoaId: lanc.pessoaId, dia: lanc.dia || hoje, min: sinal * min, tipo: t[0], motivo: String(lanc.motivo || "").trim(), quem, em: new Date().toISOString() };
+    const nome = (pessoas.find((x) => x.id === lanc.pessoaId) || {}).nome || "";
+    salvarBanco({ lanc: [...((banco && banco.lanc) || []), novo] }, `${nome}: ${t[1].replace(/^\S+\s/, "")} ${fmtSaldo(novo.min)}${novo.motivo ? ` (${novo.motivo})` : ""}`);
+    setLanc(null);
+  };
+  return (
+    <div>
+      <div className="nao-imprimir" style={{ display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 8 }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontWeight: 900, fontSize: 18, color: C.navy }}>🏦 Banco de horas</div>
+          <div style={{ fontSize: 12, color: C.cinza }}>Desde {fmtD(banco.inicio)} · prazo {prazo === 1 ? "no mesmo mês" : `${prazo} meses`} · jornada {fmtHM(cfg.jornada.semana)} seg–sex, {fmtHM(cfg.jornada.sabado)} sábado</div>
+        </div>
+        <BotaoPdfWhats compacto nome={`banco-de-horas-${fazenda.nome}`} titulo={`Banco de horas · ${fazenda.nome}`} />
+      </div>
+      <div className="imprimivel">
+        <div className="so-imprimir" style={{ display: "none", marginBottom: 8 }}>
+          <div style={{ fontWeight: 900, fontSize: 17, color: C.navy }}>Banco de horas — {fazenda.nome}</div>
+          <div style={{ fontSize: 12, color: C.cinza }}>Desde {fmtD(banco.inicio)} · gerado em {fmtD(hoje)}</div>
+        </div>
+        {linhas.length === 0 && <div style={{ fontSize: 13, color: C.cinza }}>Ninguém no ponto ainda.</div>}
+        {linhas.map(({ p, b }) => {
+          const ab = aberto === p.id;
+          return (
+            <div key={p.id} style={{ ...cartao, borderLeft: `6px solid ${b.saldoMin > 0 ? C.verde : b.saldoMin < 0 ? C.vermelho : C.borda}` }}>
+              <button onClick={() => setAberto(ab ? null : p.id)} style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, background: "transparent", border: "none", padding: 0, textAlign: "left" }}>
+                <span style={{ flex: 1, minWidth: 0 }}><b style={{ color: C.navy, fontSize: 14.5 }}>{p.nome}</b> <span style={{ fontSize: 12, color: C.cinza }}>{p.funcao || ""}</span></span>
+                <span style={{ fontWeight: 900, fontSize: 18, color: b.saldoMin > 0 ? C.verdeEscuro : b.saldoMin < 0 ? C.vermelho : C.cinza }}>{fmtSaldo(b.saldoMin)}</span>
+              </button>
+              <div style={{ fontSize: 11.5, color: C.cinza }}>{b.saldoMin > 0 ? "a favor do funcionário (folga ou pagar)" : b.saldoMin < 0 ? "o funcionário deve horas" : "zerado"}{b.saldoMin > 0 && banco.inicio < limite ? ` · ⚠ hora de antes de ${fmtD(limite)} vence o prazo — compense ou pague` : ""}</div>
+              {ab && (
+                <div style={{ marginTop: 8 }}>
+                  <div style={{ overflowX: "auto" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
+                      <thead><tr>{["Mês", "Extras", "Faltas", "Lançado", "Saldo"].map((h, i) => <th key={h} style={{ textAlign: i ? "right" : "left", fontSize: 11, color: C.cinza, padding: "3px 4px", borderBottom: `1.5px solid ${C.borda}` }}>{h}</th>)}</tr></thead>
+                      <tbody>{b.meses.map((m) => (
+                        <tr key={m.mes}>
+                          <td style={{ padding: "4px", fontWeight: 700 }}>{m.mes.slice(5)}/{m.mes.slice(0, 4)}</td>
+                          <td style={{ padding: "4px", textAlign: "right", color: C.verdeEscuro }}>{m.extraMin ? "+" + fmtHM(m.extraMin) : "—"}</td>
+                          <td style={{ padding: "4px", textAlign: "right", color: C.vermelho }}>{m.faltaMin ? "−" + fmtHM(m.faltaMin) : "—"}</td>
+                          <td style={{ padding: "4px", textAlign: "right" }}>{m.lancMin ? fmtSaldo(m.lancMin) : "—"}</td>
+                          <td style={{ padding: "4px", textAlign: "right", fontWeight: 900, color: m.saldoMin < 0 ? C.vermelho : C.navy }}>{fmtSaldo(m.saldoMin)}</td>
+                        </tr>
+                      ))}</tbody>
+                    </table>
+                  </div>
+                  {b.lancamentos.length > 0 && (
+                    <div style={{ marginTop: 6 }}>
+                      {b.lancamentos.map((l) => (
+                        <div key={l.id} style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12, padding: "3px 0", borderTop: `1px solid ${C.fundo}` }}>
+                          <span style={{ flex: 1 }}>{fmtD(l.dia)} · {((TIPOS_LANC_BANCO.find((x) => x[0] === l.tipo) || [])[1] || l.tipo)}{l.motivo ? ` — ${l.motivo}` : ""} <span style={{ color: C.cinza }}>({l.quem})</span></span>
+                          <b style={{ color: l.min < 0 ? C.vermelho : C.verdeEscuro }}>{fmtSaldo(l.min)}</b>
+                          <button className="nao-imprimir" onClick={() => { if (window.confirm("Tirar este lançamento do banco de horas?")) salvarBanco({ lanc: (banco.lanc || []).filter((x) => x.id !== l.id) }, `${p.nome}: lançamento de ${fmtD(l.dia)} retirado`); }} style={{ background: "transparent", border: "none", color: C.vermelho, fontSize: 12, padding: 0 }}>✕</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {lanc && lanc.pessoaId === p.id ? (
+                    <div className="nao-imprimir" style={{ background: C.fundo, borderRadius: 10, padding: "8px 10px", marginTop: 8 }}>
+                      <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                        {TIPOS_LANC_BANCO.map(([id, rot]) => <button key={id} onClick={() => setLanc({ ...lanc, tipo: id })} style={{ padding: "6px 9px", borderRadius: 8, border: "none", fontWeight: 800, fontSize: 12, background: lanc.tipo === id ? C.navy : "#fff", color: lanc.tipo === id ? "#fff" : C.navyEscuro }}>{rot}</button>)}
+                      </div>
+                      <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+                        <div style={{ flex: 1 }}><label style={{ marginTop: 0 }}>Horas (h:mm)</label><input value={lanc.horas} onChange={(e) => setLanc({ ...lanc, horas: e.target.value })} placeholder="8:00" inputMode="numeric" /></div>
+                        {lanc.tipo === "ajuste" && <div style={{ flex: 1 }}><label style={{ marginTop: 0 }}>Sinal</label><select value={lanc.sinal} onChange={(e) => setLanc({ ...lanc, sinal: e.target.value })}><option value="+">+ a favor dele</option><option value="-">− ele deve</option></select></div>}
+                        <div style={{ flex: 1 }}><label style={{ marginTop: 0 }}>Dia</label><input type="date" value={lanc.dia} onChange={(e) => setLanc({ ...lanc, dia: e.target.value })} /></div>
+                      </div>
+                      <input value={lanc.motivo} onChange={(e) => setLanc({ ...lanc, motivo: e.target.value })} placeholder="Motivo (ex.: folga no sábado 01/11, atestado médico)" style={{ marginTop: 6 }} />
+                      <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+                        <button onClick={() => setLanc(null)} style={{ flex: 1, padding: 9, background: "#fff", border: `1.5px solid ${C.borda}`, borderRadius: 10, fontWeight: 800, color: C.navy }}>Cancelar</button>
+                        <button onClick={salvarLanc} style={{ flex: 2, padding: 9, background: C.verde, color: "#fff", border: "none", borderRadius: 10, fontWeight: 800 }}>Lançar</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button className="nao-imprimir" onClick={() => setLanc({ pessoaId: p.id, tipo: "folga", horas: "", sinal: "+", motivo: "", dia: hoje })} style={{ marginTop: 8, padding: "7px 12px", background: C.verdeBg, color: C.verdeEscuro, border: "none", borderRadius: 10, fontWeight: 800, fontSize: 12.5 }}>+ Lançar folga, horas pagas ou abono</button>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+        <div style={{ fontSize: 11, color: C.cinza }}>Extra e falta saem do ponto, dia a dia, contra a jornada; dia sem batida conta como falta (lance abono, folga ou feriado). Correção de batida é feita no Espelho do ponto.</div>
+      </div>
+      <div className="nao-imprimir" style={{ ...cartao, marginTop: 10 }}>
+        <b style={{ color: C.navy, fontSize: 13.5 }}>📅 Feriados (não contam como falta)</b>
+        <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+          <input type="date" value={feriado} onChange={(e) => setFeriado(e.target.value)} style={{ flex: 1, marginTop: 0 }} />
+          <button disabled={!feriado} onClick={() => { onSalvarConfig({ ...cfg, feriados: [...new Set([...(cfg.feriados || []), feriado])].sort() }); setFeriado(""); }} style={{ flex: "none", padding: "0 14px", background: C.navy, color: "#fff", border: "none", borderRadius: 10, fontWeight: 800, opacity: feriado ? 1 : 0.5 }}>+ feriado</button>
+        </div>
+        <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginTop: 6 }}>
+          {(cfg.feriados || []).filter((d) => d >= hoje.slice(0, 4) + "-01-01").map((d) => <span key={d} style={{ background: C.fundo, borderRadius: 8, padding: "3px 8px", fontSize: 12 }}>{fmtD(d)} <button onClick={() => onSalvarConfig({ ...cfg, feriados: (cfg.feriados || []).filter((x) => x !== d) })} style={{ background: "transparent", border: "none", color: C.vermelho, padding: 0, fontSize: 12 }}>✕</button></span>)}
+        </div>
+        <button onClick={() => { if (window.confirm("Desligar o banco de horas? Os lançamentos ficam guardados e voltam se ligar de novo.")) salvarBanco({ ativo: false }, "desligado"); }} style={{ marginTop: 10, background: "transparent", border: "none", color: C.cinza, fontSize: 12, fontWeight: 700, padding: 0 }}>desligar o banco de horas</button>
+      </div>
+    </div>
+  );
+}
+
 function SecaoPonto({ fazenda, kml, usuario, batidas, config, onBater, podeGerir, onSalvarConfig, funcionarios }) {
   const cfg = { ...PONTO_PADRAO, ...(config || {}), jornada: { ...PONTO_PADRAO.jornada, ...((config || {}).jornada || {}) } };
   const pessoas = (cfg.pessoas || []).filter((p) => !p.inativa);
@@ -21028,7 +21201,7 @@ function EspelhoPonto({ fazenda, pessoas, cfg, batidas, usuario, onBater }) {
   const [ajuste, setAjuste] = useState(null);   // {dia, substitui, tipo, hora, motivo, anula}
   const folhaRef = useRef(null);
   const p = pessoas.find((x) => x.id === pessoaId);
-  const esp = p ? espelhoDoMes(batidas, p.id, mes, cfg.jornada, diaLocal()) : null;
+  const esp = p ? espelhoDoMes(batidas, p.id, mes, { ...cfg.jornada, feriados: cfg.feriados || [] }, diaLocal()) : null;
   const dSem = (dia) => ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"][new Date(dia + "T12:00:00").getDay()];
   const td = { padding: "4px 5px", borderBottom: `1px solid ${C.fundo}`, textAlign: "center", fontSize: 12 };
   const gravarAjuste = () => {
