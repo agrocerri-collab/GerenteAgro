@@ -1398,7 +1398,7 @@ export default function App() {
     if (!MARCA_VENDA || !naNuvem || !perfil || !perfil.email || ehDonoPlataforma(perfil)) { setLicenca(undefined); return; }
     return Nuvem.observarLicenca(perfil.email, setLicenca);
   }, [naNuvem, perfil && perfil.email]);
-  const licencaValida = !MARCA_VENDA || !naNuvem || !perfil || !perfil.email || ehDonoPlataforma(perfil)
+  const licencaValida = !MARCA_VENDA || !naNuvem || !perfil || !perfil.email || ehDonoPlataforma(perfil) || !!perfil.soPonto
     || !!(licenca && licenca.validaAte && licenca.validaAte.toDate && licenca.validaAte.toDate() > new Date());
   const licencaCarregando = MARCA_VENDA && naNuvem && perfil && perfil.email && !ehDonoPlataforma(perfil) && licenca === undefined;
   // rede de segurança do teste grátis: o titular apareceu SEM licença nenhuma
@@ -1460,7 +1460,7 @@ export default function App() {
         return;
       }
       if (d.papel === "fazenda" && perfil.tipo === "consultoria" && Array.isArray(d.fazendas) && d.fazendas.length > 0) {
-        definirPerfil({ tipo: "fazenda", email: perfil.email, uid: perfil.uid, nomeUsuario: d.nome || perfil.nomeUsuario, funcao: d.funcao || "Operador", fazendasNuvem: d.fazendas, fazendaId: d.fazendas.length === 1 ? d.fazendas[0] : null });
+        definirPerfil({ tipo: "fazenda", email: perfil.email, uid: perfil.uid, nomeUsuario: d.nome || perfil.nomeUsuario, funcao: d.funcao || "Operador", fazendasNuvem: d.fazendas, soPonto: !!d.soPonto, pontoPessoaId: d.pontoPessoaId || null, fazendaId: d.fazendas.length === 1 ? d.fazendas[0] : null });
         return;
       }
       if (perfil.tipo === "consultoria") {
@@ -1475,7 +1475,7 @@ export default function App() {
         };
       } else if (perfil.tipo === "fazenda" && Array.isArray(d.fazendas)) {
         // a função (operador / gerente / produtor…) também vem ao vivo: é ela que decide a tela curta
-        novo = { ...perfil, nomeUsuario: d.nome || perfil.nomeUsuario, fazendasNuvem: d.fazendas, permissoes: d.permissoes || null, funcao: d.funcao || perfil.funcao || "Operador" };
+        novo = { ...perfil, nomeUsuario: d.nome || perfil.nomeUsuario, fazendasNuvem: d.fazendas, soPonto: !!d.soPonto, pontoPessoaId: d.pontoPessoaId || null, permissoes: d.permissoes || null, funcao: d.funcao || perfil.funcao || "Operador" };
       }
       if (novo && JSON.stringify(novo) !== JSON.stringify(perfil)) {
         setPerfil(novo);
@@ -1953,6 +1953,7 @@ export default function App() {
         const fz = fazendas.find((f) => f.id === fazendaAberta);
         if (!fz) return <div style={{ padding: 30, textAlign: "center", color: C.cinza }}>Fazenda não encontrada. Peça à consultoria para cadastrar.</div>;
         const minhas = perfil.tipo === "fazenda" ? fazendasDoAcesso(perfil, fazendas, grupos) : [];
+        if (perfil.tipo === "fazenda" && perfil.soPonto) return <TelaSoPonto perfil={perfil} fazenda={fz} naNuvem={naNuvem} onSair={sairPerfil} />;
         return (
           <ProtecaoTela key={"protecao-" + fz.id} onSair={perfil.tipo === "consultoria" || minhas.length > 1 ? () => setFazendaAberta(null) : null}><TelaFazenda abrirInicial={abrirPendente && abrirPendente.f === fazendaAberta ? abrirPendente : null} onAbriu={() => setAbrirPendente(null)}
             key={fz.id}
@@ -2107,7 +2108,7 @@ function TelaPerfil({ fazendas, grupos, equipe, onSalvarEquipe, onEntrar }) {
           tipo: "fazenda", email: u.email, uid: u.uid,
           nomeUsuario: p.nome || (u.email || "").split("@")[0],
           funcao: p.funcao || "Operador",
-          fazendasNuvem: p.fazendas,
+          fazendasNuvem: p.fazendas, soPonto: !!p.soPonto, pontoPessoaId: p.pontoPessoaId || null,
           fazendaId: p.fazendas.length === 1 ? p.fazendas[0] : null,
         });
       } else {
@@ -2195,28 +2196,28 @@ function TelaPerfil({ fazendas, grupos, equipe, onSalvarEquipe, onEntrar }) {
           escolher nada. Os caminhos por código só existem no modo sem nuvem. */}
       {temNuvem && !contaAtiva && !criandoConta && (
         <div style={{ background: "#fff", border: `1.5px solid ${C.borda}`, borderRadius: 14, padding: "16px 18px" }}>
-          <label style={{ marginTop: 0 }}>E-mail</label>
-          <input type="email" value={emailNuvem} onChange={(e) => setEmailNuvem(e.target.value)} placeholder="voce@exemplo.com" autoComplete="username" />
+          <label style={{ marginTop: 0 }}>E-mail <span style={{ fontWeight: 500, color: C.cinza }}>(ou o celular, para quem só bate ponto)</span></label>
+          <input type="text" inputMode="email" autoCapitalize="none" value={emailNuvem} onChange={(e) => setEmailNuvem(e.target.value)} placeholder="voce@exemplo.com" autoComplete="username" />
           <label>Senha</label>
           <input type="password" value={senhaNuvem} onChange={(e) => setSenhaNuvem(e.target.value)} autoComplete="current-password" />
           <button disabled={entrando} onClick={async () => {
             setMsg(""); setEntrando(true);
             try {
-              const u = await Nuvem.entrar(emailNuvem.trim(), senhaNuvem);
+              const u = await Nuvem.entrar(emailDoPonto(emailNuvem) || emailNuvem.trim(), senhaNuvem);
               const p = await Nuvem.meuPerfil();
               if (p && p.papel === "fazenda" && Array.isArray(p.fazendas) && p.fazendas.length > 0) {
                 onEntrar({
                   tipo: "fazenda", email: u.email, uid: u.uid,
                   nomeUsuario: p.nome || (u.email || "").split("@")[0],
                   funcao: p.funcao || "Operador",
-                  fazendasNuvem: p.fazendas,
+                  fazendasNuvem: p.fazendas, soPonto: !!p.soPonto, pontoPessoaId: p.pontoPessoaId || null,
                   fazendaId: p.fazendas.length === 1 ? p.fazendas[0] : null,
                 });
               } else {
                 onEntrar({ tipo: "consultoria", nomeUsuario: (p && p.nome) || (u.email || "").split("@")[0], funcao: "Consultoria", email: u.email, uid: u.uid, admin: !!(p && p.admin), permissoes: (p && p.permissoes) || null, fazendasLimitadas: (p && p.fazendasLimitadas) || null });
               }
             } catch (e) {
-              setMsg(e.code === "auth/invalid-credential" || e.code === "auth/user-not-found" ? "E-mail ou senha não conferem."
+              setMsg(e.code === "auth/invalid-credential" || e.code === "auth/user-not-found" ? (emailDoPonto(emailNuvem) ? "Celular ou senha não conferem. Confira o número (com DDD) e a senha que o produtor mandou." : "E-mail ou senha não conferem.")
                 : e.code === "auth/network-request-failed" ? "Sem internet. Só a primeira entrada neste aparelho precisa de sinal — depois é só tocar em Continuar."
                 : (e.code || "") + " " + (e.message || "não consegui entrar"));
             }
@@ -2226,6 +2227,7 @@ function TelaPerfil({ fazendas, grupos, equipe, onSalvarEquipe, onEntrar }) {
           </button>
           <button onClick={async () => {
             if (!emailNuvem.trim()) { setMsg("Digite o e-mail primeiro."); return; }
+            if (emailDoPonto(emailNuvem)) { setMsg("Quem entra pelo celular (só o ponto) pede uma senha nova ao produtor: RH → Funcionários → app do ponto."); return; }
             try { await Nuvem.redefinirSenha(emailNuvem.trim()); setMsg("Link de senha enviado para " + emailNuvem.trim() + "."); }
             catch (e) { setMsg("Não consegui enviar: " + (e.code || e.message)); }
           }} style={{ background: "transparent", border: "none", color: C.cinza, fontSize: 12, padding: "10px 0 0", width: "100%", textAlign: "center" }}>
@@ -6358,7 +6360,8 @@ function TelaFazenda({ fazenda, fazendas, grupos, papel, usuario, naNuvem, equip
         </div>
       )}
       {(secao === "rh" || secao === "fin") && veFinanceiro && abaFin === "func" && veCustos && (
-        <SecaoFuncionarios fazenda={fazenda} funcionarios={funcionarios} usuario={usuario} registrar={registrar}
+        <SecaoFuncionarios fazenda={fazenda} funcionarios={funcionarios} usuario={usuario} registrar={registrar} naNuvem={naNuvem} podeAcessoPonto={!!(consultor || ehProdutor)}
+          pontoCfg={pontoCfg} onSalvarPontoCfg={(v) => gravar(kPontoCfg(fazenda.id), v, setPontoCfg, pontoCfg)}
           onSalvar={(v) => gravar(kFunc(fazenda.id), v, setFuncionarios, funcionarios)}
           onLancarCusto={(c) => gravar(kCusto(fazenda.id, safra), [...(custos || []), { id: idNovo(), ...c }], setCustos, custos)} />
       )}
@@ -12104,8 +12107,28 @@ function brutoParaLiquido(liquidoAlvo, dependentes) {
   return Math.round(hi * 100) / 100;
 }
 
-function SecaoFuncionarios({ fazenda, funcionarios, usuario, registrar, onSalvar, onLancarCusto }) {
-  const [form, setForm] = useState(null);   // {id?, nome, cargo, salario, dependentes, comissao, comissaoPeriodo, comissaoData, obs}
+function SecaoFuncionarios({ fazenda, funcionarios, usuario, registrar, onSalvar, onLancarCusto, pontoCfg, onSalvarPontoCfg, podeAcessoPonto, naNuvem }) {
+  const [form, setForm] = useState(null);
+  const [acessoDe, setAcessoDe] = useState(null);   // funcionário com o "app do ponto" aberto
+  // todo funcionário do quadro já entra no ponto (com a senha de 4 números do celular da sede)
+  const garantirNoPonto = (f) => {
+    const cfgP = { ...PONTO_PADRAO, ...(pontoCfg || {}) };
+    const ja = (cfgP.pessoas || []).find((p) => p.funcionarioId === f.id);
+    if (ja) {
+      if (onSalvarPontoCfg && (ja.nome !== f.nome || (ja.funcao || "") !== (f.cargo || "") || ja.inativa)) onSalvarPontoCfg({ ...cfgP, pessoas: cfgP.pessoas.map((p) => (p.id === ja.id ? { ...p, nome: f.nome, funcao: f.cargo || "", inativa: false } : p)) });
+      return ja;
+    }
+    const nova = { id: idNovo(), nome: f.nome, funcao: f.cargo || "", pin: pinDoPonto(), funcionarioId: f.id };
+    if (onSalvarPontoCfg) onSalvarPontoCfg({ ...cfgP, pessoas: [...(cfgP.pessoas || []), nova] });
+    return nova;
+  };
+  // saiu do quadro: sai do ponto (as batidas ficam) e perde o acesso do celular
+  const desligarDoPonto = (f) => {
+    const cfgP = { ...PONTO_PADRAO, ...(pontoCfg || {}) };
+    if (onSalvarPontoCfg && (cfgP.pessoas || []).some((p) => p.funcionarioId === f.id)) onSalvarPontoCfg({ ...cfgP, pessoas: cfgP.pessoas.map((p) => (p.funcionarioId === f.id ? { ...p, inativa: true } : p)) });
+    if (f.acessoPonto && f.acessoPonto.uid && window.Nuvem && Nuvem.apagarUsuario) Nuvem.apagarUsuario(f.acessoPonto.uid).catch(() => {});
+  };
+  const pessoaDoPonto = (f) => ((pontoCfg && pontoCfg.pessoas) || []).find((p) => p.funcionarioId === f.id && !p.inativa) || null;   // {id?, nome, cargo, salario, dependentes, comissao, comissaoPeriodo, comissaoData, obs}
   const [tirando, setTirando] = useState(null);
   const [lancado, setLancado] = useState(false);
   const [detalhe, setDetalhe] = useState(null);   // id do funcionário com a conta aberta
@@ -12280,7 +12303,7 @@ function SecaoFuncionarios({ fazenda, funcionarios, usuario, registrar, onSalvar
       </div>
 
       <div style={{ display: "flex", gap: 6, marginBottom: 10 }} className="nao-imprimir">
-        <button onClick={() => setForm({ nome: "", cargo: "", salario: "", dependentes: "0", comissaoMensal: "", comissaoAnual: "", comissaoData: "", obs: "" })}
+        <button onClick={() => setForm({ nome: "", cargo: "", celular: "", salario: "", dependentes: "0", comissaoMensal: "", comissaoAnual: "", comissaoData: "", obs: "" })}
           style={{ flex: 1, padding: 12, background: C.verde, color: "#fff", border: "none", borderRadius: 10, fontWeight: 800, fontSize: 14 }}>
           + Adicionar funcionário
         </button>
@@ -12305,6 +12328,7 @@ function SecaoFuncionarios({ fazenda, funcionarios, usuario, registrar, onSalvar
           <input value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} placeholder="Ex.: José da Silva" />
           <div style={{ display: "flex", gap: 8 }}>
             <div style={{ flex: 1.4 }}><label>Cargo / função</label><input value={form.cargo} onChange={(e) => setForm({ ...form, cargo: e.target.value })} placeholder="Ex.: operador de máquinas" /></div>
+            <div style={{ flex: 1.2 }}><label>Celular (WhatsApp)</label><input inputMode="tel" value={form.celular || ""} onChange={(e) => setForm({ ...form, celular: e.target.value })} placeholder="63 99999-0001" /></div>
             <div style={{ flex: 1 }}><label>Salário bruto (R$/mês)</label><input type="number" inputMode="decimal" value={form.salario} onChange={(e) => setForm({ ...form, salario: e.target.value })} placeholder="Ex.: 3200" /></div>
             <div style={{ flex: 0.6 }}><label>Dependentes</label><input type="number" inputMode="numeric" value={form.dependentes} onChange={(e) => setForm({ ...form, dependentes: e.target.value })} /></div>
           </div>
@@ -12325,8 +12349,10 @@ function SecaoFuncionarios({ fazenda, funcionarios, usuario, registrar, onSalvar
             <button disabled={!form.nome.trim()} onClick={() => {
               const doc = { id: form.id || idNovo(), nome: form.nome.trim(), cargo: form.cargo.trim(), salario: num(form.salario) || null, dependentes: Math.max(0, Math.floor(num(form.dependentes))) || 0,
                 comissaoMensal: num(form.comissaoMensal) || 0, comissaoAnual: num(form.comissaoAnual) || 0, comissaoData: (num(form.comissaoAnual) > 0 && form.comissaoData) || null,
-                comissao: null, comissaoPeriodo: null, obs: form.obs.trim() || null };
+                comissao: null, comissaoPeriodo: null, obs: form.obs.trim() || null,
+                celular: String(form.celular || "").trim() || null, acessoPonto: ((form.id && todos.find((x) => x.id === form.id)) || {}).acessoPonto || null };
               onSalvar(form.id ? todos.map((x) => (x.id === form.id ? doc : x)) : [...todos, doc]);
+              garantirNoPonto(doc);
               registrar && registrar(form.id ? "Funcionário editado" : "Funcionário cadastrado", `${doc.nome} · ${doc.cargo || ""}`);
               setForm(null);
             }} style={{ flex: 1, padding: 11, background: C.verde, color: "#fff", border: "none", borderRadius: 10, fontWeight: 800, fontSize: 14, opacity: form.nome.trim() ? 1 : 0.5 }}>Salvar</button>
@@ -12354,12 +12380,18 @@ function SecaoFuncionarios({ fazenda, funcionarios, usuario, registrar, onSalvar
                     className="nao-imprimir" style={{ background: "transparent", border: "none", color: C.navy, fontSize: 11, fontWeight: 700, padding: 0 }}>editar</button>
                   {" · "}
                   {tirando === f.id ? (
-                    <button onClick={() => { onSalvar(todos.filter((x) => x.id !== f.id)); registrar && registrar("Funcionário removido", f.nome); setTirando(null); }}
+                    <button onClick={() => { onSalvar(todos.filter((x) => x.id !== f.id)); desligarDoPonto(f); registrar && registrar("Funcionário removido", f.nome); setTirando(null); }}
                       className="nao-imprimir" style={{ background: C.vermelho, color: "#fff", border: "none", borderRadius: 5, padding: "1px 7px", fontSize: 10, fontWeight: 800 }}>confirmar</button>
                   ) : (
                     <button onClick={() => setTirando(f.id)} className="nao-imprimir" style={{ background: "transparent", border: "none", color: C.vermelho, fontSize: 11, padding: 0 }}>tirar</button>
                   )}
                 </div>
+                {(() => { const pp = pessoaDoPonto(f); return (
+                  <div className="nao-imprimir" style={{ fontSize: 11, color: C.navyEscuro, marginTop: 2 }}>
+                    ⏰ {pp ? <>ponto da sede: senha <b>{pp.pin || "—"}</b></> : <span style={{ color: C.cinza }}>ainda fora do ponto</span>}
+                    {podeAcessoPonto && naNuvem && <>{" · "}<button onClick={() => setAcessoDe(f)} style={{ background: "transparent", border: "none", color: f.acessoPonto ? C.verdeEscuro : C.navy, fontSize: 11, fontWeight: 800, padding: 0, textDecoration: "underline" }}>{f.acessoPonto ? `📲 app do ponto: ${f.acessoPonto.login}` : "📲 liberar o app do ponto"}</button></>}
+                  </div>
+                ); })()}
               </span>
               <span style={{ textAlign: "right" }}>{c.bruto > 0 ? fmtMoeda(c.bruto) : "—"}</span>
               <span style={{ textAlign: "right", color: C.verdeEscuro, fontWeight: 700 }}>{c.remuneracao > 0 ? fmtMoeda(c.liquido) : "—"}</span>
@@ -12394,6 +12426,8 @@ function SecaoFuncionarios({ fazenda, funcionarios, usuario, registrar, onSalvar
       <div style={{ fontSize: 11, color: C.cinza, marginTop: 8 }}>
         Comissão variável (ex.: % da produtividade)? Coloque a estimativa e anote a regra na observação; ajuste quando fechar a conta. Só quem vê dinheiro enxerga esta tela.
       </div>
+      {acessoDe && <ModalAcessoPonto funcionario={acessoDe} fazenda={fazenda} garantirNoPonto={garantirNoPonto} registrar={registrar} onFechar={() => setAcessoDe(null)}
+        onSalvarFuncionario={(nf) => { onSalvar(todos.map((x) => (x.id === nf.id ? nf : x))); setAcessoDe(nf); }} />}
     </div>
   );
 }
@@ -20636,8 +20670,197 @@ function localDaBatida(kml, lat, lng) {
 function pegarGps() {
   return new Promise((ok) => {
     if (!navigator.geolocation) { ok(null); return; }
-    navigator.geolocation.getCurrentPosition((p) => ok({ lat: p.coords.latitude, lng: p.coords.longitude, prec: Math.round(p.coords.accuracy || 0) }), () => ok(null), { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 });
+    // o timeout do GPS só conta depois da permissão: com o pedido de permissão parado na tela, a batida não pode ficar presa
+    const limite = setTimeout(() => ok(null), 25000);
+    navigator.geolocation.getCurrentPosition((p) => { clearTimeout(limite); ok({ lat: p.coords.latitude, lng: p.coords.longitude, prec: Math.round(p.coords.accuracy || 0) }); }, () => { clearTimeout(limite); ok(null); }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 });
   });
+}
+
+// ---------- acesso SÓ AO PONTO ----------
+// Funcionário do quadro (RH) que não usa o app para mais nada: entra com o CELULAR e uma senha de
+// números. O celular vira um e-mail interno (p63999990001@ponto…); "-2", "-3"… é o acesso refeito
+// (senha nova). Entrando, ele vê só o ponto DELE — as regras da nuvem também só deixam isso.
+const DOMINIO_PONTO = "ponto.gerenteagro.com";
+const FUNCAO_SO_PONTO = "Funcionário (ponto)";
+function emailDoPonto(texto) {
+  const s = String(texto || "").trim();
+  if (!s || s.includes("@")) return null;
+  let t = s.replace(/[^\d-]/g, ""); let n = 1;
+  const m = /^(.*\d)-(\d{1,2})$/.exec(t);
+  if (m && m[1].replace(/\D/g, "").length >= 10) { t = m[1]; n = Number(m[2]) || 1; }
+  let d = t.replace(/\D/g, "");
+  if (d.length >= 12 && d.startsWith("55")) d = d.slice(2);
+  if (d.length < 10 || d.length > 11) return null;
+  return `p${d}${n > 1 ? "x" + n : ""}@${DOMINIO_PONTO}`;
+}
+const loginDoPonto = (celular, n) => { let d = String(celular || "").replace(/\D/g, ""); if (d.length >= 12 && d.startsWith("55")) d = d.slice(2); return d + (n > 1 ? "-" + n : ""); };
+const numeroSorteado = (min, max) => { try { const r = new Uint32Array(1); crypto.getRandomValues(r); return min + (r[0] % (max - min + 1)); } catch (e) { return min + Math.floor(Math.random() * (max - min + 1)); } };
+const senhaDoPonto = () => String(numeroSorteado(100000, 999999));
+const pinDoPonto = () => String(numeroSorteado(1000, 9999));
+// mensagem do WhatsApp com o jeito de entrar
+const textoAcessoPonto = (nome, fazendaNome, login, senha) =>
+  `Olá, ${nome}! Este é o seu acesso para bater o ponto na ${fazendaNome}.\n\n1) Abra ${URL_APP} no celular (no menu do navegador, toque em "Adicionar à tela inicial").\n2) Em "E-mail ou celular" digite: ${login}\n3) Senha: ${senha}\n\nDepois é só tocar no botão verde na entrada, no almoço e na saída. Funciona sem internet — sobe quando tiver sinal.`;
+
+function TelaSoPonto({ perfil, fazenda, naNuvem, onSair }) {
+  const safra = safraAtualDe(fazenda);
+  const chave = kPonto(fazenda.id, safra);
+  const meu = perfil.pontoPessoaId || "";
+  const [batidas, setBatidas] = useState([]);
+  const batRef = useRef([]); batRef.current = batidas;
+  const [kml, setKml] = useState(null);
+  const [estado, setEstado] = useState("");   // "" · gps · ok
+  const [msg, setMsg] = useState("");
+  const [tipo, setTipo] = useState("");
+  useEffect(() => {
+    let vivo = true;
+    sGet(chave, []).then((l) => { if (vivo && Array.isArray(l) && !batRef.current.length) setBatidas(l); });
+    if (!naNuvem) return () => { vivo = false; };
+    const s1 = NuvemDados.observarColecao(fazenda.id, "ponto", safra, (l) => { if (!vivo) return; setBatidas(l || []); sSet(chave, l || []); });
+    const s2 = NuvemDados.observarDoc(fazenda.id, "kml", (v) => { if (vivo) setKml(v || null); });
+    return () => { vivo = false; try { s1 && s1(); } catch (e) {} try { s2 && s2(); } catch (e) {} };
+  }, [fazenda.id, safra]);
+  const hoje = diaLocal();
+  const minhas = batidasValidas(batidas.filter((b) => b.pessoaId === meu));
+  const doDia = minhas.filter((b) => b.dia === hoje).sort((a, b) => (minDaHora(a.hora) || 0) - (minDaHora(b.hora) || 0));
+  const proximo = tipo || proximoTipo(doDia);
+  const t = TIPOS_PONTO.find((x) => x[0] === proximo) || TIPOS_PONTO[0];
+  async function bater() {
+    if (!meu) { setMsg("Seu acesso está sem o cadastro do ponto — peça ao produtor para refazer em RH → Funcionários."); return; }
+    setEstado("gps"); setMsg("📍 Pegando o local…");
+    const g = await pegarGps();
+    const loc = g ? localDaBatida(kml, g.lat, g.lng) : { dentro: null, distM: null };
+    const agora = new Date();
+    const rec = { id: idNovo(), pessoaId: meu, pessoaNome: perfil.nomeUsuario || "", tipo: proximo, dia: diaLocal(agora), hora: horaLocal(agora), em: agora.toISOString(), lat: g ? g.lat : null, lng: g ? g.lng : null, prec: g ? g.prec : null, dentro: loc.dentro, distM: loc.distM, foto: null, aparelho: "app", quem: perfil.nomeUsuario || "" };
+    const antes = batRef.current, depois = [...antes, rec];
+    setBatidas(depois); sSet(chave, depois);
+    if (naNuvem) NuvemDados.gravarColecao(fazenda.id, "ponto", safra, antes, depois).catch(() => {});
+    setEstado("ok"); setTipo("");
+    setMsg(`✓ ${tipoNome(rec.tipo)} às ${rec.hora}${loc.dentro === true ? " · na fazenda" : loc.dentro === false ? ` · fora da fazenda (${fmtN(loc.distM)} m)` : g ? "" : " · sem GPS"}${navigator.onLine ? "" : " · guardado no celular, sobe quando tiver sinal"}`);
+  }
+  // últimos 7 dias com batida
+  const dias = [...new Set(minhas.map((b) => b.dia))].sort().reverse().slice(0, 7);
+  return (
+    <div style={{ maxWidth: 520, margin: "0 auto", padding: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontWeight: 900, fontSize: 18, color: C.navy }}>⏰ Ponto — {fazenda.nome}</div>
+          <div style={{ fontSize: 13, color: C.cinza }}>{perfil.nomeUsuario}</div>
+        </div>
+        <button onClick={onSair} style={{ flex: "none", background: "#fff", border: `1.5px solid ${C.borda}`, borderRadius: 10, padding: "8px 12px", fontWeight: 800, color: C.navy, fontSize: 13 }}>Sair</button>
+      </div>
+      <div style={{ background: "#fff", border: `1.5px solid ${C.borda}`, borderRadius: 16, padding: "14px 14px" }}>
+        <div style={{ fontWeight: 900, color: C.navy, fontSize: 14 }}>Hoje · {fmtD(hoje)}</div>
+        {doDia.length === 0 && <div style={{ fontSize: 13, color: C.cinza, marginTop: 4 }}>Nenhuma batida hoje ainda.</div>}
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
+          {doDia.map((b) => <span key={b.id} style={{ background: C.verdeBg, color: C.verdeEscuro, borderRadius: 8, padding: "5px 9px", fontWeight: 800, fontSize: 13 }}>{(TIPOS_PONTO.find((x) => x[0] === b.tipo) || [])[2]} {tipoNome(b.tipo)} {b.hora}{b.ajuste ? "*" : ""}</span>)}
+        </div>
+        <button onClick={bater} disabled={estado === "gps"} style={{ width: "100%", marginTop: 14, padding: "24px 12px", background: C.verde, color: "#fff", border: "none", borderRadius: 16, fontWeight: 900, fontSize: 23 }}>
+          {estado === "gps" ? "📍 Registrando…" : `${t[2]} ${t[1]}`}
+        </button>
+        <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginTop: 8, alignItems: "center" }}>
+          <span style={{ fontSize: 11.5, color: C.cinza, fontWeight: 700 }}>Não é esta?</span>
+          {TIPOS_PONTO.filter((x) => x[0] !== proximo).map(([id, nome, ic]) => <button key={id} onClick={() => setTipo(id)} style={{ background: C.fundo, border: "none", borderRadius: 8, padding: "5px 9px", fontWeight: 800, fontSize: 12, color: C.navyEscuro }}>{ic} {nome}</button>)}
+        </div>
+        {msg && <div style={{ marginTop: 10, fontSize: 13.5, fontWeight: 800, color: estado === "ok" ? C.verdeEscuro : C.navyEscuro }}>{msg}</div>}
+      </div>
+      {dias.length > 0 && (
+        <div style={{ background: "#fff", border: `1.5px solid ${C.borda}`, borderRadius: 16, padding: "10px 14px", marginTop: 12 }}>
+          <div style={{ fontWeight: 900, color: C.navy, fontSize: 14, marginBottom: 4 }}>Seus últimos dias</div>
+          {dias.map((d) => {
+            const bs = minhas.filter((b) => b.dia === d).sort((a, b) => (minDaHora(a.hora) || 0) - (minDaHora(b.hora) || 0));
+            const h = horasDoDia(bs);
+            return (
+              <div key={d} style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "6px 0", borderTop: `1px solid ${C.fundo}`, fontSize: 13 }}>
+                <span><b>{fmtD(d)}</b> <span style={{ color: C.cinza }}>{bs.map((b) => b.hora).join(" · ")}</span></span>
+                <b style={{ color: h.incompleto ? C.amarelo : C.verdeEscuro, whiteSpace: "nowrap" }}>{h.incompleto ? "em aberto" : fmtHM(h.trabalhadoMin)}</b>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      <div style={{ fontSize: 11.5, color: C.cinza, marginTop: 12, textAlign: "center" }}>Controle de jornada interno da fazenda · guarda a hora e o local · funciona sem internet. Esqueceu de bater? Avise o encarregado — ele corrige com o motivo.</div>
+    </div>
+  );
+}
+
+// RH → Funcionários: cria (ou refaz) o login de quem só bate ponto e manda pelo WhatsApp
+function ModalAcessoPonto({ funcionario, fazenda, garantirNoPonto, onSalvarFuncionario, registrar, onFechar }) {
+  const f = funcionario;
+  const ac = f.acessoPonto || null;
+  const [celular, setCelular] = useState(f.celular || "");
+  const [senha, setSenha] = useState(senhaDoPonto());
+  const [ocupado, setOcupado] = useState(false);
+  const [erro, setErro] = useState("");
+  const [pronto, setPronto] = useState(null);   // {login, senha}
+  const celOk = !!emailDoPonto(celular);
+  async function criar() {
+    if (!celOk) { setErro("Digite o celular com DDD (ex.: 63 99999-0001)."); return; }
+    if (!/^\d{6,}$/.test(senha)) { setErro("A senha precisa de pelo menos 6 números."); return; }
+    if (!navigator.onLine) { setErro("Criar o acesso precisa de internet."); return; }
+    setOcupado(true); setErro("");
+    try {
+      const pessoa = garantirNoPonto(f);
+      let uid = null, n = 0;
+      const inicio = ac && ac.n ? ac.n + 1 : 1;
+      for (let k = inicio; k < inicio + 9 && !uid; k++) {
+        try { uid = await Nuvem.criarUsuario(emailDoPonto(loginDoPonto(celular, k)), senha); n = k; }
+        catch (e) { if (!e || e.code !== "auth/email-already-in-use") throw e; }
+      }
+      if (!uid) throw new Error("este celular já tem muitos acessos — confira o número");
+      const login = loginDoPonto(celular, n);
+      await Nuvem.gravarUsuario(uid, { nome: f.nome, papel: "fazenda", funcao: FUNCAO_SO_PONTO, soPonto: true, fazendas: [fazenda.id], pontoPessoaId: pessoa.id, funcionarioId: f.id, login, permissoes: {}, ...(fazenda.conta ? { conta: fazenda.conta } : {}) });
+      if (ac && ac.uid && ac.uid !== uid) { try { await Nuvem.apagarUsuario(ac.uid); } catch (e) {} }
+      onSalvarFuncionario({ ...f, celular: celular.trim(), acessoPonto: { uid, login, n, em: new Date().toISOString() } });
+      registrar && registrar(ac ? "Acesso do ponto refeito" : "Acesso do ponto criado", `${f.nome} · ${login}`);
+      setPronto({ login, senha });
+    } catch (e) {
+      setErro(e && e.code === "auth/network-request-failed" ? "Sem internet — tente quando tiver sinal." : e && /permission/i.test(String(e.code || e.message)) ? "A nuvem não deixou: só o produtor ou a consultoria criam acesso." : "Não consegui criar: " + ((e && (e.message || e.code)) || e));
+    }
+    setOcupado(false);
+  }
+  async function tirar() {
+    if (!ac || !window.confirm(`Tirar o acesso do ponto de ${f.nome}? Ele não entra mais pelo celular (as batidas ficam).`)) return;
+    setOcupado(true);
+    try { await Nuvem.apagarUsuario(ac.uid); } catch (e) {}
+    const { acessoPonto, ...resto } = f;
+    onSalvarFuncionario({ ...resto, acessoPonto: null });
+    registrar && registrar("Acesso do ponto retirado", f.nome);
+    setOcupado(false); onFechar();
+  }
+  const zap = String(celular).replace(/\D/g, "");
+  return (
+    <Modal titulo={`⏰ App do ponto — ${f.nome}`} onFechar={onFechar}>
+      {!pronto && (
+        <>
+          <div style={{ fontSize: 13, color: C.navyEscuro }}>{f.nome} entra no app <b>só para bater o ponto</b> — não vê mais nada da fazenda. O login é o celular dele; a senha, só números.</div>
+          {ac && <div style={{ background: C.verdeBg, borderRadius: 10, padding: "8px 12px", marginTop: 8, fontSize: 13 }}>Já tem acesso: entra com <b>{ac.login}</b>. Fazer de novo cria uma senha nova (o login antigo para de funcionar).</div>}
+          <label>Celular (com DDD)</label>
+          <input inputMode="tel" value={celular} onChange={(e) => setCelular(e.target.value)} placeholder="63 99999-0001" />
+          <label>Senha (6 números)</label>
+          <div style={{ display: "flex", gap: 6 }}>
+            <input inputMode="numeric" value={senha} onChange={(e) => setSenha(e.target.value.replace(/\D/g, ""))} style={{ flex: 1, marginTop: 0, fontSize: 18, letterSpacing: 2 }} />
+            <button onClick={() => setSenha(senhaDoPonto())} style={{ flex: "none", background: C.fundo, border: "none", borderRadius: 10, padding: "0 12px", fontWeight: 800, color: C.navy }}>🎲 outra</button>
+          </div>
+          {erro && <div style={{ color: C.vermelho, fontWeight: 700, fontSize: 12.5, marginTop: 8 }}>{erro}</div>}
+          <BotaoSalvar disabled={ocupado || !celOk} texto={ocupado ? "Criando…" : ac ? "Fazer acesso novo" : "Criar acesso do ponto"} onClick={criar} />
+          {ac && <button onClick={tirar} disabled={ocupado} style={{ width: "100%", marginTop: 8, padding: 10, background: "#fff", color: C.vermelho, border: `1.5px solid ${C.borda}`, borderRadius: 10, fontWeight: 800 }}>Tirar o acesso do ponto</button>}
+        </>
+      )}
+      {pronto && (
+        <>
+          <div style={{ background: C.verdeBg, borderRadius: 12, padding: "12px 14px" }}>
+            <div style={{ fontWeight: 900, color: C.verdeEscuro, fontSize: 15 }}>✓ Acesso pronto</div>
+            <div style={{ fontSize: 14, marginTop: 6 }}>Entrar com: <b style={{ fontSize: 17 }}>{pronto.login}</b></div>
+            <div style={{ fontSize: 14 }}>Senha: <b style={{ fontSize: 17, letterSpacing: 2 }}>{pronto.senha}</b></div>
+            <div style={{ fontSize: 12, color: C.cinza, marginTop: 4 }}>Anote ou mande agora — a senha não fica guardada no app.</div>
+          </div>
+          <a href={`https://wa.me/${zap.length <= 11 ? "55" + zap : zap}?text=${encodeURIComponent(textoAcessoPonto(f.nome, fazenda.nome, pronto.login, pronto.senha))}`} target="_blank" rel="noreferrer"
+            style={{ display: "block", textAlign: "center", marginTop: 10, padding: 13, background: "#25D366", color: "#fff", borderRadius: 12, fontWeight: 900, fontSize: 15, textDecoration: "none" }}>💬 Mandar pelo WhatsApp para {f.nome}</a>
+          <button onClick={onFechar} style={{ width: "100%", marginTop: 8, padding: 10, background: "#fff", color: C.navy, border: `1.5px solid ${C.borda}`, borderRadius: 10, fontWeight: 800 }}>Fechar</button>
+        </>
+      )}
+    </Modal>
+  );
 }
 
 function SecaoPonto({ fazenda, kml, usuario, batidas, config, onBater, podeGerir, onSalvarConfig, funcionarios }) {

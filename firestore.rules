@@ -111,7 +111,17 @@ service cloud.firestore {
     }
     function acessoFazendaLiberado(fazendaId) {
       return temPerfil() &&
+        meuPerfil().get('soPonto', false) != true &&
         fazendaId in meuPerfil().get('fazendas', []);
+    }
+    // funcionário que SÓ bate ponto (RH → Funcionários → app do ponto): enxerga o nome da fazenda,
+    // o mapa (para conferir o local) e as batidas de ponto — mais nada
+    function pontoNaLista(fazendaId) {
+      return temPerfil() && meuPerfil().get('soPonto', false) == true &&
+        fazendaId in meuPerfil().get('fazendas', []);
+    }
+    function pontoLiberado(fazendaId) {
+      return pontoNaLista(fazendaId) && fazendaDaMinhaConta(fazendaId);
     }
     function consultorNaFazenda(fazendaId) {
       return consultorLiberado(fazendaId) && fazendaDaMinhaConta(fazendaId);
@@ -175,14 +185,21 @@ service cloud.firestore {
          exists(/databases/$(database)/documents/convites/$(request.auth.token.email)) &&
          request.resource.data.get('conta', '') == get(/databases/$(database)/documents/convites/$(request.auth.token.email)).data.get('conta', '') &&
          request.resource.data.get('papel', '') == get(/databases/$(database)/documents/convites/$(request.auth.token.email)).data.get('papel', '')) ||
+        // produtor cria/refaz o acesso SÓ DO PONTO de funcionário da fazenda dele (RH → Funcionários)
+        (request.resource.data.get('soPonto', false) == true && request.resource.data.get('papel', '') == 'fazenda' &&
+         request.resource.data.get('admin', false) != true &&
+         request.resource.data.fazendas.size() == 1 && ehProdutorNa(request.resource.data.fazendas[0]) &&
+         (resource == null || (resource.data.get('soPonto', false) == true && ehProdutorNa(resource.data.fazendas[0]))) &&
+         mesmaConta(request.resource.data)) ||
         // a própria pessoa só pode gravar o endereço de avisos, a marca do
         // aparelho ativo e o PRÓPRIO NOME — nenhum outro campo, senão ela trocaria o papel
         (request.auth.uid == uid && resource != null &&
          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fcmTokens', 'aparelhoAtivo', 'ultimoAcesso', 'nome']) &&
          (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['nome']) || (request.resource.data.nome is string && request.resource.data.nome.size() <= 80)));
-      allow delete: if (ehAdmin() ||
+      allow delete: if ((ehAdmin() ||
         (podeC('acessos') && resource.data.papel == 'fazenda')) &&
-        mesmaConta(resource.data);
+        mesmaConta(resource.data)) ||
+        (resource.data.get('soPonto', false) == true && ehProdutorNa(resource.data.fazendas[0]));
 
       // pedido de "teste de aviso": a própria pessoa cria, o servidor consome
       match /testes/{doc} {
@@ -274,7 +291,7 @@ service cloud.firestore {
       // a conferência de conta aqui é NO PRÓPRIO documento (minhaContaNoDoc):
       // é a forma que a consulta em lista com where('conta'...) aceita —
       // com get() o servidor recusava a lista inteira do comprador
-      allow read: if (consultorLiberado(fazendaId) || acessoFazendaLiberado(fazendaId)) &&
+      allow read: if (consultorLiberado(fazendaId) || acessoFazendaLiberado(fazendaId) || pontoNaLista(fazendaId)) &&
         minhaContaNoDoc();
       // criar fazenda nova: só consultor SEM limitação de fazendas (a nova
       // não estaria na lista dele); editar: só quem enxerga aquela fazenda.
@@ -344,11 +361,14 @@ service cloud.firestore {
       // batidas de ponto: quem tem acesso à fazenda bate; ninguém edita (correção é ajuste novo);
       // apagar só o administrador da consultoria (dados de teste)
       match /ponto/{doc} {
-        allow read, create: if temAcessoAFazenda(fazendaId);
-        allow update: if temAcessoAFazenda(fazendaId) && reenvioIgual();
+        allow read: if temAcessoAFazenda(fazendaId) || pontoLiberado(fazendaId);
+        // quem só bate ponto grava só a batida DELE
+        allow create: if temAcessoAFazenda(fazendaId) ||
+          (pontoLiberado(fazendaId) && request.resource.data.get('pessoaId', '') == meuPerfil().get('pontoPessoaId', 'x'));
+        allow update: if (temAcessoAFazenda(fazendaId) || pontoLiberado(fazendaId)) && reenvioIgual();
         allow delete: if consultorNaFazenda(fazendaId) && ehAdmin();
       }
-      match /arquivos/{doc}     { allow read: if temAcessoAFazenda(fazendaId);
+      match /arquivos/{doc}     { allow read: if temAcessoAFazenda(fazendaId) || (doc == 'kml' && pontoLiberado(fazendaId));
                                   allow write: if consultorNaFazenda(fazendaId); }
 
       // O que a fazenda lança no campo: execução, chuva e ajuste de estoque.

@@ -157,7 +157,19 @@ regras = regras.replace(/function licencaOk\(\) \{\s*return true;\s*\}/,
   "function licencaOk() {\n" +
   "      return ehDono() ||\n" +
   "        (exists(/databases/$(database)/documents/licencas/$(request.auth.token.email)) &&\n" +
-  "         get(/databases/$(database)/documents/licencas/$(request.auth.token.email)).data.validaAte > request.time);\n" +
+  "         get(/databases/$(database)/documents/licencas/$(request.auth.token.email)).data.validaAte > request.time) ||\n" +
+  "        pontoPelaContaPaga();\n" +
+  "    }\n" +
+  "    // acesso SO DO PONTO (funcionario do RH): nao gasta licenca — vale enquanto a do dono da conta valer\n" +
+  "    function pontoPelaContaPaga() {\n" +
+  "      return logado() && exists(/databases/$(database)/documents/usuarios/$(request.auth.uid)) &&\n" +
+  "        get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.get('soPonto', false) == true &&\n" +
+  "        exists(/databases/$(database)/documents/usuarios/$(get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.get('conta', 'x'))) &&\n" +
+  "        licencaDoEmailValida(string(get(/databases/$(database)/documents/usuarios/$(get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.get('conta', 'x'))).data.get('email', 'x')).lower());\n" +
+  "    }\n" +
+  "    function licencaDoEmailValida(email) {\n" +
+  "      return exists(/databases/$(database)/documents/licencas/$(email)) &&\n" +
+  "        get(/databases/$(database)/documents/licencas/$(email)).data.validaAte > request.time;\n" +
   "    }");
 // versao de venda: liga o isolamento por conta (multi-inquilino)
 regras = regras.replace(/function multiConta\(\) \{\s*return false;\s*\}/,
