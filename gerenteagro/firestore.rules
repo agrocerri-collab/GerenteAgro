@@ -48,8 +48,13 @@ service cloud.firestore {
     function pontoPelaContaPaga() {
       return logado() && exists(/databases/$(database)/documents/usuarios/$(request.auth.uid)) &&
         get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.get('soPonto', false) == true &&
-        exists(/databases/$(database)/documents/usuarios/$(get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.get('conta', 'x'))) &&
-        licencaDoEmailValida(string(get(/databases/$(database)/documents/usuarios/$(get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.get('conta', 'x'))).data.get('email', 'x')).lower());
+        (contaDoDonoDaPlataforma(get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.get('conta', 'x')) ||
+         (exists(/databases/$(database)/documents/usuarios/$(get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.get('conta', 'x'))) &&
+          licencaDoEmailValida(string(get(/databases/$(database)/documents/usuarios/$(get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.get('conta', 'x'))).data.get('email', 'x')).lower())));
+    }
+    // a conta do dono da plataforma (fazendas dele e de demonstracao) nao tem licenca: o dono nao paga
+    function contaDoDonoDaPlataforma(conta) {
+      return conta in ['AEChKtFa9rVa7VwTRAGw2KvumO53'];
     }
     function licencaDoEmailValida(email) {
       return exists(/databases/$(database)/documents/licencas/$(email)) &&
@@ -452,6 +457,11 @@ service cloud.firestore {
       // quadro de funcionários (salários/comissões): dinheiro — mesmas
       // permissões dos custos
       match /funcionarios/{doc} {
+        allow read, write: if (consultorNaFazenda(fazendaId) && podeC('custos'))
+          || ehProdutorNa(fazendaId);
+      }
+      // arquivos da ficha de contratação (certidões, ASO, contrato): só quem vê o RH
+      match /rhAnexos/{doc} {
         allow read, write: if (consultorNaFazenda(fazendaId) && podeC('custos'))
           || ehProdutorNa(fazendaId);
       }

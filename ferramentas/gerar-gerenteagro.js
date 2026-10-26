@@ -149,6 +149,9 @@ patch("manifest.webmanifest", (t) => {
 });
 
 // ---------- 4) regras e firebase.json do projeto ----------
+// uid(s) da conta do dono da plataforma no GerenteAgro (administrativo@gerenteagro.com): as fazendas
+// dessa conta (demonstracao) nao tem licenca, porque o dono nao paga — o funcionario do ponto entra por aqui
+const UIDS_DONO_GA = ["AEChKtFa9rVa7VwTRAGw2KvumO53"];
 let regras = fs.readFileSync(path.join(raiz, "firestore.rules"), "utf8");
 regras = regras.replace(/'agrocerri@yahoo\.com\.br',\s*\n\s*'agrocerri@gmail\.com'/,
   "'administrativo@gerenteagro.com',\n        'agrocerri@gmail.com'");
@@ -164,8 +167,13 @@ regras = regras.replace(/function licencaOk\(\) \{\s*return true;\s*\}/,
   "    function pontoPelaContaPaga() {\n" +
   "      return logado() && exists(/databases/$(database)/documents/usuarios/$(request.auth.uid)) &&\n" +
   "        get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.get('soPonto', false) == true &&\n" +
-  "        exists(/databases/$(database)/documents/usuarios/$(get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.get('conta', 'x'))) &&\n" +
-  "        licencaDoEmailValida(string(get(/databases/$(database)/documents/usuarios/$(get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.get('conta', 'x'))).data.get('email', 'x')).lower());\n" +
+  "        (contaDoDonoDaPlataforma(get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.get('conta', 'x')) ||\n" +
+  "         (exists(/databases/$(database)/documents/usuarios/$(get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.get('conta', 'x'))) &&\n" +
+  "          licencaDoEmailValida(string(get(/databases/$(database)/documents/usuarios/$(get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.get('conta', 'x'))).data.get('email', 'x')).lower())));\n" +
+  "    }\n" +
+  "    // a conta do dono da plataforma (fazendas dele e de demonstracao) nao tem licenca: o dono nao paga\n" +
+  "    function contaDoDonoDaPlataforma(conta) {\n" +
+  "      return conta in " + JSON.stringify(UIDS_DONO_GA).replace(/"/g, "'") + ";\n" +
   "    }\n" +
   "    function licencaDoEmailValida(email) {\n" +
   "      return exists(/databases/$(database)/documents/licencas/$(email)) &&\n" +
