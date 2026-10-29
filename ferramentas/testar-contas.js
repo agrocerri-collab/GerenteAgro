@@ -1286,6 +1286,14 @@ teste("semeadura com variedade por talhão: cada talhão leva a sua; estoque bai
     && e2.length === 1 && e2[0].nome === "Olivo" && lav.registro.variedade === "Olivo";
 });
 
+teste("plantio: gasto real da etapa (bags, sulco) baixa no estoque; etapa sem gasto usa a receita", () => {
+  const prods = [{ nome: "NS 7709", uso: "semente", dose: 1, unidade: "bag" }, { nome: "Bio X", uso: "sulco", dose: 200, unidade: "mL" }];
+  const ex = { etapas: [{ areaHa: 30, produtosReais: [{ nome: "NS 7709", qtd: "33", unidade: "bag" }, { nome: "Bio X", qtd: "5", unidade: "L" }] }, { areaHa: 20 }] };
+  const c = C.consumoDaExecucao(prods, ex, 50, "t1");
+  const sem = c.find((x) => x.nome === "NS 7709"), bio = c.find((x) => x.nome === "Bio X");
+  return c.length === 2 && Math.abs(sem.v - 53) < 1e-6 && Math.abs(bio.v - 9) < 1e-6;
+});
+
 teste("visita: 'mais opções' tem daninhas do cerrado e entra no dicionário da transcrição", () => {
   const mais = C.OBS_CATALOGO_MAIS["🌿 Daninha"];
   const d = C.dicasVozDe([{ nome: "T1" }]);

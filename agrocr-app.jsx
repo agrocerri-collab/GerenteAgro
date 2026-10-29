@@ -689,10 +689,23 @@ function lavouraComEmergenciaDoPlantio(lavoura, t, apl, ex, novoId) {
   return { lista, registro: nova, emergencia: nova.dataEmergencia || "", partes: (nova.partes || []).length };
 }
 const ehSementeDaReceita = (p, produtos) => !!p && (p.uso === "semente" || p.unidade === "bag" || p === sementeDaReceita({ produtos }));
+// Plantio em etapas com o gasto REAL informado no Feito (bags de semente, sulco, tudo): a etapa com gasto informado
+// baixa exatamente aquilo; a etapa sem gasto informado usa a conta da receita na área dela.
+function consumoDasEtapas(produtos, etapas, tid) {
+  const porNome = {};
+  for (const et of etapas) {
+    const linhas = Array.isArray(et.produtosReais)
+      ? et.produtosReais.filter((r) => r && r.nome && String(r.qtd).trim() !== "" && num(r.qtd) >= 0).map((r) => { const a = normalizar(num(r.qtd), r.unidade); return { nome: r.nome, v: a.v, base: a.base, real: true, unidade: r.unidade, dose: r.dose }; })
+      : consumoDaExecucao(produtos, { etapas: [et] }, num(et.areaHa), tid);
+    for (const l of linhas) { const k = chaveProduto(l.nome) + "|" + l.base; if (porNome[k]) porNome[k].v += l.v; else porNome[k] = { ...l }; }
+  }
+  return Object.values(porNome);
+}
 function consumoDaExecucao(produtos, ex, ha, tid) {
   const saida = [];
   // plantio em etapas: a semente sai por etapa, da variedade que foi plantada em cada uma
   const etapas = ex && Array.isArray(ex.etapas) && ex.etapas.length ? ex.etapas : null;
+  if (etapas && etapas.some((e) => Array.isArray(e.produtosReais))) return consumoDasEtapas(produtos, etapas, tid);
   const realDe = (nome) => { const r = ((ex && ex.produtosReais) || []).find((x) => chaveProduto(x.nome) === chaveProduto(nome)); return r && String(r.qtd).trim() !== "" && num(r.qtd) >= 0 ? r : null; };
   for (const p of produtos || []) {
     if (!p || !p.nome) continue;
@@ -30185,7 +30198,7 @@ function SecaoAplicacoes({ maquinas, podeApagar, fazenda, apls, modulo, estoque,
                       {ex && Array.isArray(ex.etapas) && ex.etapas.length > 0 && (
                         <div style={{ fontSize: 12, color: ex.aberto ? "#7A5C00" : C.ok }}>
                           {ex.aberto ? `⏳ Plantio em aberto: ${fmtN(ex.areaExecutada)} de ${fmtN(tAreaNaApl({ ...a, execucoes: {} }, tid))} ha` : `✓ Plantio concluído: ${fmtN(ex.areaExecutada)} ha`}
-                          {ex.etapas.map((e, i) => <div key={e.id || i}>{i + 1}ª etapa: {fmtD(e.inicio)}{e.fim && e.fim !== e.inicio ? ` a ${fmtD(e.fim)}` : ""} · {fmtN(num(e.areaHa))} ha{e.variedade ? ` · ${e.variedade}` : ""}{e.operador ? ` · ${e.operador}` : ""}{e.obs ? ` · ${e.obs}` : ""}</div>)}
+                          {ex.etapas.map((e, i) => <div key={e.id || i}>{i + 1}ª etapa: {fmtD(e.inicio)}{e.fim && e.fim !== e.inicio ? ` a ${fmtD(e.fim)}` : ""} · {fmtN(num(e.areaHa))} ha{e.variedade ? ` · ${e.variedade}` : ""}{e.operador ? ` · ${e.operador}` : ""}{e.obs ? ` · ${e.obs}` : ""}{Array.isArray(e.produtosReais) && e.produtosReais.length ? <div style={{ color: C.navyEscuro }}>Gasto real: {e.produtosReais.map((r) => `${r.nome} ${fmtN(num(r.qtd))} ${r.unidade}`).join(" · ")}</div> : null}</div>)}
                           {podeApagar && <button className="nao-imprimir" onClick={() => desfazerExecucao(a, tid)} style={{ background: "transparent", border: "none", color: C.vermelho, fontSize: 11.5, fontWeight: 700, padding: 0 }}>desfazer o plantio deste talhão</button>}
                         </div>
                       )}
@@ -30277,7 +30290,7 @@ function SecaoAplicacoes({ maquinas, podeApagar, fazenda, apls, modulo, estoque,
       {confirmar && (
         <ModalExecucao estoque={estoque} aplicacao={confirmar.apl} nomeTalhao={tNome(confirmar.talhaoId)} areaHa={mod.usaSemeadura ? tAreaNaApl({ ...confirmar.apl, execucoes: {} }, confirmar.talhaoId) : tAreaNaApl(confirmar.apl, confirmar.talhaoId)} usuario={usuario} onFechar={() => setConfirmar(null)}
           etapas={mod.usaSemeadura} continuarDe={(confirmar.apl.execucoes || {})[confirmar.talhaoId] || null}
-          variedadePadrao={(sementeDaReceita(confirmar.apl) || {}).nome || ""} variedades={(estoque || []).filter((l) => /^sementes?$/i.test(String(l.categoria || "")) || /semente|soja|milho|algod/i.test(String(l.produto || ""))).map((l) => l.produto)}
+          variedadePadrao={(sementeDoTalhao(confirmar.apl, confirmar.talhaoId) || {}).nome || ""} sementeTalhao={sementeDoTalhao(confirmar.apl, confirmar.talhaoId)} variedades={(estoque || []).filter((l) => /^sementes?$/i.test(String(l.categoria || "")) || /semente|soja|milho|algod/i.test(String(l.produto || ""))).map((l) => l.produto)}
           onSalvar={(dadosEx) => {
             gravarExecucao(confirmar.apl, confirmar.talhaoId, dadosEx);
             setConfirmar(null);
@@ -34714,7 +34727,7 @@ function ModalTrocarSenha({ perfil, onFechar, onNome, naNuvem }) {
   );
 }
 
-function ModalExecucao({ aplicacao, nomeTalhao, areaHa, usuario, onFechar, onSalvar, estoque, etapas, continuarDe, variedadePadrao, variedades }) {
+function ModalExecucao({ aplicacao, nomeTalhao, areaHa, usuario, onFechar, onSalvar, estoque, etapas, continuarDe, variedadePadrao, variedades, sementeTalhao }) {
   // lote que deve sair primeiro (vence antes) e aviso de lote vencido, por produto da receita
   const dicaLote = (nome) => dicaLoteDe(estoque, nome);
   const [operador, setOperador] = useState((usuario && usuario.nomeUsuario) || "");
@@ -34731,6 +34744,22 @@ function ModalExecucao({ aplicacao, nomeTalhao, areaHa, usuario, onFechar, onSal
   const somaDepois = Math.round((jaPlantado + (num(areaEtapa) || 0)) * 100) / 100;
   const fechaSozinho = somaDepois >= num(areaHa) - 0.01;
   const [encerrar, setEncerrar] = useState(false);   // terminou mesmo faltando área (o resto não vai ser plantado)
+  // gasto desta etapa: todos os produtos da receita (semente, TS, sulco, adubo...) na área da etapa; o operador corrige
+  const [gastoEditado, setGastoEditado] = useState({});   // {indice: {qtd, unidade}} só do que ele mexeu
+  const gastoEtapa = (() => {
+    if (!emEtapas) return [];
+    const ha = num(areaEtapa) || 0; const prods = (aplicacao.produtos || []).filter((p) => p && p.nome);
+    return prods.map((p, i) => {
+      const ehSem = ehSementeDaReceita(p, prods);
+      const st = ehSem && sementeTalhao && sementeTalhao.nome ? sementeTalhao : p;
+      const nome = ehSem && variedade.trim() ? variedade.trim() : st.nome;
+      const q = totalProduto(st.dose, st.unidade || p.unidade, ha, p.mlPorDose);
+      const conta = { nome, qtd: String(Math.round(q.v * 1000) / 1000), unidade: q.un || p.unidade, uso: ehSem ? "semente" : (p.uso || "") };
+      const ed = gastoEditado[i];
+      return ed ? { ...conta, qtd: ed.qtd, unidade: ed.unidade || conta.unidade, editado: true, conta: conta.qtd } : conta;
+    });
+  })();
+  const mexeuNoGasto = gastoEtapa.some((g) => g.editado);
   // área que REALMENTE foi executada (plantou/aplicou só parte do talhão) e o dia
   const [areaExec, setAreaExec] = useState(areaHa ? String(Number(num(areaHa).toFixed(2))) : "");
   const [dia, setDia] = useState(hojeISO());
@@ -34791,14 +34820,30 @@ function ModalExecucao({ aplicacao, nomeTalhao, areaHa, usuario, onFechar, onSal
           <span>Encerrar o talhão mesmo assim (o resto não vai ser plantado)</span>
         </label>
       )}
-      {(aplicacao.produtos || []).map((p, i) => { const d = dicaLote(p.nome); return d ? <div key={i} style={{ fontSize: 11.5, color: d.vencido ? C.vermelho : "#7A5C00", fontWeight: 700, marginTop: 4 }}>{p.nome}: {d.texto}</div> : null; })}
+      <div style={{ marginTop: 12, border: `1.5px solid ${C.borda}`, borderRadius: 12, padding: 12 }}>
+        <div style={{ fontWeight: 900, fontSize: 14, color: C.navy }}>Quanto gastou de verdade nesta etapa</div>
+        <div style={{ fontSize: 12, color: C.cinza, marginTop: 2, marginBottom: 6 }}>Já vem com a conta da receita para {fmtN(num(areaEtapa) || 0)} ha. Gastou diferente? Corrija — é este número que baixa no estoque.
+          {mexeuNoGasto && <> <button onClick={() => setGastoEditado({})} style={{ background: "transparent", border: "none", color: C.navy, fontWeight: 800, fontSize: 12, padding: 0, textDecoration: "underline" }}>voltar para a conta da receita</button></>}</div>
+        {gastoEtapa.map((g, i) => { const d = dicaLote(g.nome); return (
+          <div key={i} style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 6 }}>
+            <span style={{ flex: 2, fontSize: 13, fontWeight: 700, minWidth: 0 }}>{g.uso === "semente" ? "🌱 " : g.uso === "sulco" ? "💧 " : g.uso === "ts" ? "🧪 " : ""}{g.nome}
+              {g.uso === "sulco" ? <div style={{ fontSize: 11, color: C.cinza, fontWeight: 600 }}>no sulco</div> : g.uso === "ts" ? <div style={{ fontSize: 11, color: C.cinza, fontWeight: 600 }}>tratamento de semente</div> : null}
+              {g.editado ? <div style={{ fontSize: 11, color: "#7A5C00", fontWeight: 700 }}>pela receita: {fmtN(num(g.conta))} {g.unidade}</div> : null}
+              {d ? <div style={{ fontSize: 11, color: d.vencido ? C.vermelho : "#7A5C00", fontWeight: 700 }}>{d.texto}</div> : null}</span>
+            <input style={{ flex: 1, minWidth: 0, marginTop: 0 }} type="number" inputMode="decimal" value={g.qtd} onChange={(e) => setGastoEditado({ ...gastoEditado, [i]: { qtd: e.target.value, unidade: g.unidade } })} />
+            <select style={{ flex: 1, minWidth: 0, marginTop: 0 }} value={g.unidade} onChange={(e) => setGastoEditado({ ...gastoEditado, [i]: { qtd: g.qtd, unidade: e.target.value } })}>
+              {[...new Set([g.unidade, "bag", "kg", "g", "t", "L", "mL", "dose"].filter(Boolean))].map((u) => <option key={u}>{u}</option>)}
+            </select>
+          </div>
+        ); })}
+      </div>
       <label>Observação (opcional)</label>
       <input value={obs} onChange={(e) => setObs(e.target.value)} placeholder="Ex.: parou pela chuva, solo úmido…" />
       <label>Fotos (opcional, até 3)</label>
       <input type="file" accept="image/*" capture="environment" multiple onChange={addFotos} />
       {fotos.length > 0 && <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>{fotos.map((f, i) => <img key={i} src={f} style={{ width: 84, borderRadius: 8 }} />)}</div>}
       <BotaoSalvar disabled={!operador || !(num(areaEtapa) > 0) || !inicio || !fim} cor={C.ok} texto={fechaSozinho || encerrar ? "✓ Registrar e fechar o talhão" : "✓ Registrar esta etapa (talhão fica em aberto)"}
-        onClick={() => onSalvar({ operador, obs, fotos, etapa: { id: idNovo(), inicio, fim: fim || inicio, areaHa: num(areaEtapa), variedade: variedade.trim(), operador, obs }, terminou: fechaSozinho || encerrar })} />
+        onClick={() => onSalvar({ operador, obs, fotos, etapa: { id: idNovo(), inicio, fim: fim || inicio, areaHa: num(areaEtapa), variedade: variedade.trim(), operador, obs, ...(mexeuNoGasto ? { produtosReais: gastoEtapa.map((g) => ({ nome: g.nome, qtd: g.qtd, unidade: g.unidade, uso: g.uso })) } : {}) }, terminou: fechaSozinho || encerrar })} />
       <div style={{ fontSize: 12, color: C.cinza, marginTop: 8, textAlign: "center" }}>Cada etapa vira uma parte nos Dados da lavoura (informe a emergência de cada uma lá).</div>
     </Modal>
   );
