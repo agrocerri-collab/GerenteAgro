@@ -145,6 +145,14 @@ service cloud.firestore {
           meuPerfil().get('funcao', '') in ['Produtor', 'Gerente']) == true &&
         fazendaId in meuPerfil().get('fazendas', []) && fazendaDaMinhaConta(fazendaId);
     }
+    // Pessoa DA FAZENDA com 🧾 Insumos do grupo: passa compra de uma fazenda do grupo para outra.
+    // Sem marca, Produtor e Gerente podem (mesma regra do app)
+    function fazendaPodeInsumosGrupo(fazendaId) {
+      return temPerfil() && meuPerfil().get('papel', '') == 'fazenda' &&
+        meuPerfil().get('permissoes', {}).get('insumosGrupo',
+          meuPerfil().get('funcao', '') in ['Produtor', 'Gerente']) == true &&
+        fazendaId in meuPerfil().get('fazendas', []) && fazendaDaMinhaConta(fazendaId);
+    }
     function temAcessoAFazenda(fazendaId) {
       return consultorNaFazenda(fazendaId) ||
         (acessoFazendaLiberado(fazendaId) && fazendaDaMinhaConta(fazendaId));
@@ -319,8 +327,9 @@ service cloud.firestore {
                                   allow write: if consultorNaFazenda(fazendaId); }
       match /compras/{doc}      { allow read: if temAcessoAFazenda(fazendaId);
                                   // a fazenda lança pedido só com "pedidos" liberado no acesso da pessoa
-                                  allow create, update: if (consultorNaFazenda(fazendaId) && podeC('cadastrar')) || fazendaPode(fazendaId, 'pedidos');
-                                  allow delete: if (consultorNaFazenda(fazendaId) && podeC('excluir')) || (fazendaPode(fazendaId, 'pedidos') && fazendaPodeApagar(fazendaId)); }
+                                  allow create, update: if (consultorNaFazenda(fazendaId) && podeC('cadastrar')) || fazendaPode(fazendaId, 'pedidos') || fazendaPodeInsumosGrupo(fazendaId);
+                                  // mover TODA a compra de uma linha para a outra fazenda apaga a linha da origem
+                                  allow delete: if (consultorNaFazenda(fazendaId) && podeC('excluir')) || (fazendaPode(fazendaId, 'pedidos') && fazendaPodeApagar(fazendaId)) || fazendaPodeInsumosGrupo(fazendaId); }
       match /recomendacoes/{doc}{ allow read: if temAcessoAFazenda(fazendaId);
                                   // a fazenda recomenda só com "recomendar" liberado no acesso da pessoa
                                   allow create, update: if (consultorNaFazenda(fazendaId) && podeC('recomendar')) || fazendaPode(fazendaId, 'recomendacoes');

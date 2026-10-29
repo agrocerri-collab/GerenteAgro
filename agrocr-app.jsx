@@ -121,6 +121,7 @@ const ITENS_ACESSO = [
   ["financeiro", "💰 Financeiro (custos, compras, vendas, DRE, notas) e 👥 RH (funcionários)", "Dinheiro"],
   ["custos", "💵 Ver e lançar valores em R$ dentro do Financeiro", "Dinheiro", true],
   ["cotacoes", "💹 Cotações", "Dinheiro"],
+  ["insumosGrupo", "🧾 Insumos do grupo (compras de todas as fazendas e transferência entre elas)", "Dinheiro"],
   ["simulacoes", "🧮 Simulações de custo", "Dinheiro", true],
   ["relatorios", "📊 Relatórios", "Acompanhamento"],
   ["documentos", "📁 Documentos", "Acompanhamento"],
@@ -144,7 +145,8 @@ const AREAS_FAZENDA = ITENS_ACESSO.filter((i) => !i[3]).map(([k, r]) => [k, r]);
 // funções de campo (operador, monitor): tela curta, sem Financeiro/Cotações/Programa por padrão
 const funcaoDeCampo = (f) => /operador|monitor/i.test(String(f || ""));
 const funcaoMonitor = (f) => /monitor/i.test(String(f || ""));
-const padraoAreaFazenda = (funcao, chave) => chave === "apagar" ? /produtor|gerente/i.test(String(funcao || "")) : LANCAR_FAZENDA.includes(chave) ? false : !(["financeiro", "cotacoes", "programa"].includes(chave) && funcaoDeCampo(funcao));
+// "apagar" e "insumosGrupo": Produtor e Gerente podem sem marcar; os outros só se a consultoria liberar
+const padraoAreaFazenda = (funcao, chave) => chave === "apagar" || chave === "insumosGrupo" ? /produtor|gerente/i.test(String(funcao || "")) : LANCAR_FAZENDA.includes(chave) ? false : !(["financeiro", "cotacoes", "programa"].includes(chave) && funcaoDeCampo(funcao));
 // O que cada função pode, por padrão, nos acessos da EQUIPE (GerenteAgro): o titular escolhe a função e
 // ajusta se quiser. Chave ausente = pode (para as funções de confiança) — a lista diz o que NÃO pode.
 const CAMPO_VER = ["panorama", "dadosfazenda", "lavoura", "solo", "operacoes", "fungicidas", "estoque", "ndvi", "pluviometria", "previsao", "colheita", "visitas", "comunidade", "suporte", "guia", "ponto"];
@@ -152,7 +154,7 @@ const PADRAO_FUNCAO_EQUIPE = {
   "Produtor": { tudo: true },
   "Gerente": { tudo: true, nao: ["acessos"] },
   "Engenheiro agrônomo": { tudo: true, nao: ["custos", "simulacoes", "excluir", "acessos"] },
-  "Escritório": { so: ["panorama", "estoque", "programa", "diesel", "almoxarifado", "ponto", "financeiro", "custos", "cotacoes", "simulacoes", "relatorios", "documentos", "comunidade", "suporte", "cadastrar"] },
+  "Escritório": { so: ["panorama", "estoque", "programa", "diesel", "almoxarifado", "ponto", "financeiro", "custos", "cotacoes", "insumosGrupo", "simulacoes", "relatorios", "documentos", "comunidade", "suporte", "cadastrar"] },
   "Monitor de campo": { so: CAMPO_VER },
   "Operador de máquinas": { so: ["panorama", "operacoes", "fungicidas", "estoque", "pluviometria", "previsao", "colheita", "diesel", "almoxarifado", "comunidade", "suporte", "guia", "ponto"] },
 };
@@ -1446,6 +1448,7 @@ export default function App() {
     if (fazendaAberta !== abrirPendente.f) setFazendaAberta(abrirPendente.f);
   }, [abrirPendente, fazendas]);
   const [panoramaMinhas, setPanoramaMinhas] = useState(false);   // produtor com várias fazendas: panorama de todas
+  const [insumosMinhas, setInsumosMinhas] = useState(false);     // 🧾 Insumos do grupo para quem é da fazenda (chave insumosGrupo)
   const [geralMinhas, setGeralMinhas] = useState(false);         // idem para o resumo geral (dinheiro)
   const [erro, setErro] = useState(null);
   const [salvando, setSalvando] = useState(false);
@@ -1972,6 +1975,14 @@ export default function App() {
           );
         }
         const veDinheiro = podeFazenda(perfil, "financeiro");
+        const veInsumos = minhas.length > 1 && podeFazenda(perfil, "insumosGrupo");
+        if (insumosMinhas && naNuvem && veInsumos) {
+          return (
+            <div style={{ maxWidth: 760, margin: "0 auto", padding: 16 }}>
+              <TelaGrupoGeral grupo={{ id: "minhas", nome: grupo ? grupo.nome : "Suas fazendas", foco: "estoque" }} fazendas={minhas} usuario={perfil} podeMover podeEditar={podeFazenda(perfil, "pedidos")} onFechar={() => setInsumosMinhas(false)} />
+            </div>
+          );
+        }
         if (geralMinhas && naNuvem && veDinheiro) {
           return (
             <div style={{ maxWidth: 760, margin: "0 auto", padding: 16 }}>
@@ -1992,6 +2003,11 @@ export default function App() {
                   </button>
                 )}
               </div>
+            )}
+            {naNuvem && veInsumos && (
+              <button onClick={() => setInsumosMinhas(true)} style={{ width: "100%", padding: 14, background: "#fff", color: C.navy, border: `1.5px solid ${C.navy}`, borderRadius: 14, fontWeight: 900, fontSize: 15, textAlign: "left", marginBottom: 12 }}>
+                🧾 Insumos do grupo <div style={{ fontWeight: 600, fontSize: 12, color: C.cinza, marginTop: 2 }}>o que cada fazenda comprou, usou e tem de saldo · 🔁 passar produto de uma fazenda para outra</div>
+              </button>
             )}
             <div style={{ fontWeight: 900, fontSize: 18, color: C.navy }}>{grupo ? grupo.nome : "Suas fazendas"}</div>
             <div style={{ fontSize: 13, color: C.cinza, marginBottom: 14 }}>
@@ -2843,7 +2859,8 @@ function SecaoFinanceiroDono({ usuario, fazendas, naNuvem, onFechar }) {
 // Junta as fazendas de um grupo numa visão só: custo total, estoque somado,
 // colheita e diesel de todas — as fazendas separadas continuam como estão.
 // Soma a SAFRA ATUAL de cada fazenda.
-function TelaGrupoGeral({ grupo, fazendas, onFechar, usuario }) {
+// podeMover = 🔁 passar compra de uma fazenda para outra; podeEditar = ✏️ corrigir a compra em todas as fazendas
+function TelaGrupoGeral({ grupo, fazendas, onFechar, usuario, podeMover = true, podeEditar = true }) {
   const soEstoque = grupo.foco === "estoque";   // veio do botão "Insumos do grupo": compras por fazenda + planejamento somado
   const [abaInsumos, setAbaInsumos] = useState("compras");   // compras · planejamento
   const [foraPlano, setForaPlano] = useState({});             // produtos desmarcados só para o PDF do planejamento
@@ -3170,8 +3187,8 @@ function TelaGrupoGeral({ grupo, fazendas, onFechar, usuario }) {
                         <div style={{ fontWeight: 900, fontSize: 15, color: C.navy }}>{fmtN(Math.round(l.comprado * 100) / 100)} {l.base}</div>
                         <div style={{ fontSize: 10.5, color: C.cinza }}>comprado no grupo</div>
                       </div>
-                      <button onClick={() => setEditandoProd({ produto: l.produto, base: l.base })} title="Editar a compra deste produto em todas as fazendas" style={{ background: C.fundo, color: C.navy, border: "none", borderRadius: 10, padding: "9px 10px", fontWeight: 800, fontSize: 14, flex: "none" }}>✏️</button>
-                      {temSaldo(l) && <button onClick={() => setTransf({ origemId: origemSugerida(l), produto: l.produto })} style={{ background: C.navy, color: "#fff", border: "none", borderRadius: 10, padding: "9px 10px", fontWeight: 800, fontSize: 14, flex: "none" }}>🔁</button>}
+                      {podeEditar && <button onClick={() => setEditandoProd({ produto: l.produto, base: l.base })} title="Editar a compra deste produto em todas as fazendas" style={{ background: C.fundo, color: C.navy, border: "none", borderRadius: 10, padding: "9px 10px", fontWeight: 800, fontSize: 14, flex: "none" }}>✏️</button>}
+                      {podeMover && temSaldo(l) && <button onClick={() => setTransf({ origemId: origemSugerida(l), produto: l.produto })} style={{ background: C.navy, color: "#fff", border: "none", borderRadius: 10, padding: "9px 10px", fontWeight: 800, fontSize: 14, flex: "none" }}>🔁</button>}
                     </div>
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
                       {fazendas.map((f) => { const s = num(l.porId[f.id]), e = num(l.entreguePorId[f.id]); if (Math.abs(s) < 0.001) return null; return (
@@ -3206,7 +3223,7 @@ function TelaGrupoGeral({ grupo, fazendas, onFechar, usuario }) {
                   <td style={{ ...td, fontWeight: 700 }}>{l.produto} <span style={{ color: C.cinza, fontWeight: 500, fontSize: 11.5 }}>({l.base})</span><div style={{ fontSize: 10.5, color: C.cinza, fontWeight: 500 }}>{l.antigo > 0 ? `compra ${fmtN(Math.round((l.comprado - l.antigo) * 100) / 100)} · estoque anterior ${fmtN(l.antigo)} · ` : ""}recebido {fmtN(l.entregue)} · usado {fmtN(l.usado)}</div></td>
                   {fazendas.map((f) => { const s = num(l.porId[f.id]), e = num(l.entreguePorId[f.id]); return <td key={f.id} style={{ ...td, textAlign: "right", fontWeight: Math.abs(s) > 0.001 ? 800 : 400, color: Math.abs(s) > 0.001 ? C.navy : C.cinza }}>{Math.abs(s) > 0.001 ? fmtN(Math.round(s * 100) / 100) : "—"}{num(l.antigoPorId[f.id]) > 0 ? <><div style={{ fontSize: 10, color: C.navyEscuro, fontWeight: 600 }}>compra {fmtN(Math.round((s - num(l.antigoPorId[f.id])) * 100) / 100)}</div><div style={{ fontSize: 10, color: "#7A5C00", fontWeight: 600 }}>estoque anterior {fmtN(Math.round(num(l.antigoPorId[f.id]) * 100) / 100)}</div></> : null}{e > 0 ? <div style={{ fontSize: 10, color: C.verdeEscuro, fontWeight: 600 }}>recebido {fmtN(Math.round(e * 100) / 100)}</div> : null}</td>; })}
                   <td style={{ ...td, textAlign: "right", fontWeight: 900, color: C.navy }}>{fmtN(Math.round(l.comprado * 100) / 100)}{l.antigo > 0 ? <div style={{ fontSize: 10, color: C.navyEscuro, fontWeight: 600 }}>compra {fmtN(Math.round((l.comprado - l.antigo) * 100) / 100)}</div> : null}</td>
-                  <td className="nao-imprimir" style={{ ...td, textAlign: "right", whiteSpace: "nowrap" }}><button onClick={() => setEditandoProd({ produto: l.produto, base: l.base })} title="Editar a compra deste produto em todas as fazendas" style={{ background: C.fundo, border: "none", borderRadius: 8, padding: "5px 8px", fontWeight: 800, fontSize: 12, color: C.navy, marginRight: 4 }}>✏️</button>{temSaldo(l) && <button onClick={() => setTransf({ origemId: origemSugerida(l), produto: l.produto })} title="Mover parte desta compra para outra fazenda" style={{ background: C.fundo, border: "none", borderRadius: 8, padding: "5px 8px", fontWeight: 800, fontSize: 12, color: C.navy }}>🔁</button>}</td>
+                  <td className="nao-imprimir" style={{ ...td, textAlign: "right", whiteSpace: "nowrap" }}>{podeEditar && <button onClick={() => setEditandoProd({ produto: l.produto, base: l.base })} title="Editar a compra deste produto em todas as fazendas" style={{ background: C.fundo, border: "none", borderRadius: 8, padding: "5px 8px", fontWeight: 800, fontSize: 12, color: C.navy, marginRight: 4 }}>✏️</button>}{podeMover && temSaldo(l) && <button onClick={() => setTransf({ origemId: origemSugerida(l), produto: l.produto })} title="Mover parte desta compra para outra fazenda" style={{ background: C.fundo, border: "none", borderRadius: 8, padding: "5px 8px", fontWeight: 800, fontSize: 12, color: C.navy }}>🔁</button>}</td>
                 </tr>
                 )),
               ])}
@@ -4273,7 +4290,7 @@ function HomeConsultoria({ fazendas, grupos, naNuvem, usuario, onAbrir, onAbrirS
   if (verGeral) {
     return (
       <div style={{ maxWidth: 720, margin: "0 auto", padding: 16 }}>
-        <TelaGrupoGeral grupo={verGeral} fazendas={fazendas.filter((f) => fazendaNoGrupo(f, verGeral))} usuario={usuario}
+        <TelaGrupoGeral grupo={verGeral} fazendas={fazendas.filter((f) => fazendaNoGrupo(f, verGeral))} usuario={usuario} podeMover={podePermissao(usuario, "cadastrar")} podeEditar={podePermissao(usuario, "cadastrar")}
           onFechar={() => setVerGeral(null)} />
       </div>
     );
@@ -4459,12 +4476,12 @@ function HomeConsultoria({ fazendas, grupos, naNuvem, usuario, onAbrir, onAbrirS
                           }}>
                             🌱 Panorama geral <span style={{ fontWeight: 600, fontSize: 12, color: C.cinza }}>· culturas, chuva, fungicida e pendências de todas</span> ›
                           </button>
-                          <button onClick={() => setVerGeral({ ...g, foco: "estoque" })} style={{
+                          {podePermissao(usuario, "insumosGrupo") && <button onClick={() => setVerGeral({ ...g, foco: "estoque" })} style={{
                             width: "100%", textAlign: "left", background: C.verdeBg, border: `1.5px solid ${C.verde}`,
                             borderRadius: 12, padding: "12px 14px", marginBottom: 8, fontWeight: 800, color: C.verdeEscuro, fontSize: 14,
                           }}>
                             🧾 Insumos do grupo <span style={{ fontWeight: 600, fontSize: 12, color: C.cinza }}>· compras por fazenda e planejamento de compra somado, com pedido de cotação</span> ›
-                          </button>
+                          </button>}
                         </>
                       )}
                       {renomeando === g.id ? (
@@ -10283,15 +10300,7 @@ const catEstoque = (l) => (CATEGORIAS.includes(l.categoria) ? l.categoria : "Out
 function SecaoEstoque({ linhas, ajustes, entregas, usuario, registrar, prog, fornecedores, onSalvarFornecedores, fazendaNome, consultor, podeCorrigir, onSalvarAjustes, onSalvarEntregas, onLerPedido, irmas, onGravarNaIrma, notas, abrirRelatorio }) {
   // notas que o escritório já lançou e cujo produto ainda não chegou (ou não chegou inteiro)
   const notasAguardando = notasComChegada(notas, entregas, prog).filter((c) => c.aguardando);
-  const [modalTransf, setModalTransf] = useState(false);
-  // grava primeiro na fazenda de destino; só se der certo tira daqui (se falhar, nada muda)
-  const transferir = async (linha, qtd, ir, quem, obs) => {
-    const { saida, entrada } = ajustesDaTransferencia(linha, qtd, fazendaNome, ir.f.nome, quem, obs, idNovo(), new Date().toISOString());
-    try { await onGravarNaIrma(ir, { id: idNovo(), ...entrada }); } catch (e) { return false; }
-    onSalvarAjustes([...ajustes, { id: idNovo(), ...saida }]);
-    registrar && registrar("Produto transferido para outra fazenda", `${linha.produto} ${fmtN(num(qtd))} ${linha.base} → ${ir.f.nome} · lançado por ${quem}`);
-    return true;
-  };
+  // transferir produto para outra fazenda do grupo: só em 👥 Insumos do grupo (🔁), não mais aqui
   const [modalPedido, setModalPedido] = useState(false);
   const [modal, setModal] = useState(false);
   const [modalEntrega, setModalEntrega] = useState(false);   // false | true (nova) | entrega (corrigindo)
@@ -10345,12 +10354,6 @@ function SecaoEstoque({ linhas, ajustes, entregas, usuario, registrar, prog, for
       <button onClick={() => setModal(true)} style={{ width: "100%", padding: 13, background: C.navy, color: "#fff", border: "none", borderRadius: 12, fontSize: 15, fontWeight: 800, marginBottom: 12 }}>
         ± Lançar ajuste de estoque (entrada / saída)
       </button>
-      {irmas && irmas.length > 0 && onGravarNaIrma && (
-        <button onClick={() => setModalTransf(true)} style={{ width: "100%", padding: 13, background: "#fff", color: C.navy, border: `1.5px solid ${C.navy}`, borderRadius: 12, fontSize: 15, fontWeight: 800, marginBottom: 12 }}>
-          🔁 Transferir produto para outra fazenda do grupo
-        </button>
-      )}
-      {modalTransf && <ModalTransferencia linhas={linhas} irmas={irmas} usuario={usuario} onFechar={() => setModalTransf(false)} onTransferir={transferir} />}
 
       {temSafrinha && (
         <div className="nao-imprimir" style={{ display: "flex", gap: 6, marginBottom: 12 }}>

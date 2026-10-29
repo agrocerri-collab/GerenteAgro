@@ -1294,6 +1294,13 @@ teste("plantio: gasto real da etapa (bags, sulco) baixa no estoque; etapa sem ga
   return c.length === 2 && Math.abs(sem.v - 53) < 1e-6 && Math.abs(bio.v - 9) < 1e-6;
 });
 
+teste("insumos do grupo: chave própria em Acessos; produtor/gerente podem sem marcar, secretária só se liberar", () => {
+  const temItem = C.ITENS_ACESSO.some((i) => i[0] === "insumosGrupo" && !i[3]);
+  const sec = { funcao: "Escritório" }, secLib = { funcao: "Escritório", permissoes: { insumosGrupo: true } }, ger = { funcao: "Gerente" }, prod = { funcao: "Produtor", permissoes: { insumosGrupo: false } };
+  return temItem && !C.podeFazenda(sec, "insumosGrupo") && C.podeFazenda(secLib, "insumosGrupo") && C.podeFazenda(ger, "insumosGrupo") && !C.podeFazenda(prod, "insumosGrupo")
+    && C.permissoesDaFuncao("Escritório").insumosGrupo === true && C.permissoesDaFuncao("Monitor de campo").insumosGrupo === false;
+});
+
 teste("visita: 'mais opções' tem daninhas do cerrado e entra no dicionário da transcrição", () => {
   const mais = C.OBS_CATALOGO_MAIS["🌿 Daninha"];
   const d = C.dicasVozDe([{ nome: "T1" }]);
