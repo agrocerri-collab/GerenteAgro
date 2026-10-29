@@ -2862,6 +2862,7 @@ function TelaGrupoGeral({ grupo, fazendas, onFechar, usuario }) {
         const ant = Math.min(num(antigo[k]), num(l.entregue));
         m[k].comprado += l.comprado; m[k].entregue += num(l.entregue) - ant; m[k].antigo += ant; m[k].usado += l.usado;
         m[k].porId[x.f.id] = (m[k].porId[x.f.id] || 0) + l.comprado;
+        m[k].usadoPorId = m[k].usadoPorId || {}; m[k].usadoPorId[x.f.id] = (m[k].usadoPorId[x.f.id] || 0) + l.usado - num(l.ajuste);
         m[k].entreguePorId[x.f.id] = (m[k].entreguePorId[x.f.id] || 0) + (num(l.entregue) - ant);
         m[k].antigoPorId[x.f.id] = (m[k].antigoPorId[x.f.id] || 0) + ant;
       }
@@ -2881,7 +2882,8 @@ function TelaGrupoGeral({ grupo, fazendas, onFechar, usuario }) {
     setMsgTransf(`✓ ${produto}: ${fmtN(num(qtd))} ${r.unidade} da compra de ${org.f.nome} passou para ${dst.f.nome}.`);
     return true;
   };
-    const origemSugerida = (l) => { let melhor = "", maior = 0; for (const id of Object.keys(l.porId)) { const livre = l.porId[id] - num(l.entreguePorId[id]); if (livre > maior) { maior = livre; melhor = id; } } return melhor; };
+    const origemSugerida = (l) => { let melhor = "", maior = 0; for (const id of Object.keys(l.porId)) { const livre = l.porId[id] - num((l.usadoPorId || {})[id]); if (livre > maior) { maior = livre; melhor = id; } } return melhor; };
+    const temSaldo = (l) => Object.keys(l.porId).some((id) => l.porId[id] - num((l.usadoPorId || {})[id]) > 0.001);
 
   // colheita consolidada por cultura — se a área colhida não foi lançada,
   // a média sai ESTIMADA pela área total dos talhões daquela cultura
@@ -3125,7 +3127,7 @@ function TelaGrupoGeral({ grupo, fazendas, onFechar, usuario }) {
                         <div style={{ fontSize: 10.5, color: C.cinza }}>comprado no grupo</div>
                       </div>
                       <button onClick={() => setEditandoProd({ produto: l.produto, base: l.base })} title="Editar a compra deste produto em todas as fazendas" style={{ background: C.fundo, color: C.navy, border: "none", borderRadius: 10, padding: "9px 10px", fontWeight: 800, fontSize: 14, flex: "none" }}>✏️</button>
-                      {l.comprado - l.entregue > 0.001 && <button onClick={() => setTransf({ origemId: origemSugerida(l), produto: l.produto })} style={{ background: C.navy, color: "#fff", border: "none", borderRadius: 10, padding: "9px 10px", fontWeight: 800, fontSize: 14, flex: "none" }}>🔁</button>}
+                      {temSaldo(l) && <button onClick={() => setTransf({ origemId: origemSugerida(l), produto: l.produto })} style={{ background: C.navy, color: "#fff", border: "none", borderRadius: 10, padding: "9px 10px", fontWeight: 800, fontSize: 14, flex: "none" }}>🔁</button>}
                     </div>
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
                       {fazendas.map((f) => { const s = num(l.porId[f.id]), e = num(l.entreguePorId[f.id]); if (Math.abs(s) < 0.001) return null; return (
@@ -3160,7 +3162,7 @@ function TelaGrupoGeral({ grupo, fazendas, onFechar, usuario }) {
                   <td style={{ ...td, fontWeight: 700 }}>{l.produto} <span style={{ color: C.cinza, fontWeight: 500, fontSize: 11.5 }}>({l.base})</span><div style={{ fontSize: 10.5, color: C.cinza, fontWeight: 500 }}>{l.antigo > 0 ? `compra ${fmtN(Math.round((l.comprado - l.antigo) * 100) / 100)} · estoque anterior ${fmtN(l.antigo)} · ` : ""}recebido {fmtN(l.entregue)} · usado {fmtN(l.usado)}</div></td>
                   {fazendas.map((f) => { const s = num(l.porId[f.id]), e = num(l.entreguePorId[f.id]); return <td key={f.id} style={{ ...td, textAlign: "right", fontWeight: Math.abs(s) > 0.001 ? 800 : 400, color: Math.abs(s) > 0.001 ? C.navy : C.cinza }}>{Math.abs(s) > 0.001 ? fmtN(Math.round(s * 100) / 100) : "—"}{num(l.antigoPorId[f.id]) > 0 ? <><div style={{ fontSize: 10, color: C.navyEscuro, fontWeight: 600 }}>compra {fmtN(Math.round((s - num(l.antigoPorId[f.id])) * 100) / 100)}</div><div style={{ fontSize: 10, color: "#7A5C00", fontWeight: 600 }}>estoque anterior {fmtN(Math.round(num(l.antigoPorId[f.id]) * 100) / 100)}</div></> : null}{e > 0 ? <div style={{ fontSize: 10, color: C.verdeEscuro, fontWeight: 600 }}>recebido {fmtN(Math.round(e * 100) / 100)}</div> : null}</td>; })}
                   <td style={{ ...td, textAlign: "right", fontWeight: 900, color: C.navy }}>{fmtN(Math.round(l.comprado * 100) / 100)}{l.antigo > 0 ? <div style={{ fontSize: 10, color: C.navyEscuro, fontWeight: 600 }}>compra {fmtN(Math.round((l.comprado - l.antigo) * 100) / 100)}</div> : null}</td>
-                  <td className="nao-imprimir" style={{ ...td, textAlign: "right", whiteSpace: "nowrap" }}><button onClick={() => setEditandoProd({ produto: l.produto, base: l.base })} title="Editar a compra deste produto em todas as fazendas" style={{ background: C.fundo, border: "none", borderRadius: 8, padding: "5px 8px", fontWeight: 800, fontSize: 12, color: C.navy, marginRight: 4 }}>✏️</button>{l.comprado - l.entregue > 0.001 && <button onClick={() => setTransf({ origemId: origemSugerida(l), produto: l.produto })} title="Mover parte desta compra para outra fazenda" style={{ background: C.fundo, border: "none", borderRadius: 8, padding: "5px 8px", fontWeight: 800, fontSize: 12, color: C.navy }}>🔁</button>}</td>
+                  <td className="nao-imprimir" style={{ ...td, textAlign: "right", whiteSpace: "nowrap" }}><button onClick={() => setEditandoProd({ produto: l.produto, base: l.base })} title="Editar a compra deste produto em todas as fazendas" style={{ background: C.fundo, border: "none", borderRadius: 8, padding: "5px 8px", fontWeight: 800, fontSize: 12, color: C.navy, marginRight: 4 }}>✏️</button>{temSaldo(l) && <button onClick={() => setTransf({ origemId: origemSugerida(l), produto: l.produto })} title="Mover parte desta compra para outra fazenda" style={{ background: C.fundo, border: "none", borderRadius: 8, padding: "5px 8px", fontWeight: 800, fontSize: 12, color: C.navy }}>🔁</button>}</td>
                 </tr>
                 )),
               ])}
@@ -19886,6 +19888,17 @@ function moverCompraEntreFazendas(progOrigem, progDestino, produto, ciclo, qtd, 
   }
   return { ok: true, origem, destino, unidade: modelo.unidade, ciclo: modelo.ciclo || "Safra" };
 }
+// quanto dá para mover de uma fazenda: o SALDO dela (comprado − usado ± ajustes), na unidade da compra,
+// e nunca mais do que ainda está nas linhas de compra (estoque da safra anterior não é compra para mover)
+function saldoParaMover(x, produto) {
+  const k = chaveProduto(produto);
+  const compras = (x.d.prog || []).filter((p) => p.produto && chaveProduto(p.produto) === k);
+  const unidade = compras.length ? compras[compras.length - 1].unidade : "";
+  const fator = normalizar(1, unidade).v || 1;
+  const saldoBase = calcularEstoqueDe(x.f, x.d.prog, x.d.apls, x.d.ajustes, x.d.entregas).filter((l) => chaveProduto(l.produto) === k).reduce((s, l) => s + saldoDe(l), 0);
+  const comprado = compras.filter((p) => p.origem !== "anterior").reduce((s, p) => s + num(p.qtd), 0);
+  return { saldo: Math.round((saldoBase / fator) * 1000) / 1000, comprado: Math.round(comprado * 1000) / 1000, unidade, max: Math.max(0, Math.round(Math.min(saldoBase / fator, comprado) * 1000) / 1000) };
+}
 function ModalMoverCompra({ fazendas, produto, origemInicial, onFechar, onMover }) {
   const [origem, setOrigem] = useState(origemInicial || "");
   const [destino, setDestino] = useState("");
@@ -19895,7 +19908,8 @@ function ModalMoverCompra({ fazendas, produto, origemInicial, onFechar, onMover 
   const entregueEm = (x) => Math.round(((x.d.entregas || []).filter((e) => chaveProduto(e.produto) === k).reduce((s, e) => s + num(e.qtd), 0) + (x.d.prog || []).filter((p) => p.origem === "anterior" && p.produto && chaveProduto(p.produto) === k).reduce((s, p) => s + num(p.qtd), 0)) * 1000) / 1000;
   const unidadeEm = (x) => { const l = (x.d.prog || []).filter((p) => p.produto && chaveProduto(p.produto) === k); return l.length ? l[l.length - 1].unidade : ""; };
   const org = fazendas.find((x) => x.f.id === origem) || null, dst = fazendas.find((x) => x.f.id === destino) || null;
-  const max = org ? Math.max(0, compradoEm(org) - entregueEm(org)) : 0;
+  const max = org ? saldoParaMover(org, produto).max : 0;
+  const saldoEm = (x) => saldoParaMover(x, produto).saldo;
   const passou = org && num(qtd) > max + 1e-9;
   async function mover() {
     setOcupado(true); setMsg("");
@@ -19905,11 +19919,11 @@ function ModalMoverCompra({ fazendas, produto, origemInicial, onFechar, onMover 
   }
   return (
     <Modal titulo={`Mover compra: ${produto}`} onFechar={onFechar}>
-      <div style={{ fontSize: 12.5, color: C.cinza }}>Muda a DISTRIBUIÇÃO da compra entre as fazendas: sai da linha de compra de uma e entra na da outra, com o mesmo preço e fornecedor. O que já foi entregue não se move — isso é estoque, dentro da fazenda.</div>
+      <div style={{ fontSize: 12.5, color: C.cinza }}>Passa o que SOBROU de uma fazenda para a outra: sai da linha de compra de uma e entra na da outra, com o mesmo preço e fornecedor. Só dá para mover o saldo — o que já foi usado (plantado, aplicado) fica na fazenda que usou.</div>
       <label>De qual fazenda</label>
       <select value={origem} onChange={(e) => { setOrigem(e.target.value); setQtd(""); }}>
         <option value="">Escolha…</option>
-        {fazendas.map((x) => <option key={x.f.id} value={x.f.id}>{x.f.nome} · comprado {fmtN(compradoEm(x))} {unidadeEm(x)}{entregueEm(x) > 0 ? ` (recebido ${fmtN(entregueEm(x))})` : ""}</option>)}
+        {fazendas.filter((x) => compradoEm(x) > 0).map((x) => <option key={x.f.id} value={x.f.id}>{x.f.nome} · saldo {fmtN(Math.max(0, saldoEm(x)))} {unidadeEm(x)} (comprado {fmtN(compradoEm(x))})</option>)}
       </select>
       <label>Para qual fazenda</label>
       <select value={destino} onChange={(e) => setDestino(e.target.value)}>
@@ -19918,8 +19932,9 @@ function ModalMoverCompra({ fazendas, produto, origemInicial, onFechar, onMover 
       </select>
       <label>Quantidade {org ? `(${unidadeEm(org)})` : ""}</label>
       <input type="number" inputMode="decimal" value={qtd} onChange={(e) => setQtd(e.target.value)} placeholder={org ? `até ${fmtN(max)} ${unidadeEm(org)}` : ""} />
-      {org && <button onClick={() => setQtd(String(max))} style={{ background: "transparent", border: "none", color: C.navy, fontSize: 12.5, fontWeight: 700, textDecoration: "underline", padding: 0, marginTop: 4 }}>mover tudo o que ainda não chegou ({fmtN(max)})</button>}
-      {passou && <div style={{ fontSize: 12.5, color: C.vermelho, fontWeight: 700, marginTop: 4 }}>É mais do que a compra ainda não recebida em {org.f.nome} ({fmtN(max)} {unidadeEm(org)}).</div>}
+      {org && <button onClick={() => setQtd(String(max))} style={{ background: "transparent", border: "none", color: C.navy, fontSize: 12.5, fontWeight: 700, textDecoration: "underline", padding: 0, marginTop: 4 }}>mover todo o saldo ({fmtN(max)})</button>}
+      {passou && <div style={{ fontSize: 12.5, color: C.vermelho, fontWeight: 700, marginTop: 4 }}>É mais do que o saldo de {org.f.nome}: sobram {fmtN(max)} {unidadeEm(org)} (comprado {fmtN(compradoEm(org))} − usado).</div>}
+      {org && max <= 0 && <div style={{ fontSize: 12.5, color: C.vermelho, fontWeight: 700, marginTop: 4 }}>{org.f.nome} não tem saldo deste produto para mover.</div>}
       {msg && <div style={{ background: "#FDECEA", color: C.vermelho, borderRadius: 10, padding: "8px 12px", fontSize: 13, fontWeight: 700, marginTop: 10 }}>{msg}</div>}
       <BotaoSalvar disabled={ocupado || !org || !dst || !(num(qtd) > 0) || passou} cor={C.navy}
         texto={ocupado ? "Movendo…" : org && dst && num(qtd) > 0 ? `Mover ${fmtN(num(qtd))} ${unidadeEm(org)} para ${dst.f.nome}` : "Mover"} onClick={mover} />
