@@ -642,6 +642,23 @@ const sementeDaReceita = (a) => (a && a.produtos || []).find((p) => p && (p.uso 
 // A data REAL do plantio (da execução) vence a que estava planejada; a emergência é refeita quando ainda
 // era a prevista (ou vazia) — a que a pessoa digitou fica. Devolve null quando não há o que mudar.
 const DIAS_ATE_EMERGENCIA = 4;
+// nomes com número em ordem de gente: "Pluviômetro 2" antes de "Pluviômetro 10", talhão 1, 2, 3…
+const compararNomes = (a, b) => String(a || "").localeCompare(String(b || ""), "pt-BR", { numeric: true, sensitivity: "base" });
+// estande contado no monitoramento: vale o ÚLTIMO; cada contagem fica guardada para a média (mesma área e variedade)
+function registrarEstande(reg, parteNome, valor, info) {
+  const v = Math.round(num(valor)); if (!(v > 0)) return reg;
+  const cont = { data: (info && info.data) || hojeISO(), valor: v, pontos: (info && info.pontos) || null, variedade: (info && info.variedade) || "", quem: (info && info.quem) || "" };
+  if (parteNome && Array.isArray(reg.partes) && reg.partes.length) {
+    return { ...reg, partes: reg.partes.map((p, k) => ((p.nome || NOMES_PARTES[k]) === parteNome ? { ...p, estandeFinal: String(v), estandeContagens: [...(p.estandeContagens || []), cont] } : p)) };
+  }
+  return { ...reg, estandeFinal: String(v), estandeContagens: [...(reg.estandeContagens || []), cont] };
+}
+function resumoEstande(reg, variedade) {
+  const lista = ((reg && reg.estandeContagens) || []).filter((c) => !variedade || !c.variedade || c.variedade === variedade);
+  if (!lista.length) return null;
+  const ult = lista[lista.length - 1];
+  return { ultimo: num(ult.valor), data: ult.data, media: Math.round(lista.reduce((s, c) => s + num(c.valor), 0) / lista.length), n: lista.length };
+}
 function lavouraComEmergenciaDoPlantio(lavoura, t, apl, ex, novoId) {
   if (!t || !apl || !ex || moduloDe(apl) !== "semeadura") return null;
   const dia = (iso) => String(iso || "").slice(0, 10);
@@ -6366,7 +6383,7 @@ function TelaFazenda({ fazenda, fazendas, grupos, papel, usuario, naNuvem, equip
           onSalvarConfig={(v) => gravar(kPontoCfg(fazenda.id), v, setPontoCfg, pontoCfg)} />
       )}
       {(secao === "rh" || secao === "fin") && veFinanceiro && abaFin === "func" && veCustos && (
-        <SecaoFuncionarios fazenda={fazenda} funcionarios={funcionarios} usuario={usuario} registrar={registrar} naNuvem={naNuvem} podeAcessoPonto={!!(consultor || ehProdutor)}
+        <SecaoFuncionarios fazenda={fazenda} funcionarios={funcionarios} usuario={usuario} registrar={registrar} naNuvem={naNuvem} podeAcessoPonto={!!(consultor || ehProdutor)} rateio={rateioGrupo}
           pontoCfg={pontoCfg} onSalvarPontoCfg={(v) => gravar(kPontoCfg(fazenda.id), v, setPontoCfg, pontoCfg)}
           onSalvar={(v) => gravar(kFunc(fazenda.id), v, setFuncionarios, funcionarios)}
           onLancarCusto={(c) => gravar(kCusto(fazenda.id, safra), [...(custos || []), { id: idNovo(), ...c }], setCustos, custos)} />
@@ -12256,7 +12273,9 @@ function ModalContratacao({ funcionario, fazenda, usuario, naNuvem, onSalvarFunc
   );
 }
 
-function SecaoFuncionarios({ fazenda, funcionarios, usuario, registrar, onSalvar, onLancarCusto, pontoCfg, onSalvarPontoCfg, podeAcessoPonto, naNuvem }) {
+function SecaoFuncionarios({ fazenda, funcionarios, usuario, registrar, onSalvar, onLancarCusto, pontoCfg, onSalvarPontoCfg, podeAcessoPonto, naNuvem, rateio }) {
+  // fazenda em grupo: as fazendas que podem dividir o custo de cada funcionário
+  const fazendasRateio = rateio ? [{ id: "aqui", nome: fazenda.nome, areaHa: rateio.areaAqui }, ...rateio.irmas.map((ir) => ({ id: ir.f.id, nome: ir.f.nome, areaHa: ir.areaHa, safra: ir.safra }))] : [];
   const [form, setForm] = useState(null);
   const [fichaDe, setFichaDe] = useState(null);   // funcionário com a ficha de contratação aberta
   const [acessoDe, setAcessoDe] = useState(null);   // funcionário com o "app do ponto" aberto
@@ -12322,6 +12341,13 @@ function SecaoFuncionarios({ fazenda, funcionarios, usuario, registrar, onSalvar
   const valorAnuaisDoMes = anuaisDoMes.reduce((s, f) => s + premAnualDe(f), 0);
   // folha "caixa" do mês: salários + comissões mensais + comissões anuais que vencem agora + encargos
   const folhaDoMes = folha - anuais.reduce((s, f) => s + premAnualDe(f) / 12, 0) + valorAnuaisDoMes;
+  // grupo: quanto da folha do mês fica em cada fazenda (cada pessoa pelo rateio dela)
+  const custoMesDe = (f, c) => Math.max(0, (modoPercentual ? c.remuneracao * (1 + pct / 100) : c.custo) - premAnualDe(f) / 12 + (anuaisDoMes.includes(f) ? premAnualDe(f) : 0));
+  const rateioFolha = rateio && lista.some((f) => f.rateio && f.rateio.modo !== "aqui") ? (() => {
+    const brutos = contas.map(({ f, c }) => ({ valor: custoMesDe(f, c), rateio: f.rateio }));
+    const soma = brutos.reduce((s, x) => s + x.valor, 0);
+    return ratearFolha(soma > 0 ? brutos.map((x) => ({ ...x, valor: (x.valor / soma) * folhaDoMes })) : [], fazendasRateio);
+  })() : null;
 
   const r = REGIMES_FOLHA[regime] || REGIMES_FOLHA.pf;
   const cartao = { background: "#fff", border: `1.5px solid ${C.borda}`, borderRadius: 12, padding: "10px 14px", marginBottom: 10 };
@@ -12459,15 +12485,25 @@ function SecaoFuncionarios({ fazenda, funcionarios, usuario, registrar, onSalvar
         </button>
         {folha > 0 && (
           <button disabled={lancado} onClick={() => {
-            onLancarCusto({
-              descricao: `Folha ${mesRef} — ${lista.length} funcionário${lista.length > 1 ? "s" : ""} com encargos${anuaisDoMes.length ? ` + comissão anual de ${anuaisDoMes.map((f) => f.nome).join(", ")}` : ""}`,
-              categoria: "Mão de obra", valor: Math.round(folhaDoMes * 100) / 100, data: hoje, ciclo: "Ambas", talhaoId: null,
-              quem: (usuario && usuario.nomeUsuario) || "",
-            });
-            registrar && registrar("Folha lançada nos custos", `${mesRef} · ${fmtMoeda(folhaDoMes)}`);
+            const desc = `Folha ${mesRef} — ${lista.length} funcionário${lista.length > 1 ? "s" : ""} com encargos${anuaisDoMes.length ? ` + comissão anual de ${anuaisDoMes.map((f) => f.nome).join(", ")}` : ""}`;
+            const base = { categoria: "Mão de obra", data: hoje, ciclo: "Ambas", talhaoId: null, quem: (usuario && usuario.nomeUsuario) || "" };
+            if (!rateioFolha) { onLancarCusto({ ...base, descricao: desc, valor: Math.round(folhaDoMes * 100) / 100 }); registrar && registrar("Folha lançada nos custos", `${mesRef} · ${fmtMoeda(folhaDoMes)}`); setLancado(true); return; }
+            // grupo: cada fazenda recebe a parte dela da folha (mesmo rateioId)
+            const rid = idNovo();
+            const parte = (v) => ({ ...base, valor: v, descricao: `${desc} (rateio ${rateio.nomeGrupo}: ${fmtMoeda(v)} de ${fmtMoeda(folhaDoMes)})`, rateioId: rid, rateioTotal: Math.round(folhaDoMes * 100) / 100, rateioGrupo: rateio.nomeGrupo });
+            if (rateioFolha.aqui > 0) onLancarCusto(parte(rateioFolha.aqui));
+            (async () => {
+              const falhas = [];
+              for (const f of fazendasRateio.filter((x) => x.id !== "aqui" && rateioFolha[x.id] > 0)) {
+                try { await NuvemDados.gravarColecao(f.id, "custos", f.safra, [], [{ id: idNovo(), ...parte(rateioFolha[f.id]) }]); }
+                catch (e) { falhas.push(f.nome); }
+              }
+              if (falhas.length) { try { alert(`Não consegui lançar a folha em: ${falhas.join(", ")}. Lance a parte dessas fazendas à mão.`); } catch (e) {} }
+            })();
+            registrar && registrar("Folha do grupo lançada nos custos", `${mesRef} · ${fazendasRateio.filter((x) => rateioFolha[x.id] > 0).map((x) => `${x.id === "aqui" ? "aqui" : x.nome} ${fmtMoeda(rateioFolha[x.id])}`).join(" · ")}`);
             setLancado(true);
           }} style={{ flex: 1, padding: 12, background: lancado ? C.fundo : "#fff", color: lancado ? C.cinza : C.navy, border: `1.5px solid ${lancado ? C.borda : C.navy}`, borderRadius: 10, fontWeight: 800, fontSize: 13 }}>
-            {lancado ? "✓ folha lançada" : `💰 Lançar folha de ${mesRef} nos Custos (${fmtMoeda(folhaDoMes)})`}
+            {lancado ? "✓ folha lançada" : `💰 Lançar folha de ${mesRef} nos Custos (${fmtMoeda(rateioFolha ? rateioFolha.aqui : folhaDoMes)}${rateioFolha ? ` aqui + ${fmtMoeda(Math.round((folhaDoMes - rateioFolha.aqui) * 100) / 100)} nas outras fazendas` : ""})`}
           </button>
         )}
       </div>
@@ -12493,6 +12529,30 @@ function SecaoFuncionarios({ fazenda, funcionarios, usuario, registrar, onSalvar
           {num(form.salario) > 0 && (
             <Conta c={contaFuncionario(num(form.salario), num(form.comissaoMensal) + num(form.comissaoAnual) / 12, Math.max(0, Math.floor(num(form.dependentes))), regime, provisaoRescisao)} titulo="Como fica esta pessoa" />
           )}
+          {rateio && (() => {
+            const rt = form.rateio || { modo: "aqui" };
+            const somaPct = fazendasRateio.reduce((s, f) => s + num((rt.pct || {})[f.id]), 0);
+            return (
+              <div style={{ background: C.verdeBg, borderRadius: 10, padding: "8px 10px", marginTop: 10 }}>
+                <b style={{ color: C.navy, fontSize: 13 }}>🤝 Custo deste funcionário no {rateio.nomeGrupo}</b>
+                <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginTop: 6 }}>
+                  {[["aqui", "Só esta fazenda"], ["area", "Dividir pela área"], ["pct", "Dividir por %"]].map(([id, rot]) => <button key={id} type="button" onClick={() => setForm({ ...form, rateio: { ...rt, modo: id } })} style={{ padding: "7px 10px", borderRadius: 8, border: "none", fontWeight: 800, fontSize: 12.5, background: rt.modo === id ? C.navy : "#fff", color: rt.modo === id ? "#fff" : C.navyEscuro }}>{rot}</button>)}
+                </div>
+                {rt.modo === "area" && <div style={{ fontSize: 12, color: C.navyEscuro, marginTop: 6 }}>{fazendasRateio.map((f) => `${f.nome}: ${fmtN((num(f.areaHa) / Math.max(1, fazendasRateio.reduce((s, x) => s + num(x.areaHa), 0))) * 100)}%`).join(" · ")}</div>}
+                {rt.modo === "pct" && (
+                  <div style={{ marginTop: 6 }}>
+                    {fazendasRateio.map((f) => (
+                      <div key={f.id} style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4, fontSize: 13 }}>
+                        <span style={{ flex: 1, minWidth: 0 }}>{f.nome}</span>
+                        <input type="number" inputMode="decimal" value={(rt.pct || {})[f.id] != null ? rt.pct[f.id] : ""} onChange={(e) => setForm({ ...form, rateio: { ...rt, pct: { ...(rt.pct || {}), [f.id]: e.target.value } } })} placeholder="%" style={{ width: 80, marginTop: 0, textAlign: "right", padding: "6px 8px" }} /><span>%</span>
+                      </div>
+                    ))}
+                    <div style={{ fontSize: 12, fontWeight: 800, color: Math.abs(somaPct - 100) < 0.01 ? C.verdeEscuro : C.vermelho, marginTop: 4 }}>soma {fmtN(somaPct)}%{Math.abs(somaPct - 100) < 0.01 ? " ✓" : " — precisa dar 100%"}</div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
           <label>Observação (opcional)</label>
           <input value={form.obs} onChange={(e) => setForm({ ...form, obs: e.target.value })} placeholder="Ex.: comissão de 2% sobre a produtividade, paga na colheita" />
           <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
@@ -12500,6 +12560,7 @@ function SecaoFuncionarios({ fazenda, funcionarios, usuario, registrar, onSalvar
               const doc = { id: form.id || idNovo(), nome: form.nome.trim(), cargo: form.cargo.trim(), salario: num(form.salario) || null, dependentes: Math.max(0, Math.floor(num(form.dependentes))) || 0,
                 comissaoMensal: num(form.comissaoMensal) || 0, comissaoAnual: num(form.comissaoAnual) || 0, comissaoData: (num(form.comissaoAnual) > 0 && form.comissaoData) || null,
                 comissao: null, comissaoPeriodo: null, obs: form.obs.trim() || null,
+                rateio: rateio && form.rateio && form.rateio.modo && form.rateio.modo !== "aqui" ? { modo: form.rateio.modo, pct: form.rateio.modo === "pct" ? Object.fromEntries(Object.entries(form.rateio.pct || {}).map(([k, v]) => [k, num(v)])) : null } : null,
                 celular: String(form.celular || "").trim() || null, acessoPonto: ((form.id && todos.find((x) => x.id === form.id)) || {}).acessoPonto || null, contratacao: ((form.id && todos.find((x) => x.id === form.id)) || {}).contratacao || null };
               onSalvar(form.id ? todos.map((x) => (x.id === form.id ? doc : x)) : [...todos, doc]);
               garantirNoPonto(doc);
@@ -12524,11 +12585,12 @@ function SecaoFuncionarios({ fazenda, funcionarios, usuario, registrar, onSalvar
                 <div style={{ color: C.cinza, fontSize: 11 }}>
                   {premMensalDe(f) > 0 ? `premiação ${fmtMoeda(premMensalDe(f))}/mês · ` : ""}{premAnualDe(f) > 0 ? `premiação ${fmtMoeda(premAnualDe(f))}/ano${f.comissaoData ? ` em ${fmtD(f.comissaoData)}` : ""} · ` : ""}
                   {f.obs ? `${f.obs} · ` : ""}
+                  {rateio && f.rateio && f.rateio.modo !== "aqui" ? `🤝 ${ROTULO_RATEIO[f.rateio.modo]} no grupo · ` : ""}
                   <button onClick={() => setDetalhe(detalhe === f.id ? null : f.id)} className="nao-imprimir" style={{ background: "transparent", border: "none", color: C.navy, fontSize: 11, fontWeight: 700, padding: 0 }}>{detalhe === f.id ? "fechar conta" : "ver conta"}</button>
                   {" · "}
                   {(() => { const a = andamentoContratacao(f.contratacao); return <button onClick={() => setFichaDe(f)} className="nao-imprimir" style={{ background: "transparent", border: "none", color: a.feitos === a.total ? C.verdeEscuro : C.navy, fontSize: 11, fontWeight: 700, padding: 0 }}>📁 contratação {a.feitos}/{a.total}</button>; })()}
                   {" · "}
-                  <button onClick={() => setForm({ ...f, salario: f.salario != null ? String(f.salario) : "", dependentes: String(f.dependentes || 0), comissaoMensal: premMensalDe(f) ? String(premMensalDe(f)) : "", comissaoAnual: premAnualDe(f) ? String(premAnualDe(f)) : "", comissaoData: f.comissaoData || "", obs: f.obs || "", cargo: f.cargo || "" })}
+                  <button onClick={() => setForm({ ...f, salario: f.salario != null ? String(f.salario) : "", dependentes: String(f.dependentes || 0), comissaoMensal: premMensalDe(f) ? String(premMensalDe(f)) : "", comissaoAnual: premAnualDe(f) ? String(premAnualDe(f)) : "", comissaoData: f.comissaoData || "", obs: f.obs || "", cargo: f.cargo || "", rateio: f.rateio ? { modo: f.rateio.modo, pct: Object.fromEntries(Object.entries(f.rateio.pct || {}).map(([k, v]) => [k, String(v)])) } : { modo: "aqui" } })}
                     className="nao-imprimir" style={{ background: "transparent", border: "none", color: C.navy, fontSize: 11, fontWeight: 700, padding: 0 }}>editar</button>
                   {" · "}
                   {tirando === f.id ? (
@@ -14799,6 +14861,23 @@ function SecaoCustos({ podeApagar, fazenda, safra, onAtualizarFazenda, prog, apl
             onSalvar((custos || []).map((x) => (x.id === modal.id ? mesclado : x)));
             registrar && registrar(c.ehBarter ? "Barter editado" : "Custo editado",
               `${c.descricao} · ${c.ehBarter ? `${fmtN(c.sacas)} sacas de soja` : `${c.categoria} · ${fmtMoeda(c.valor)}`}`);
+          } else if (!c.ehBarter && c.rateioValor && rateio) {
+            // custo do grupo: cada fazenda recebe a parte dela em R$ (mesmo rateioId), na safra dela
+            const { rateioValor, parcelas: _pp, ...b } = c;
+            const total = num(b.valor), rid = idNovo();
+            const parte = (v) => ({ ...b, valor: v, descricao: `${b.descricao} (rateio ${rateio.nomeGrupo}: ${fmtMoeda(v)} de ${fmtMoeda(total)})`, rateioId: rid, rateioTotal: total, rateioGrupo: rateio.nomeGrupo });
+            if (rateioValor.aqui > 0) onSalvar([...(custos || []), { id: idNovo(), ...parte(rateioValor.aqui) }]);
+            const falhas = [];
+            (async () => {
+              for (const ir of rateio.irmas) {
+                const p = rateioValor.partes.find((x) => x.id === ir.f.id);
+                if (!p || !(p.sacas > 0)) continue;
+                try { await NuvemDados.gravarColecao(ir.f.id, "custos", ir.safra, [], [{ id: idNovo(), ...parte(p.sacas) }]); }
+                catch (e) { falhas.push(ir.f.nome); registrar && registrar("Rateio do custo falhou", `${ir.f.nome} — lance manualmente ${fmtMoeda(p.sacas)}`); }
+              }
+              if (falhas.length) { try { alert(`Não consegui gravar o custo em: ${falhas.join(", ")}. Lance a parte dessas fazendas à mão.`); } catch (e) {} }
+            })();
+            registrar && registrar("Custo do grupo rateado", `${b.descricao} · ${fmtMoeda(total)}: aqui ${fmtMoeda(rateioValor.aqui)}${rateio.irmas.map((ir) => { const p = rateioValor.partes.find((x) => x.id === ir.f.id); return p && p.sacas > 0 ? ` · ${ir.f.nome} ${fmtMoeda(p.sacas)}` : ""; }).join("")}`);
           } else if (c.ehBarter && c.rateioPartes && rateio) {
             // barter do grupo: cada fazenda recebe a parte dela (mesmo rateioId), na safra dela
             const { rateioPartes, ...b } = c;
@@ -15305,6 +15384,24 @@ function ratearSacas(total, areaAqui, irmas, manual) {
   });
   return { partes, aqui: Math.round((num(total) - partes.reduce((s, p) => s + p.sacas, 0)) * 100) / 100 };
 }
+// Folha dividida entre as fazendas do grupo: cada item {valor, rateio:{modo:'aqui'|'area'|'pct', pct:{id: %}}};
+// fazendas [{id:'aqui'|fazendaId, areaHa}] → {id: R$}. Os centavos que sobram do arredondamento ficam aqui.
+function ratearFolha(itens, fazendas) {
+  const total = {}; for (const f of fazendas || []) total[f.id] = 0;
+  const areaTot = (fazendas || []).reduce((s, f) => s + num(f.areaHa), 0);
+  let geral = 0;
+  for (const it of itens || []) {
+    const r = it.rateio || {}; const v = num(it.valor); geral += v;
+    let pesos = { aqui: 1 };
+    if (r.modo === "area" && areaTot > 0) pesos = Object.fromEntries((fazendas || []).map((f) => [f.id, num(f.areaHa) / areaTot]));
+    else if (r.modo === "pct") { const soma = (fazendas || []).reduce((s, f) => s + num((r.pct || {})[f.id]), 0); if (soma > 0) pesos = Object.fromEntries((fazendas || []).map((f) => [f.id, num((r.pct || {})[f.id]) / soma])); }
+    for (const [id, p] of Object.entries(pesos)) if (id in total) total[id] += v * p;
+  }
+  for (const k of Object.keys(total)) if (k !== "aqui") total[k] = Math.round(total[k] * 100) / 100;
+  total.aqui = Math.round((geral - Object.keys(total).filter((k) => k !== "aqui").reduce((s, k) => s + total[k], 0)) * 100) / 100;
+  return total;
+}
+const ROTULO_RATEIO = { aqui: "só esta fazenda", area: "dividido pela área", pct: "dividido por porcentagem" };
 function ModalCusto({ talhoes, usuario, pagoEmInicial, inicial, onFechar, onSalvar, planoOps, rateio }) {
   const [ratear, setRatear] = useState(false);          // barter do grupo inteiro, dividido entre as fazendas
   const [partesManuais, setPartesManuais] = useState({}); // sacas corrigidas à mão, por fazenda irmã
@@ -15474,6 +15571,33 @@ function ModalCusto({ talhoes, usuario, pagoEmInicial, inicial, onFechar, onSalv
           Serviço cobrado por hectare (hora-máquina, aplicação…)? Digite o R$/ha que o total sai sozinho pela área
           {talhaoId ? " do talhão escolhido" : " da fazenda"}.
         </div>
+        {rateio && !inicial && (() => {
+          const r = ratearSacas(num(valor), rateio.areaAqui, rateio.irmas.map((x) => ({ id: x.f.id, areaHa: x.areaHa })), partesManuais);
+          const linha = { display: "flex", alignItems: "center", gap: 8, padding: "5px 0", borderTop: `1px solid ${C.fundo}`, fontSize: 13 };
+          return (
+            <div style={{ marginTop: 10, border: `1.5px solid ${ratear ? C.verde : C.borda}`, borderRadius: 12, padding: "10px 12px" }}>
+              <label style={{ margin: 0, display: "flex", alignItems: "center", gap: 8, fontSize: 14, color: C.navy }}>
+                <input type="checkbox" checked={ratear} onChange={(e) => { setRatear(e.target.checked); if (e.target.checked) setTalhaoId(""); }} style={{ width: 20, height: 20, flex: "none" }} />
+                🤝 Este custo é do {rateio.nomeGrupo} inteiro — dividir entre as fazendas
+              </label>
+              {!ratear ? <div style={{ fontSize: 12, color: C.cinza, marginTop: 4 }}>Energia, contador, assistência técnica, frete de todo o grupo? Marque: informe o TOTAL acima e o app divide pela área de cada fazenda.</div> : (
+                <div style={{ marginTop: 6 }}>
+                  <div style={{ fontSize: 12, color: C.cinza, marginBottom: 2 }}>Dividido pela área. Se o combinado foi outro, corrija o valor de cada fazenda — esta aqui fica com o que sobrar.</div>
+                  <div style={linha}><b style={{ flex: 1 }}>Esta fazenda</b><span style={{ color: C.cinza, fontSize: 12 }}>{fmtN(rateio.areaAqui)} ha</span><b style={{ width: 110, textAlign: "right", color: r.aqui < 0 ? C.vermelho : C.navy }}>{fmtMoeda(r.aqui)}</b></div>
+                  {rateio.irmas.map((ir) => { const p = r.partes.find((x) => x.id === ir.f.id); return (
+                    <div key={ir.f.id} style={linha}>
+                      <span style={{ flex: 1, minWidth: 0 }}>{ir.f.nome} <span style={{ color: C.cinza, fontSize: 11 }}>· safra {ir.safra}</span></span>
+                      <span style={{ color: C.cinza, fontSize: 12 }}>{fmtN(ir.areaHa)} ha</span>
+                      <input type="number" inputMode="decimal" value={partesManuais[ir.f.id] != null ? partesManuais[ir.f.id] : String(p.sacas)} onChange={(e) => setPartesManuais({ ...partesManuais, [ir.f.id]: e.target.value })} style={{ width: 110, marginTop: 0, textAlign: "right", padding: "6px 8px" }} />
+                    </div>
+                  ); })}
+                  <div style={{ ...linha, fontWeight: 800 }}><span style={{ flex: 1 }}>Total</span><span style={{ color: C.cinza, fontSize: 12, fontWeight: 400 }}>{fmtN(rateio.areaTotal)} ha</span><span style={{ width: 110, textAlign: "right" }}>{fmtMoeda(num(valor))}</span></div>
+                  {r.aqui < 0 && <div style={{ fontSize: 12, color: C.vermelho, fontWeight: 700 }}>As partes das outras fazendas passam do total.</div>}
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </div>
       )}
       <div style={{ display: "flex", gap: 8 }}>
@@ -15517,8 +15641,9 @@ function ModalCusto({ talhoes, usuario, pagoEmInicial, inicial, onFechar, onSalv
         onClick={() => onSalvar(ehBarter
           ? { descricao: descricao.trim(), categoria: categoriaSoja, ehBarter: true, sacas: num(sacas), precoSaca: num(precoSaca) || null, valorTotal: num(valorTotal) || null, moeda: moedaB, dolarTravado: moedaB === "US$" ? num(dolarTravado) || null : null, valor: null, data, ciclo, talhaoId: ratear ? null : talhaoId || null, planoOpId: planoOpId || null, quem: (usuario && usuario.nomeUsuario) || "",
               ...(rateio && ratear && !inicial ? { rateioPartes: ratearSacas(num(sacas), rateio.areaAqui, rateio.irmas.map((x) => ({ id: x.f.id, areaHa: x.areaHa })), partesManuais) } : {}) }
-          : { descricao: descricao.trim(), categoria, valor: num(valor), data, ciclo, talhaoId: talhaoId || null, planoOpId: planoOpId || null, quem: (usuario && usuario.nomeUsuario) || "",
-              pago, vencimento: pago ? (i.vencimento || null) : vencimento, pagoEm: pago ? (i.pagoEm || (i.pago === false ? hojeISO() : null)) : null, parcelas: !inicial && !pago ? Math.max(1, Math.round(num(parcelas)) || 1) : 1 })} />
+          : { descricao: descricao.trim(), categoria, valor: num(valor), data, ciclo, talhaoId: ratear ? null : talhaoId || null, planoOpId: planoOpId || null, quem: (usuario && usuario.nomeUsuario) || "",
+              pago, vencimento: pago ? (i.vencimento || null) : vencimento, pagoEm: pago ? (i.pagoEm || (i.pago === false ? hojeISO() : null)) : null, parcelas: !inicial && !pago && !ratear ? Math.max(1, Math.round(num(parcelas)) || 1) : 1,
+              ...(rateio && ratear && !inicial ? { rateioValor: ratearSacas(num(valor), rateio.areaAqui, rateio.irmas.map((x) => ({ id: x.f.id, areaHa: x.areaHa })), partesManuais) } : {}) })} />
     </Modal>
   );
 }
@@ -20391,7 +20516,7 @@ function SecaoLavoura({ fazenda, lavoura, apls, prog, consultor, registrar, onSa
                       <div style={{ margin: "4px 0", display: "grid", gap: 3 }}>
                         {l.partes.map((p, k) => { const d = diasDesde(p.dataEmergencia); return (
                           <div key={p.id || k} style={{ background: C.fundo, borderRadius: 8, padding: "4px 8px", fontSize: 12.5, display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
-                            <span><b style={{ color: C.navy }}>{p.nome || NOMES_PARTES[k] || k + 1}</b> · {p.variedade || "variedade?"} · {fmtN(num(p.areaHa))} ha{p.anel ? " 🗺️" : ""}{p.dataPlantio ? ` · plantio ${fmtD(p.dataPlantio)}${p.dataPlantioFim && p.dataPlantioFim !== p.dataPlantio ? " a " + fmtD(p.dataPlantioFim) : ""}` : ""}{p.dataEmergencia ? ` · emergência ${fmtD(p.dataEmergencia)}` : " · emergência não informada"}{num(p.estandeFinal) > 0 ? ` · estande ${fmtN(num(p.estandeFinal))} pl/ha` : ""}</span>
+                            <span><b style={{ color: C.navy }}>{p.nome || NOMES_PARTES[k] || k + 1}</b> · {p.variedade || "variedade?"} · {fmtN(num(p.areaHa))} ha{p.anel ? " 🗺️" : ""}{p.dataPlantio ? ` · plantio ${fmtD(p.dataPlantio)}${p.dataPlantioFim && p.dataPlantioFim !== p.dataPlantio ? " a " + fmtD(p.dataPlantioFim) : ""}` : ""}{p.dataEmergencia ? ` · emergência ${fmtD(p.dataEmergencia)}` : " · emergência não informada"}{num(p.estandeFinal) > 0 ? ` · estande ${fmtN(num(p.estandeFinal))} pl/ha` : ""}{(() => { const r = resumoEstande(p, p.variedade); return r && r.n > 1 ? ` (média ${fmtN(r.media)} em ${r.n} contagens)` : ""; })()}</span>
                             {d != null && <b style={{ color: C.verdeEscuro }}>{d} DAE</b>}
                           </div>
                         ); })}
@@ -20431,6 +20556,7 @@ function SecaoLavoura({ fazenda, lavoura, apls, prog, consultor, registrar, onSa
                       return (
                         <div style={{ color: C.navyEscuro, fontWeight: 700 }}>
                           Estande final {fmtN(est)} plantas/ha
+                          {(() => { const r = resumoEstande(l, l.variedade); return r ? <span style={{ fontWeight: 600, color: C.cinza }}> · último em {fmtD(r.data)}{r.n > 1 ? ` · média ${fmtN(r.media)} em ${r.n} contagens` : ""}</span> : null; })()}
                           {porMetro != null ? ` · ${fmtN(porMetro)} plantas/m` : ""}
                           {pct != null && (
                             <span style={{ color: pct < 85 ? C.vermelho : C.verdeEscuro }}>
@@ -20721,7 +20847,7 @@ function ModalLavoura({ talhao, inicial, sugestao, variedades, onFechar, onSalva
           cultura, variedade: variedadeFinal, dataPlantio: plantioFinal, dataEmergencia: emergenciaFinal,
           dataPlantioFim: partesOk.length ? (partesOk.map((p) => p.dataPlantioFim).filter(Boolean).sort().pop() || "") : (dataPlantioFim || ""),
           cicloDias: partesOk.length ? null : (num(cicloDias) > 0 ? Math.round(num(cicloDias)) : null),
-          partes: partesOk.length ? partesOk.map((p) => ({ id: p.id, variedade: (p.variedade || "").trim(), areaHa: num(p.areaHa), dataPlantio: p.dataPlantio || "", dataPlantioFim: p.dataPlantioFim || "", dataEmergencia: p.dataEmergencia || "", cicloDias: num(p.cicloDias) > 0 ? Math.round(num(p.cicloDias)) : (num(cicloConhecido(p.variedade)) || null), nome: p.nome || "", anel: Array.isArray(p.anel) ? p.anel : null, estandeFinal: num(p.estandeFinal) > 0 ? String(Math.round(num(p.estandeFinal))) : "" })) : [],
+          partes: partesOk.length ? partesOk.map((p) => ({ id: p.id, variedade: (p.variedade || "").trim(), areaHa: num(p.areaHa), dataPlantio: p.dataPlantio || "", dataPlantioFim: p.dataPlantioFim || "", dataEmergencia: p.dataEmergencia || "", cicloDias: num(p.cicloDias) > 0 ? Math.round(num(p.cicloDias)) : (num(cicloConhecido(p.variedade)) || null), nome: p.nome || "", anel: Array.isArray(p.anel) ? p.anel : null, estandeFinal: num(p.estandeFinal) > 0 ? String(Math.round(num(p.estandeFinal))) : "", estandeContagens: Array.isArray(p.estandeContagens) ? p.estandeContagens : [] })) : [],
           estandeFinal, espacamento, populacaoSemeada, obs: obs.trim(),
           culturaAnterior, variedadeAnterior: variedadeAnterior.trim(), tecnologia, tecnologiaAnterior: culturaAnterior ? tecnologiaAnterior : "",
         })} />
@@ -22527,7 +22653,7 @@ function SecaoRelatorios({ fazenda, prog, apls, ajustes, chuvas, visitas, kml, e
           </LinhaRel>
         ))}
         {(() => {
-          const medidores = ((fazenda && fazenda.pluviometros) || []).filter((m) => coordOk(m.lat) && coordOk(m.lng));
+          const medidores = ((fazenda && fazenda.pluviometros) || []).filter((m) => coordOk(m.lat) && coordOk(m.lng)).sort((a, b) => compararNomes(a.nome, b.nome));
           const desde = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
           const comMm = medidores.map((m) => ({
             ...m, mm: chuvas.filter((c) => c.pluviometroId === m.id && (c.data || "") >= desde).reduce((s, c) => s + num(c.mm), 0),
@@ -22601,7 +22727,7 @@ function SecaoRelatorios({ fazenda, prog, apls, ajustes, chuvas, visitas, kml, e
         })()}
 
         <TituloRel>Lançamentos</TituloRel>
-        {chuvas.slice().sort((a, b) => (a.data || "").localeCompare(b.data || "")).map((c, i) => (
+        {chuvas.slice().sort((a, b) => (a.data || "").localeCompare(b.data || "") || compararNomes(((fazenda.pluviometros || []).find((m) => m.id === a.pluviometroId) || {}).nome || a.local, ((fazenda.pluviometros || []).find((m) => m.id === b.pluviometroId) || {}).nome || b.local)).map((c, i) => (
           <LinhaRel key={i}>
             <div style={{ display: "flex", justifyContent: "space-between" }}>
               <span>{fmtD(c.data)}{c.local ? ` · ${c.local}` : ""} · {c.quem}</span><b>{fmtN(num(c.mm))} mm</b>
@@ -26568,6 +26694,9 @@ function MonitoramentoPragas({ fazenda, lavoura, kml, usuario, onFechar, onSalva
   const poligonoDo = (tid) => (kml && kml.poligonos ? kml.poligonos.find((g) => g.talhaoId === tid) : null);
   // estande: se a lavoura do talhão não tem, abre a contagem em cada ponto
   const semEstande = !!t && (parteObj ? !(num(parteObj.estandeFinal) > 0) : !(num(lv && lv.estandeFinal) > 0));
+  // já tem estande: o técnico pode contar de novo (vira o último; a média junta com as outras contagens)
+  const [contarEstande, setContarEstande] = useState(false);
+  const pedeEstande = semEstande || contarEstande;
   const espacamentoPadrao = (lv && num(lv.espacamento) > 0) ? String(lv.espacamento) : (cultura === "Algodão" ? "76" : cultura === "Milho" ? "50" : "45");
   const plantasHaDe = (e) => { const esp = num(e && e.espacamento) / 100, m = num(e && e.metros), pl = num(e && e.plantas); return esp > 0 && m > 0 && pl > 0 ? (pl / m) * (10000 / esp) : 0; };
   // GPS ao vivo enquanto o monitoramento está aberto (para guiar até o ponto)
@@ -26602,7 +26731,7 @@ function MonitoramentoPragas({ fazenda, lavoura, kml, usuario, onFechar, onSalva
     setMsg("");
   };
   const chegueiNo = (p) => {
-    setAtual({ n: p.n, lat: posicao ? posicao.lat : p.lat, lng: posicao ? posicao.lng : p.lng, planLat: p.lat, planLng: p.lng, hora: new Date().toTimeString().slice(0, 5), pragas: {}, obs: "", estande: semEstande ? { plantas: "", metros: "1", espacamento: espacamentoPadrao } : null });
+    setAtual({ n: p.n, lat: posicao ? posicao.lat : p.lat, lng: posicao ? posicao.lng : p.lng, planLat: p.lat, planLng: p.lng, hora: new Date().toTimeString().slice(0, 5), pragas: {}, obs: "", estande: pedeEstande ? { plantas: "", metros: "1", espacamento: espacamentoPadrao } : null });
     setMsg("");
   };
   const [itens, setItens] = useState([]);
@@ -26621,7 +26750,7 @@ function MonitoramentoPragas({ fazenda, lavoura, kml, usuario, onFechar, onSalva
   const temFicha = itens.some((x) => x.grupo);
   const novoPonto = (lat, lng) => {
     const n = (pontos.length ? Math.max(...pontos.map((p) => p.n)) : Math.max(0, ...planejados.map((p) => p.n))) + 1;
-    setAtual({ n, lat, lng, hora: new Date().toTimeString().slice(0, 5), pragas: {}, obs: "", estande: semEstande ? { plantas: "", metros: "1", espacamento: espacamentoPadrao } : null });
+    setAtual({ n, lat, lng, hora: new Date().toTimeString().slice(0, 5), pragas: {}, obs: "", estande: pedeEstande ? { plantas: "", metros: "1", espacamento: espacamentoPadrao } : null });
     setMsg("");
   };
   const tocarMapa = (lat, lng) => {
@@ -26679,16 +26808,15 @@ function MonitoramentoPragas({ fazenda, lavoura, kml, usuario, onFechar, onSalva
       talhaoId: t.id, talhaoNome: t.nome, parteNome: parteSel || null, areaHa: parteObj ? parteObj.areaHa : t.areaHa, cultura, variedade: (lv && lv.variedade) || "", dae, emergencia: emergencia || null, metodo, pragas, itens, pontos, obs: obs.trim(), fotos: fotosGeral,
       modoPontos, planejados: modoPontos === "planejado" ? planejados : [], estandeMedio: estandeMedio > 0 ? Math.round(estandeMedio) : null,
     });
-    // estande contado aqui vai para a lavoura do talhão (quando ela ainda não tinha)
-    if (semEstande && estandeMedio > 0 && podeEditarLavoura && onAtualizarLavoura) {
+    // estande contado aqui vai SEMPRE para a lavoura: vale o último, as contagens ficam para a média
+    if (estandeMedio > 0 && onAtualizarLavoura) {
       const esp = num((pontos.find((p) => p.estande) || {}).estande && pontos.find((p) => p.estande).estande.espacamento);
       const lista = lavoura || [];
       const idx = lista.findIndex((l) => l.talhaoId === t.id);
       const base = idx >= 0 ? lista[idx] : { id: idNovo(), talhaoId: t.id, cultura };
       // talhão em partes (A/B): o estande contado é o da parte do monitoramento
-      const novo = parteSel && Array.isArray(base.partes) && base.partes.length
-        ? { ...base, partes: base.partes.map((p, k) => ((p.nome || NOMES_PARTES[k]) === parteSel ? { ...p, estandeFinal: String(Math.round(estandeMedio)) } : p)), espacamento: base.espacamento || (esp > 0 ? String(esp) : "") }
-        : { ...base, estandeFinal: String(Math.round(estandeMedio)), espacamento: base.espacamento || (esp > 0 ? String(esp) : "") };
+      const novo = registrarEstande({ ...base, espacamento: base.espacamento || (esp > 0 ? String(esp) : "") }, parteSel && Array.isArray(base.partes) && base.partes.length ? parteSel : null, estandeMedio,
+        { pontos: estandes.length, variedade: (parteObj && parteObj.variedade) || (lv && lv.variedade) || "", quem: (usuario && usuario.nomeUsuario) || "" });
       onAtualizarLavoura(idx >= 0 ? lista.map((l, i) => (i === idx ? novo : l)) : [...lista, novo]);
     }
   };
@@ -26818,9 +26946,12 @@ function MonitoramentoPragas({ fazenda, lavoura, kml, usuario, onFechar, onSalva
                   </div>
                 );
               })}
-              {semEstande && atual.estande && (
+              {!semEstande && !atual.estande && (
+                <button onClick={() => { setContarEstande(true); setAtual({ ...atual, estande: { plantas: "", metros: "1", espacamento: espacamentoPadrao } }); }} style={{ marginTop: 8, padding: "7px 12px", background: C.verdeBg, color: C.verdeEscuro, border: "none", borderRadius: 10, fontWeight: 800, fontSize: 12.5 }}>🌱 Contar o estande de novo neste ponto</button>
+              )}
+              {pedeEstande && atual.estande && (
                 <div style={{ background: "#fff", borderRadius: 10, padding: "8px 10px", marginTop: 8 }}>
-                  <div style={{ fontWeight: 800, color: C.navy, fontSize: 12.5 }}>🌱 Estande <span style={{ fontWeight: 600, color: C.cinza }}>· o talhão ainda não tem estande lançado — conte as plantas aqui</span></div>
+                  <div style={{ fontWeight: 800, color: C.navy, fontSize: 12.5 }}>🌱 Estande <span style={{ fontWeight: 600, color: C.cinza }}>{semEstande ? "· o talhão ainda não tem estande lançado — conte as plantas aqui" : "· nova contagem — vira o último estande; a média junta com as anteriores"}</span></div>
                   <div style={{ display: "flex", gap: 6, alignItems: "flex-end", marginTop: 4, flexWrap: "wrap" }}>
                     <div><label style={{ marginTop: 0, fontSize: 10.5 }}>Plantas contadas</label><input type="number" inputMode="numeric" value={atual.estande.plantas} onChange={(e) => setAtual({ ...atual, estande: { ...atual.estande, plantas: e.target.value } })} placeholder="ex.: 12" style={{ width: 80, marginTop: 0, textAlign: "center", fontWeight: 800 }} /></div>
                     <div><label style={{ marginTop: 0, fontSize: 10.5 }}>em quantos metros</label><input type="number" inputMode="decimal" value={atual.estande.metros} onChange={(e) => setAtual({ ...atual, estande: { ...atual.estande, metros: e.target.value } })} style={{ width: 70, marginTop: 0, textAlign: "center" }} /></div>
@@ -26864,7 +26995,7 @@ function MonitoramentoPragas({ fazenda, lavoura, kml, usuario, onFechar, onSalva
                 ))}</tbody>
               </table>
               {quadro.every((q) => q.com === 0) && <div style={{ fontSize: 12, color: C.cinza }}>Nenhuma praga encontrada nos pontos.</div>}
-              {estandeMedio > 0 && <div style={{ marginTop: 6, fontSize: 13, fontWeight: 800, color: C.verdeEscuro }}>🌱 Estande médio: {fmtN(Math.round(estandeMedio))} plantas/ha ({estandes.length} {estandes.length === 1 ? "ponto" : "pontos"}){podeEditarLavoura ? " · vai para a lavoura do talhão ao salvar" : ""}</div>}
+              {estandeMedio > 0 && <div style={{ marginTop: 6, fontSize: 13, fontWeight: 800, color: C.verdeEscuro }}>🌱 Estande médio: {fmtN(Math.round(estandeMedio))} plantas/ha ({estandes.length} {estandes.length === 1 ? "ponto" : "pontos"}){" · vai para Dados da lavoura ao salvar (vira o último estande)"}</div>}
             </div>
           )}
           <label>Observação geral (opcional)</label>
@@ -33690,7 +33821,7 @@ function SecaoChuva({ fazenda, safra, kml, chuvas, lavoura, consultor, usuario, 
   for (const c of noPeriodo) { const k = c.pluviometroId || c.local || "_"; porMedidor[k] = (porMedidor[k] || 0) + num(c.mm); }
   const nMedidores = Object.keys(porMedidor).length;
   const mmPeriodo = nMedidores > 1 ? Object.values(porMedidor).reduce((s, v) => s + v, 0) / nMedidores : noPeriodo.reduce((s, c) => s + num(c.mm), 0);
-  const medidores = (fazenda && fazenda.pluviometros) || [];
+  const medidores = ((fazenda && fazenda.pluviometros) || []).slice().sort((a, b) => compararNomes(a.nome, b.nome));
   // ---- chuva por satélite no mesmo período, por pluviômetro e por talhão ----
   const [sat, setSat] = useState(null);          // null = não buscou · [] · lista
   const [satErro, setSatErro] = useState("");
@@ -33834,9 +33965,9 @@ function SecaoChuva({ fazenda, safra, kml, chuvas, lavoura, consultor, usuario, 
         const comMm = (chuvas || []).filter((c) => num(c.mm) > 0 && c.data).map((c) => ({ ...c, d: String(c.data).slice(0, 10) }));
         const ultimaData = comMm.map((c) => c.d).sort().pop();
         const dia = diaChuva || ultimaData;
-        const doDia = comMm.filter((c) => c.d === dia);
         const medidores = fazenda.pluviometros || [];
         const nomeDe = (c) => (medidores.find((m) => m.id === c.pluviometroId) || {}).nome || c.local || "Pluviômetro";
+        const doDia = comMm.filter((c) => c.d === dia).sort((a, b) => compararNomes(nomeDe(a), nomeDe(b)));
         const doMes = comMm.filter((c) => c.d.slice(0, 7) === dia.slice(0, 7));
         const media = mediaChuva(doDia), mediaMes = mediaChuva(doMes);
         const mesNome = new Date(dia + "T12:00:00").toLocaleDateString("pt-BR", { month: "long" });

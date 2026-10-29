@@ -316,6 +316,25 @@ exports.lembretesDiarios = onSchedule({ schedule: "every day 06:30", timeZone: "
         }
       }
 
+      // ---- emergência prevista (4 dias depois do plantio): avisa no dia ----
+      const emergHoje = [];
+      lavouraDocs.forEach((d) => {
+        const l = d.data() || {};
+        const tn = nomeTalhao(l.talhaoId);
+        const partes = Array.isArray(l.partes) && l.partes.length >= 2 ? l.partes : null;
+        if (partes) partes.forEach((p, k) => { if (p && p.emergenciaAuto && String(p.dataEmergencia || "").slice(0, 10) === hoje) emergHoje.push({ chave: `emerg-${d.id}-${p.nome || k}-${hoje}`, texto: `${tn} (parte ${p.nome || k + 1})` }); });
+        else if (l.emergenciaAuto && String(l.dataEmergencia || "").slice(0, 10) === hoje) emergHoje.push({ chave: `emerg-${d.id}-${hoje}`, texto: tn });
+      });
+      const emergNovas = [];
+      for (const e of emergHoje) if (!(await jaAvisou(fazendaId, e.chave))) emergNovas.push(e.texto);
+      if (emergNovas.length) {
+        const daFaz = await db.collection("usuarios").where("fazendas", "array-contains", fazendaId).get();
+        await mandar(tokensDe(filtrarDestinatarios([...daFaz.docs, ...consultoria.docs], contaFz)),
+          `🌱 Provável emergência hoje — ${nome}`,
+          `${emergNovas.join(", ")}: 4 dias após o plantio. Confira no campo; se for outro dia, corrija em Dados da lavoura.`,
+          destino(fazendaId, "lavoura"));
+      }
+
       // ---- fungicida pelo DAE ----
       const lavoura = lavouraDocs;
       const recs = await base.collection("recomendacoes").get();
