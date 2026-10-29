@@ -179,6 +179,34 @@ const permissoesDaFuncao = (funcao) => {
 };
 const podeFazenda = (p, chave) => !!p && (p.permissoes && typeof p.permissoes[chave] === "boolean" ? p.permissoes[chave] : padraoAreaFazenda(p.funcao, chave));
 
+// ---- versão do aplicativo (só no site publicado: o build grava window.AGROCR_VERSAO) ----
+// lê a versão que está no servidor agora; null = sem internet ou sem versão
+async function versaoNoServidor() {
+  try {
+    const r = await fetch("./?v=" + Date.now(), { cache: "no-store" });
+    if (!r.ok) return null;
+    const m = (await r.text()).match(/AGROCR_VERSAO = '([^']+)'/);
+    return m ? m[1] : null;
+  } catch (e) { return null; }
+}
+// 🔄 Atualizar: com versão nova, pede ao guardião do offline (service worker) para baixá-la — quando ele
+// assume, a página recarrega sozinha (controllerchange no index). Se em 20 s não assumiu, limpa a cópia
+// guardada e recarrega do servidor (o guardião baixa tudo de novo na próxima conferida). Sem versão nova,
+// só recarrega. Sem internet NÃO mexe em nada — o app continua com a cópia guardada.
+async function atualizarAgora(aoEstado) {
+  const diga = (s) => { try { aoEstado && aoEstado(s); } catch (e) {} };
+  diga("conferindo");
+  const nova = await versaoNoServidor();
+  if (!nova) { diga(""); alert("Sem internet agora. O aplicativo continua funcionando com a versão guardada — tente de novo quando tiver sinal."); return; }
+  if (nova === window.AGROCR_VERSAO) { window.location.reload(); return; }
+  diga("baixando");
+  try { const regs = navigator.serviceWorker ? await navigator.serviceWorker.getRegistrations() : []; await Promise.all(regs.map((r) => r.update().catch(() => {}))); } catch (e) {}
+  setTimeout(async () => {
+    try { const ks = await caches.keys(); await Promise.all(ks.filter((k) => k.startsWith("agrocr-")).map((k) => caches.delete(k))); } catch (e) {}
+    window.location.reload();
+  }, 20000);
+}
+
 const K_FAZENDAS = "agrocr:fazendas";
 const K_GRUPOS = "agrocr:grupos";   // produtores/grupos com mais de uma fazenda
 const K_EQUIPE = "agrocr:equipe";   // nomes da consultoria, para escolher em vez de digitar
@@ -1454,6 +1482,24 @@ export default function App() {
   const [salvando, setSalvando] = useState(false);
 
   const [verSenha, setVerSenha] = useState(false);   // janela "Minha conta" (toque no nome, no topo)
+  // versão nova publicada enquanto a aba está aberta (computador fica dias sem recarregar): acende o 🔄
+  const [versaoNova, setVersaoNova] = useState("");
+  const [atualizando, setAtualizando] = useState("");
+  useEffect(() => {
+    if (!window.AGROCR_VERSAO) return;
+    let ultima = 0;
+    const conferir = async () => {
+      if (Date.now() - ultima < 60000 || (typeof navigator !== "undefined" && navigator.onLine === false)) return;
+      ultima = Date.now();
+      const v = await versaoNoServidor();
+      if (v && v !== window.AGROCR_VERSAO) setVersaoNova(v);
+    };
+    const aoVoltar = () => { if (document.visibilityState === "visible") conferir(); };
+    const relogio = setInterval(conferir, 20 * 60 * 1000);
+    window.addEventListener("focus", conferir); document.addEventListener("visibilitychange", aoVoltar);
+    const primeira = setTimeout(conferir, 15000);
+    return () => { clearInterval(relogio); clearTimeout(primeira); window.removeEventListener("focus", conferir); document.removeEventListener("visibilitychange", aoVoltar); };
+  }, []);
   // Nome gravado como e-mail: a pessoa troca pelo toque no nome, no topo ("Minha conta"); nada abre sozinho.
   // despesas da consultoria (só AgroCR): tela por cima de tudo + trajeto que segue gravando em qualquer tela
   const [verDespesas, setVerDespesas] = useState(false);
@@ -1786,6 +1832,12 @@ export default function App() {
           {perfil && perfil.tipo === "consultoria" && !MARCA_VENDA && (
             <button onClick={() => setVerDespesas(true)} style={{ background: trajetoAtivo ? "#1E88E5" : "rgba(255,255,255,.12)", color: "#fff", border: `1px solid ${trajetoAtivo ? "#1E88E5" : "rgba(255,255,255,.3)"}`, borderRadius: 8, padding: "6px 10px", fontSize: 12, fontWeight: 800, flex: "none", whiteSpace: "nowrap" }}>
               {trajetoAtivo ? `🛣 ${fmtN(Math.round(num(trajetoAtivo.km) * 10) / 10)} km` : "🚗 Despesas"}
+            </button>
+          )}
+          {window.AGROCR_VERSAO && (
+            <button onClick={() => atualizarAgora(setAtualizando)} disabled={!!atualizando} title={versaoNova ? `Versão nova publicada (${versaoNova}) — toque para atualizar` : "Buscar a versão mais nova do aplicativo"}
+              style={{ background: versaoNova ? C.verde : "rgba(255,255,255,.12)", color: "#fff", border: `1px solid ${versaoNova ? C.verde : "rgba(255,255,255,.3)"}`, borderRadius: 8, padding: "6px 10px", fontSize: 12, fontWeight: versaoNova ? 900 : 700, flex: "none", whiteSpace: "nowrap" }}>
+              {atualizando === "conferindo" ? "🔄 Conferindo…" : atualizando === "baixando" ? "🔄 Baixando a versão nova…" : versaoNova ? "🔄 Versão nova — atualizar" : "🔄 Atualizar"}
             </button>
           )}
           {perfil && (
