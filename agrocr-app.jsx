@@ -664,7 +664,7 @@ function lavouraComEmergenciaDoPlantio(lavoura, t, apl, ex, novoId) {
   const dia = (iso) => String(iso || "").slice(0, 10);
   const etapas = Array.isArray(ex.etapas) && ex.etapas.length ? ex.etapas : (dia(ex.data) ? [{ inicio: dia(ex.data), fim: dia(ex.dataFim) || dia(ex.data), areaHa: num(ex.areaExecutada) || num(t.areaHa) }] : []);
   if (!etapas.length) return null;
-  const sem = sementeDaReceita(apl);
+  const sem = sementeDoTalhao(apl, t.id);
   const variedadeRec = sem && sem.nome ? String(sem.nome) : "";
   const existe = (lavoura || []).some((l) => l.talhaoId === t.id);
   const atual = (lavoura || []).find((l) => l.talhaoId === t.id) || { id: novoId, talhaoId: t.id };
@@ -689,7 +689,7 @@ function lavouraComEmergenciaDoPlantio(lavoura, t, apl, ex, novoId) {
   return { lista, registro: nova, emergencia: nova.dataEmergencia || "", partes: (nova.partes || []).length };
 }
 const ehSementeDaReceita = (p, produtos) => !!p && (p.uso === "semente" || p.unidade === "bag" || p === sementeDaReceita({ produtos }));
-function consumoDaExecucao(produtos, ex, ha) {
+function consumoDaExecucao(produtos, ex, ha, tid) {
   const saida = [];
   // plantio em etapas: a semente sai por etapa, da variedade que foi plantada em cada uma
   const etapas = ex && Array.isArray(ex.etapas) && ex.etapas.length ? ex.etapas : null;
@@ -699,14 +699,18 @@ function consumoDaExecucao(produtos, ex, ha) {
     const cont = p.continuacao && p.continuacao.nome ? p.continuacao : null;
     const frA = cont ? Math.min(1, Math.max(0, num(cont.fracao))) : 1;
     const rA = realDe(p.nome);
+    // variedade escolhida para este talhão (semeadura com variedade por talhão)
+    const vTal = tid && Array.isArray(p.variedades) ? p.variedades.find((v) => v && v.nome && Array.isArray(v.talhoes) && v.talhoes.includes(tid)) : null;
     if (etapas && !rA && !cont && ehSementeDaReceita(p, produtos)) {
-      // cada etapa desconta a variedade que plantou (a da receita, ou a que o operador trocou)
+      // cada etapa desconta a variedade que plantou (a da receita/do talhão, ou a que o operador trocou)
       const porNome = {};
-      for (const et of etapas) { const nome = et.variedade && chaveProduto(et.variedade) !== chaveProduto(p.nome) ? et.variedade : p.nome; porNome[nome] = (porNome[nome] || 0) + num(p.dose) * num(et.areaHa); }
+      const nomeBase = vTal ? vTal.nome : p.nome, doseBase = vTal ? num(vTal.dose) : num(p.dose);
+      for (const et of etapas) { const nome = et.variedade && chaveProduto(et.variedade) !== chaveProduto(nomeBase) ? et.variedade : nomeBase; porNome[nome] = (porNome[nome] || 0) + doseBase * num(et.areaHa); }
       for (const nome of Object.keys(porNome)) { const a = normalizar(porNome[nome], p.unidade); saida.push({ nome, v: a.v, base: a.base, real: false, unidade: p.unidade, dose: p.dose, ...(nome !== p.nome ? { variedadeTrocada: p.nome } : {}) }); }
       continue;
     }
     if (!rA && !cont && Array.isArray(p.variedades) && p.variedades.length > 1 && ehSementeDaReceita(p, produtos)) {
+      if (vTal) { const a = normalizar(num(vTal.dose) * ha, vTal.unidade || p.unidade); if (a.v > 0) saida.push({ nome: vTal.nome, v: a.v, base: a.base, real: false, unidade: vTal.unidade || p.unidade, dose: vTal.dose, ...(chaveProduto(vTal.nome) !== chaveProduto(p.nome) ? { variedadeTrocada: p.nome } : {}) }); continue; }
       // várias variedades planejadas no talhão: cada uma sai pela área dela (proporcional ao que foi executado)
       const tot = p.variedades.reduce((s, v) => s + num(v.areaHa), 0) || 1;
       for (const v of p.variedades) { if (!v.nome) continue; const a = normalizar(num(v.dose) * num(v.areaHa) * (ha / tot), v.unidade || p.unidade); if (a.v > 0) saida.push({ nome: v.nome, v: a.v, base: a.base, real: false, unidade: v.unidade || p.unidade, dose: v.dose, ...(chaveProduto(v.nome) !== chaveProduto(p.nome) ? { variedadeTrocada: p.nome } : {}) }); }
@@ -783,9 +787,36 @@ function planoDeVariedades(lista, populacao, areaHa) {
   });
   return out;
 }
+// Variedades escolhidas POR TALHÃO: cada variedade fica com a área dos talhões dela (talhão sem escolha fica com a 1ª,
+// a da receita). Mesmo formato do planoDeVariedades, mais `talhoes` (ids) e `talhoesNomes`. falta = o que o saldo não cobre.
+function variedadesPorTalhao(lista, populacao, talhoes, escolha) {
+  const pop = num(populacao);
+  if (!(pop > 0) || !(lista || []).length) return [];
+  const valida = (n) => !!n && lista.some((v) => v.nome && chaveProduto(v.nome) === chaveProduto(n));
+  const nomeDe = (t) => { const e = (escolha || {})[t.id]; return valida(e) ? e : lista[0].nome; };
+  return lista.map((v) => {
+    const un = v.unidade === "kg" ? "kg" : "bag";
+    const popV = num(v.populacao) > 0 ? num(v.populacao) : pop;
+    const dose = doseSementePorHa(popV, un, { porBag: v.porBag, pms: v.pms });
+    const meus = v.nome ? (talhoes || []).filter((t) => chaveProduto(nomeDe(t)) === chaveProduto(v.nome)) : [];
+    const ha = Math.round(meus.reduce((s, t) => s + num(t.areaHa), 0) * 100) / 100;
+    const cobre = dose > 0 ? Math.floor((Math.max(0, num(v.saldo)) / dose) * 100) / 100 : 0;
+    const falta = Math.max(0, dose * ha - Math.max(0, num(v.saldo)));
+    return { nome: v.nome, unidade: un, dose, areaHa: ha, cobre, falta: Math.round(falta * 10000) / 10000, sementesPorBag: v.porBag || null, pms: v.pms || null, populacao: popV, talhoes: meus.map((t) => t.id), talhoesNomes: meus.map((t) => t.nome || "") };
+  });
+}
+// a semente que vale NAQUELE talhão: com variedade escolhida por talhão, é a variedade dele (dose/bag/PMS dela)
+function sementeDoTalhao(apl, tid) {
+  const s = sementeDaReceita(apl);
+  if (!s || !tid || !Array.isArray(s.variedades)) return s;
+  const v = s.variedades.find((x) => x && x.nome && Array.isArray(x.talhoes) && x.talhoes.includes(tid));
+  return v ? { ...s, nome: v.nome, dose: v.dose, unidade: v.unidade || s.unidade, sementesPorBag: v.sementesPorBag || s.sementesPorBag, pms: v.pms || s.pms, variedades: null } : s;
+}
 // Variedades em cadeia atravessam os talhões na ORDEM da recomendação: quanto de cada variedade cai no trecho
 // que começa em inicioHa e tem areaHa (o talhão). Devolve as variedades com `ha` dentro do trecho.
-function fatiaDasVariedades(variedades, inicioHa, areaHa) {
+// Variedades escolhidas por talhão (têm `talhoes`): o talhão tid leva só a dele, na área inteira.
+function fatiaDasVariedades(variedades, inicioHa, areaHa, tid) {
+  if (tid && (variedades || []).some((v) => v && Array.isArray(v.talhoes))) return (variedades || []).filter((v) => v && v.nome && (v.talhoes || []).includes(tid)).map((v) => ({ ...v, ha: Math.round(num(areaHa) * 100) / 100 }));
   const out = []; let acc = 0; const i0 = num(inicioHa), i1 = i0 + num(areaHa);
   for (const v of variedades || []) {
     const vi = acc, vf = acc + num(v.areaHa); acc = vf;
@@ -5636,7 +5667,7 @@ function calcularEstoqueDe(fazenda, prog, apls, ajustes, entregas) {
       const ha = t ? areaAplicada(a, t) : 0;
       // Se o operador informou o gasto real no tanque, é ele que vale. Senão, dose por hectare
       // × área do talhão. Produto que acaba no meio e continua com outro: A e B em linhas separadas.
-      for (const { nome, v, base } of consumoDaExecucao(a.produtos, ex, ha)) {
+      for (const { nome, v, base } of consumoDaExecucao(a.produtos, ex, ha, tid)) {
         const ch = acharBucket(nome, cicloApl);
         if (!linhas[ch]) linhas[ch] = criar(nome, cicloApl, base, "Outro", "");
         linhas[ch].usado += v;
@@ -14511,7 +14542,7 @@ function SecaoCustos({ podeApagar, fazenda, safra, onAtualizarFazenda, prog, apl
       if (!ex) continue;
       const t = talhoes.find((x) => x.id === tid);
       const ha = t ? areaAplicada(a, t) : 0;
-      for (const p of consumoDaExecucao(a.produtos, ex, ha)) {
+      for (const p of consumoDaExecucao(a.produtos, ex, ha, tid)) {
         const { v, base } = p;
         const k = chaveProduto(p.nome);
         if (baseCompra[k] && baseCompra[k] !== base) { unidadesIncompativeis.add(`${p.nome} (comprado em ${baseCompra[k]}, dose em ${base})`); continue; }
@@ -20464,7 +20495,7 @@ function SecaoLavoura({ fazenda, lavoura, apls, prog, consultor, registrar, onSa
     // duas (ou mais) semeaduras executadas no mesmo talhão: cada uma vira uma parte, com a área que o operador fez
     // cada etapa de plantio (ou cada semeadura inteira) vira uma parte, com a variedade e a área que o operador fez
     const etapasTodas = feitas.flatMap(({ a, ex }) => {
-      const sem = sementeDe(a);
+      const sem = sementeDoTalhao(a, t.id) || sementeDe(a);
       if (Array.isArray(ex.etapas) && ex.etapas.length) return ex.etapas.map((e, i) => ({ id: `${a.id}#${e.id || i}`, variedade: e.variedade || (sem ? sem.nome : ""), areaHa: Math.round(num(e.areaHa) * 100) / 100, dataPlantio: e.inicio || "", dataPlantioFim: e.fim || "", dataEmergencia: "" }));
       return [{ id: a.id, variedade: sem ? sem.nome : "", areaHa: Math.round(areaAplicada(a, t) * 100) / 100, dataPlantio: String(ex.data || "").slice(0, 10), dataPlantioFim: ex.dataFim || "", dataEmergencia: "" }];
     });
@@ -27830,7 +27861,7 @@ function TabelaCalda({ produtos, vazao, talhoes, titulo = "Quanto preparar", cap
             {lista.map((p, i) => {
               if (Array.isArray(p.variedades) && p.variedades.length > 1) {
                 // semente com várias variedades: cada uma só no trecho dela (no total, as áreas inteiras)
-                const partes = t.total ? p.variedades.map((v) => ({ ...v, ha: num(v.areaHa) })) : fatiaDasVariedades(p.variedades, inicioDe(t), t.areaHa);
+                const partes = t.total ? p.variedades.map((v) => ({ ...v, ha: num(v.areaHa) })) : fatiaDasVariedades(p.variedades, inicioDe(t), t.areaHa, t.id);
                 return (
                   <React.Fragment key={i}>
                     {partes.map((v, k) => (
@@ -28087,7 +28118,7 @@ function ReceitaPorHa({ produtos, titulo, numerar }) {
       <div style={{ fontWeight: 900, fontSize: 15, color: C.navy }}>📋 {titulo || "Receita por hectare"} <span style={{ fontWeight: 600, fontSize: 12, color: C.cinza }}>{numerar === false ? "" : "· na ordem de mistura"}</span></div>
       {lista.map((p, i) => (
         <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, padding: "5px 0", borderBottom: `1px dashed ${C.borda}`, fontSize: 14 }}>
-          <span style={{ minWidth: 0 }}>{numerar === false ? null : <b>{i + 1}º </b>}{p.nome}<Ativo nome={p.nome} />{Array.isArray(p.variedades) && p.variedades.length > 1 ? <div style={{ fontSize: 11.5, color: C.verdeEscuro, fontWeight: 700 }}>🌱 {p.variedades.map((v, k) => `${k + 1}ª ${v.nome} ${fmtN(num(v.areaHa))} ha`).join(" · ")}</div> : null}{p.continuacao && p.continuacao.nome ? <div style={{ fontSize: 11.5, color: C.verdeEscuro, fontWeight: 700 }}>➡ quando acabar: {p.continuacao.nome} {fmtN(num(p.continuacao.dose))} {p.continuacao.unidade}/ha</div> : null}</span>
+          <span style={{ minWidth: 0 }}>{numerar === false ? null : <b>{i + 1}º </b>}{p.nome}<Ativo nome={p.nome} />{Array.isArray(p.variedades) && p.variedades.length > 1 ? <div style={{ fontSize: 11.5, color: C.verdeEscuro, fontWeight: 700 }}>🌱 {p.variedades.filter((v) => !Array.isArray(v.talhoes) || v.talhoes.length).map((v, k) => Array.isArray(v.talhoes) ? `${v.nome} → ${(v.talhoesNomes || []).join(", ")} (${fmtN(num(v.areaHa))} ha)` : `${k + 1}ª ${v.nome} ${fmtN(num(v.areaHa))} ha`).join(" · ")}</div> : null}{p.continuacao && p.continuacao.nome ? <div style={{ fontSize: 11.5, color: C.verdeEscuro, fontWeight: 700 }}>➡ quando acabar: {p.continuacao.nome} {fmtN(num(p.continuacao.dose))} {p.continuacao.unidade}/ha</div> : null}</span>
           <b style={{ whiteSpace: "nowrap", fontSize: 16, color: C.navy }}>{fmtN(num(p.dose))} {p.unidade}/ha</b>
         </div>
       ))}
@@ -28201,13 +28232,13 @@ function TabelaSemeadura({ espacamento, populacao, talhoes, semente }) {
       </div>
       {semente && Array.isArray(semente.variedades) && semente.variedades.length > 1 && (
         <div style={{ background: "#fff", border: `1.5px solid ${C.verdeEscuro}`, borderRadius: 10, padding: "8px 12px", marginBottom: 6, fontSize: 13 }}>
-          <div style={{ fontWeight: 900, color: C.verdeEscuro, marginBottom: 2 }}>🌱 Variedades, uma depois da outra</div>
-          {semente.variedades.map((v, i) => (
+          <div style={{ fontWeight: 900, color: C.verdeEscuro, marginBottom: 2 }}>{semente.variedades.some((v) => Array.isArray(v.talhoes)) ? "🌱 Variedade de cada talhão" : "🌱 Variedades, uma depois da outra"}</div>
+          {semente.variedades.filter((v) => !Array.isArray(v.talhoes) || v.talhoes.length).map((v, i) => (
             <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 8, borderTop: i ? `1px dashed ${C.borda}` : "none", padding: "3px 0" }}>
-              <span><b>{i + 1}ª</b> {v.nome} · {fmtN(num(v.areaHa))} ha{num(v.populacao) > 0 ? <span style={{ color: C.cinza }}> · {fmtN(num(v.populacao) / 1000)} mil/ha · <b style={{ color: C.navy }}>{fmtN(Math.round((num(v.populacao) / metrosLineares) * 10) / 10)} sementes/m</b></span> : null}</span><b>{fmtN(num(v.dose) * num(v.areaHa))} {v.unidade || unSem}</b>
+              <span>{Array.isArray(v.talhoes) ? null : <b>{i + 1}ª </b>}{v.nome} · {fmtN(num(v.areaHa))} ha{Array.isArray(v.talhoes) ? <span style={{ color: C.navy, fontWeight: 800 }}> · {(v.talhoesNomes || []).join(", ")}</span> : null}{num(v.populacao) > 0 ? <span style={{ color: C.cinza }}> · {fmtN(num(v.populacao) / 1000)} mil/ha · <b style={{ color: C.navy }}>{fmtN(Math.round((num(v.populacao) / metrosLineares) * 10) / 10)} sementes/m</b></span> : null}</span><b>{fmtN(num(v.dose) * num(v.areaHa))} {v.unidade || unSem}</b>
             </div>
           ))}
-          {semente.variedades.some((v) => num(v.falta) > 0) && <div style={{ fontSize: 12, color: C.vermelho, fontWeight: 800, marginTop: 3 }}>⚠ A última variedade não tem saldo para fechar: faltam {fmtN(num(semente.variedades[semente.variedades.length - 1].falta))} {semente.variedades[semente.variedades.length - 1].unidade || unSem}.</div>}
+          {semente.variedades.some((v) => Array.isArray(v.talhoes)) ? semente.variedades.filter((v) => num(v.falta) > 0).map((v) => <div key={v.nome} style={{ fontSize: 12, color: C.vermelho, fontWeight: 800, marginTop: 3 }}>⚠ {v.nome}: faltam {fmtN(num(v.falta))} {v.unidade || unSem} no saldo.</div>) : semente.variedades.some((v) => num(v.falta) > 0) && <div style={{ fontSize: 12, color: C.vermelho, fontWeight: 800, marginTop: 3 }}>⚠ A última variedade não tem saldo para fechar: faltam {fmtN(num(semente.variedades[semente.variedades.length - 1].falta))} {semente.variedades[semente.variedades.length - 1].unidade || unSem}.</div>}
         </div>
       )}
 
@@ -28663,7 +28694,7 @@ function RelatorioOperacional({ fazenda, apls, mod, capacidade, onVoltar, kml })
           // semente em cadeia: cada variedade sai só pelo trecho dela (ordem dos talhões da recomendação)
           let inicio = 0;
           for (const tid of (a.talhaoIds || [])) { if (tid === t.id) break; const tt = talhoes.find((x) => x.id === tid); if (tt) inicio += areaAplicada(a, tt); }
-          for (const v of fatiaDasVariedades(p.variedades, inicio, areaAplicada(a, t))) {
+          for (const v of fatiaDasVariedades(p.variedades, inicio, areaAplicada(a, t), t.id)) {
             const chV = chaveProduto(v.nome);
             const n = normalizar(num(v.dose) * v.ha, v.unidade || p.unidade);
             if (!resumo[chV]) resumo[chV] = { nome: v.nome, base: n.base, total: 0 };
@@ -28797,7 +28828,7 @@ function RelatorioOperacional({ fazenda, apls, mod, capacidade, onVoltar, kml })
                       </div>
                     )}
 
-                    {mod.usaSemeadura && <TabelaSemeadura espacamento={a.espacamento} populacao={a.populacao} talhoes={[tAplicado]} semente={sementeDaReceita(a)} />}
+                    {mod.usaSemeadura && <TabelaSemeadura espacamento={a.espacamento} populacao={a.populacao} talhoes={[tAplicado]} semente={sementeDoTalhao(a, tAplicado.id)} />}
                     {mod.usaSemeadura && <QuadroSulco apl={a} talhoes={[tAplicado]} capacidade={null} />}
                     <ReceitaPorHa produtos={produtosSemSulco(a)} titulo={mod.usaSemeadura ? "Semente e tratamento por hectare" : "Receita por hectare"} numerar={!mod.usaSemeadura} />
                     <TabelaCalda produtos={mod.usaSemeadura ? produtosSemSulco(a) : a.produtos} vazao={a.vazao} talhoes={[tAplicado]} titulo="Quanto preparar neste talhão"
@@ -31843,14 +31874,18 @@ function ModalRecomendacao({ talhoes, estoque, mod, inicial, usuario, lavoura, e
 
   // semente que não fecha o talhão: outras variedades do estoque, uma depois da outra (só na semeadura)
   const [variedadesExtra, setVariedadesExtra] = useState(() => (ini.produtos || []).flatMap((p) => (p.variedades || []).slice(1).map((v) => ({ nome: v.nome, populacao: num(v.populacao) > 0 ? String(v.populacao) : "" }))));
+  // como dividir as variedades: "talhao" = Daniel escolhe o talhão de cada uma; "cadeia" = uma depois da outra até acabar o saldo
+  const [modoVariedade, setModoVariedade] = useState(() => ((ini.produtos || []).some((p) => (p.variedades || []).some((v) => Array.isArray(v.talhoes))) ? "talhao" : "cadeia"));
+  const [talhaoVariedade, setTalhaoVariedade] = useState(() => { const m = {}; for (const p of ini.produtos || []) for (const v of p.variedades || []) for (const tid of v.talhoes || []) m[tid] = v.nome; return m; });
   const popDaExtra = (x) => (num(x.populacao) > 0 ? (num(x.populacao) < 1000 ? num(x.populacao) * 1000 : num(x.populacao)) : num(populacao));
   const linhasDeSemente = disponiveis.filter((d) => /^sementes?$/i.test(String(d.categoria || "")) || ehNomeDeSemente(d.produto, d.categoria));
   const cadeiaSemente = (() => {
     if (!mod.usaSemeadura || !variedadesExtra.length) return null;
     const s = produtosCalculados.find((p) => ehSementeReceita(p)); if (!s) return null;
     const itens = [{ nome: s.nome, populacao: "" }, ...variedadesExtra].map((x) => { const nome = x.nome; const it = nome ? acharProduto(nome) : null; const info = infoSementeDe(nome, estoque); return { nome, saldo: it ? Math.max(0, saldoDe(it)) : 0, unidade: it && it.base === "kg" ? "kg" : "bag", porBag: info.porBag, pms: info.pms, populacao: popDaExtra(x) }; });
-    return planoDeVariedades(itens, populacao, areaSel);
+    return modoVariedade === "talhao" ? variedadesPorTalhao(itens, populacao, talhoesObj, talhaoVariedade) : planoDeVariedades(itens, populacao, areaSel);
   })();
+  const porTalhaoSemente = !!(cadeiaSemente && modoVariedade === "talhao");
   // Aviso (não bloqueia): a receita pede mais do que existe comprado
   const faltando = produtosCalculados
     .filter((p) => p.nome && num(p.dose))
@@ -31860,6 +31895,7 @@ function ModalRecomendacao({ talhoes, estoque, mod, inicial, usuario, lavoura, e
       const precisa = normalizar(num(p.dose) * areaSel, p.unidade).v;
       const sobra = saldoDe(item);
       if (cadeiaSemente && ehSementeReceita(p)) {
+        if (porTalhaoSemente) return cadeiaSemente.filter((v) => v.nome && v.falta > 0).map((v, k) => ({ i: `${i}v${k}`, nome: v.nome, falta: v.falta, base: (acharProduto(v.nome) || {}).base || v.unidade, deB: true, semente: true }));
         // já tem a cadeia de variedades: só a última pode faltar
         const ult = cadeiaSemente[cadeiaSemente.length - 1]; const itU = ult.nome ? acharProduto(ult.nome) : null;
         return ult.falta > 0 ? { i, nome: ult.nome || "(escolha a variedade)", falta: ult.falta, base: itU ? itU.base : p.unidade, deB: true, semente: true } : null;
@@ -31873,6 +31909,7 @@ function ModalRecomendacao({ talhoes, estoque, mod, inicial, usuario, lavoura, e
       }
       return precisa > sobra ? { i, nome: item.produto, falta: precisa - sobra, base: item.base, semente: mod.usaSemeadura && ehSementeReceita(p) } : null;
     })
+    .flat()
     .filter(Boolean);
   // continuar com outro produto quando A acabar (mesmo ativo): escolha + dose sugerida pela concentração
   const [continuando, setContinuando] = useState(null);   // {i, nome, dose, unidade}
@@ -32362,18 +32399,22 @@ function ModalRecomendacao({ talhoes, estoque, mod, inicial, usuario, lavoura, e
         const nomes = [s ? s.nome : "", ...variedadesExtra.map((x) => x.nome)];
         const usados = new Set(nomes.map((n) => chaveProduto(n)).filter(Boolean));
         const ult = cadeia[cadeia.length - 1];
-        const fecha = cadeia.length > 1 && ult && ult.nome && ult.falta <= 0;
+        const fecha = porTalhaoSemente ? cadeia.length > 1 && cadeia.every((v) => v.nome && v.falta <= 0) : cadeia.length > 1 && ult && ult.nome && ult.falta <= 0;
+        const nomesOk = nomes.filter(Boolean);
+        const variedadeDoTalhao = (tid) => { const e = talhaoVariedade[tid]; return e && nomesOk.some((n) => chaveProduto(n) === chaveProduto(e)) ? e : nomes[0]; };
+        const botaoModo = (m, txt) => <button onClick={() => setModoVariedade(m)} style={{ flex: 1, minWidth: 150, background: modoVariedade === m ? C.verdeEscuro : C.verdeBg, color: modoVariedade === m ? "#fff" : C.verdeEscuro, border: "none", borderRadius: 8, padding: "8px 10px", fontWeight: 800, fontSize: 12.5 }}>{txt}</button>;
         const cobreDe = (d, pop) => { const info = infoSementeDe(d.produto, estoque); const dose = doseSementePorHa(pop, d.base === "kg" ? "kg" : "bag", info); return dose > 0 ? Math.floor((Math.max(0, saldoDe(d)) / dose) * 100) / 100 : 0; };
         return (
           <div style={{ background: "#fff", border: `1.5px solid ${C.verdeEscuro}`, borderRadius: 10, padding: "10px 12px", marginTop: 8, color: C.navyEscuro }}>
-            <div style={{ fontWeight: 900, fontSize: 13, color: C.navy }}>🌱 Variedades neste plantio, uma depois da outra <span style={{ fontWeight: 600, fontSize: 11.5, color: C.cinza }}>· {fmtN(areaSel)} ha · {fmtN(num(populacao) / 1000)} mil sementes/ha</span></div>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>{talhoesObj.length > 1 && botaoModo("talhao", "📍 Escolher o talhão de cada uma")}{botaoModo("cadeia", "➡ Uma depois da outra (até acabar)")}</div>
+            <div style={{ fontWeight: 900, fontSize: 13, color: C.navy }}>🌱 Variedades neste plantio{porTalhaoSemente ? "" : ", uma depois da outra"} <span style={{ fontWeight: 600, fontSize: 11.5, color: C.cinza }}>· {fmtN(areaSel)} ha · {fmtN(num(populacao) / 1000)} mil sementes/ha</span></div>
             {nomes.map((nome, k) => {
               const v = cadeia[k] || {};
               const it = nome ? acharProduto(nome) : null;
               const popK = k === 0 ? num(populacao) : popDaExtra(variedadesExtra[k - 1] || {});
               return (
                 <div key={k} style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginTop: 6, fontSize: 13 }}>
-                  <b style={{ flex: "none", color: C.verdeEscuro }}>{k + 1}ª</b>
+                  <b style={{ flex: "none", color: C.verdeEscuro }}>{porTalhaoSemente ? "🌱" : `${k + 1}ª`}</b>
                   {k === 0 ? <span style={{ flex: 1, minWidth: 120, fontWeight: 800 }}>{nome || "semente da receita"}</span> : (
                     <select value={nome} onChange={(e) => setVariedadesExtra(variedadesExtra.map((x, j) => (j === k - 1 ? { ...x, nome: e.target.value } : x)))} style={{ flex: 1, minWidth: 160, marginTop: 0 }}>
                       <option value="">— escolha a variedade no estoque —</option>
@@ -32381,21 +32422,35 @@ function ModalRecomendacao({ talhoes, estoque, mod, inicial, usuario, lavoura, e
                     </select>
                   )}
                   {k > 0 && <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12 }}><input type="number" inputMode="numeric" value={(variedadesExtra[k - 1] || {}).populacao || ""} onChange={(e) => setVariedadesExtra(variedadesExtra.map((x, j) => (j === k - 1 ? { ...x, populacao: e.target.value } : x)))} placeholder={String(num(populacao))} title="população desta variedade" style={{ width: 92, marginTop: 0, textAlign: "center" }} />sementes/ha</span>}
-                  <span style={{ flex: "none", fontSize: 12.5 }}>{nome && v.nome ? <>{k > 0 && popK !== num(populacao) ? <span style={{ color: C.cinza }}>{fmtN(popK / 1000)} mil/ha · </span> : null}saldo <b>{fmtN(it ? saldoDe(it) : 0)} {it ? it.base : ""}</b> → <b style={{ color: C.navy }}>{fmtN(v.areaHa)} ha</b>{v.falta > 0 ? <span style={{ color: C.vermelho, fontWeight: 800 }}> · faltam {fmtN(v.falta)} {v.unidade}</span> : null}</> : null}</span>
+                  <span style={{ flex: "none", fontSize: 12.5 }}>{nome && v.nome ? <>{k > 0 && popK !== num(populacao) ? <span style={{ color: C.cinza }}>{fmtN(popK / 1000)} mil/ha · </span> : null}saldo <b>{fmtN(it ? saldoDe(it) : 0)} {it ? it.base : ""}</b>{porTalhaoSemente ? <> · cobre {fmtN(v.cobre)} ha · talhões <b style={{ color: C.navy }}>{fmtN(v.areaHa)} ha</b></> : <> → <b style={{ color: C.navy }}>{fmtN(v.areaHa)} ha</b></>}{v.falta > 0 ? <span style={{ color: C.vermelho, fontWeight: 800 }}> · faltam {fmtN(v.falta)} {v.unidade}</span> : null}</> : null}</span>
                   {k > 0 && <button onClick={() => setVariedadesExtra(variedadesExtra.filter((x, j) => j !== k - 1))} style={{ background: "transparent", border: "none", color: C.vermelho, fontSize: 14, fontWeight: 800, padding: "0 4px" }}>✕</button>}
                 </div>
               );
             })}
+            {porTalhaoSemente && (
+              <div style={{ marginTop: 10, borderTop: `1px dashed ${C.borda}`, paddingTop: 8 }}>
+                <div style={{ fontWeight: 900, fontSize: 13, color: C.navy, marginBottom: 4 }}>📍 Qual variedade vai em cada talhão</div>
+                {talhoesObj.map((tt) => (
+                  <div key={tt.id} style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginTop: 6, fontSize: 13 }}>
+                    <b style={{ flex: 1, minWidth: 110 }}>{tt.nome} <span style={{ fontWeight: 600, color: C.cinza, fontSize: 12 }}>{fmtN(tt.areaHa)} ha</span></b>
+                    <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>{nomesOk.map((n) => { const on = chaveProduto(variedadeDoTalhao(tt.id)) === chaveProduto(n); return <button key={n} onClick={() => setTalhaoVariedade({ ...talhaoVariedade, [tt.id]: n })} style={{ background: on ? C.navy : "#fff", color: on ? "#fff" : C.navy, border: `1.5px solid ${C.navy}`, borderRadius: 8, padding: "7px 10px", fontWeight: 800, fontSize: 12.5 }}>{on ? "✓ " : ""}{n}</button>; })}</div>
+                  </div>
+                ))}
+              </div>
+            )}
             <div style={{ fontSize: 12.5, fontWeight: 800, marginTop: 8, color: fecha ? C.verdeEscuro : "#7A5C00" }}>
-              {fecha ? `✓ Fecha os ${fmtN(areaSel)} ha do plantio.` : (ult && ult.nome && ult.falta > 0 ? `⚠ Ainda falta semente para ${fmtN(Math.round((ult.falta / (ult.dose || 1)) * 100) / 100)} ha — ` : "Escolha a variedade — ")}
+              {porTalhaoSemente ? (fecha ? "✓ O saldo de cada variedade cobre os talhões dela." : (nomesOk.length < nomes.length ? "Escolha a variedade — " : "⚠ Alguma variedade não tem saldo para os talhões dela (veja acima) — ")) : fecha ? `✓ Fecha os ${fmtN(areaSel)} ha do plantio.` : (ult && ult.nome && ult.falta > 0 ? `⚠ Ainda falta semente para ${fmtN(Math.round((ult.falta / (ult.dose || 1)) * 100) / 100)} ha — ` : "Escolha a variedade — ")}
               {!fecha && <button onClick={() => setVariedadesExtra([...variedadesExtra, { nome: "", populacao: "" }])} style={{ background: C.verdeBg, color: C.verdeEscuro, border: "none", borderRadius: 8, padding: "5px 10px", fontWeight: 800, fontSize: 12 }}>+ outra variedade</button>}
             </div>
-            <div style={{ fontSize: 11, color: C.cinza, marginTop: 4 }}>Cada variedade cobre os hectares que o saldo dela dá na população dela (vazio = a da receita); a última fecha o que sobrar. O estoque baixa de cada uma pela área dela.</div>
+            <div style={{ fontSize: 11, color: C.cinza, marginTop: 4 }}>{porTalhaoSemente ? "Cada talhão planta a variedade escolhida (sem escolha = a da receita). O estoque baixa de cada variedade pelos talhões dela, e Dados da lavoura já sai com a variedade certa." : "Cada variedade cobre os hectares que o saldo dela dá na população dela (vazio = a da receita); a última fecha o que sobrar. O estoque baixa de cada uma pela área dela."}</div>
           </div>
         );
       })()}
+      {mod.usaSemeadura && !travado && !variedadesExtra.length && talhoesObj.length > 1 && produtosCalculados.some((p) => ehSementeReceita(p) && p.nome) && (
+        <button onClick={() => { setModoVariedade("talhao"); setVariedadesExtra([{ nome: "", populacao: "" }]); }} style={{ marginTop: 8, width: "100%", background: C.verdeBg, color: C.verdeEscuro, border: `1.5px dashed ${C.verdeEscuro}`, borderRadius: 10, padding: "10px 12px", fontWeight: 800, fontSize: 13 }}>🌱 Mais de uma variedade? Escolher o talhão de cada uma</button>
+      )}
       {mod.usaSemeadura && <TabelaSemeadura espacamento={espacamento} populacao={populacao} talhoes={talhoesObj} semente={(() => { const s = produtosCalculados.find((p) => ehSementeReceita(p)); return s ? { ...s, variedades: cadeiaSemente && cadeiaSemente.length > 1 ? cadeiaSemente : null, ...(() => { const i = infoSementeDe(s.nome, estoque); return { sementesPorBag: i.porBag, pms: i.pms }; })() } : null; })()} />}
-      <TabelaCalda produtos={produtosCalculados} vazao={vazao} talhoes={talhoesObj} titulo="Confira as quantidades" capacidade={capacidadeTanque} />
+      <TabelaCalda produtos={cadeiaSemente && cadeiaSemente.length > 1 && cadeiaSemente.every((v) => v.nome) ? produtosCalculados.map((p) => (ehSementeReceita(p) ? { ...p, variedades: porTalhaoSemente ? cadeiaSemente.filter((v) => v.talhoes.length) : cadeiaSemente } : p)) : produtosCalculados} vazao={vazao} talhoes={talhoesObj} titulo="Confira as quantidades" capacidade={capacidadeTanque} />
       {mod.usaCarga ? <TabelaCarga produtos={produtosCalculados} cargaKg={cargaKg} areaTotal={areaSel} /> : <TabelaTanque produtos={produtosCalculados} vazao={vazao} capacidade={capacidadeTanque} areaTotal={areaSel} />}
 
       {faltando.length > 0 && !travado && (
@@ -32404,8 +32459,8 @@ function ModalRecomendacao({ talhoes, estoque, mod, inicial, usuario, lavoura, e
           {faltando.map((f) => (
             <div key={f.i} style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 4 }}>
               <span style={{ flex: 1, minWidth: 140 }}>{f.nome} — faltam {fmtN(f.falta)} {f.base}</span>
-              {f.semente && !f.deB && <button onClick={() => setVariedadesExtra([...variedadesExtra, { nome: "", populacao: "" }])} style={{ background: C.verdeEscuro, color: "#fff", border: "none", borderRadius: 8, padding: "6px 10px", fontWeight: 800, fontSize: 12 }}>🌱 Completar o talhão com outra variedade</button>}
-              {f.semente && f.deB && <button onClick={() => setVariedadesExtra([...variedadesExtra, { nome: "", populacao: "" }])} style={{ background: C.verdeEscuro, color: "#fff", border: "none", borderRadius: 8, padding: "6px 10px", fontWeight: 800, fontSize: 12 }}>+ mais uma variedade</button>}
+              {f.semente && !f.deB && <button onClick={() => { setModoVariedade("cadeia"); setVariedadesExtra([...variedadesExtra, { nome: "", populacao: "" }]); }} style={{ background: C.verdeEscuro, color: "#fff", border: "none", borderRadius: 8, padding: "6px 10px", fontWeight: 800, fontSize: 12 }}>🌱 Completar o talhão com outra variedade</button>}
+              {f.semente && f.deB && !porTalhaoSemente && <button onClick={() => setVariedadesExtra([...variedadesExtra, { nome: "", populacao: "" }])} style={{ background: C.verdeEscuro, color: "#fff", border: "none", borderRadius: 8, padding: "6px 10px", fontWeight: 800, fontSize: 12 }}>+ mais uma variedade</button>}
               {!f.deB && !f.semente && <button onClick={() => { setSubstituindo(null); setContinuando({ i: f.i, nome: "", dose: "", unidade: produtos[f.i].unidade || "L" }); }} style={{ background: C.verdeEscuro, color: "#fff", border: "none", borderRadius: 8, padding: "6px 10px", fontWeight: 800, fontSize: 12 }}>➡ Usar até acabar e continuar com outro</button>}
               {!f.deB && !f.semente && <button onClick={() => { setContinuando(null); setSubstituindo({ i: f.i, nome: "", dose: "", unidade: "L" }); }} style={{ background: "transparent", color: C.navy, border: `1px solid ${C.navy}`, borderRadius: 8, padding: "6px 10px", fontWeight: 800, fontSize: 12 }}>🔁 Trocar</button>}
             </div>
@@ -32533,7 +32588,7 @@ function ModalRecomendacao({ talhoes, estoque, mod, inicial, usuario, lavoura, e
           pulverizadorId: mod.usaCalda ? (pulverizadorId || "") : "", pulverizadorNome: mod.usaCalda ? ((pulvEscolhido || {}).nome || "") : "",
           cargaKg: mod.usaCarga ? cargaKg : "", distribuidorId: mod.usaCarga ? (distribuidorId || "") : "", distribuidorNome: mod.usaCarga ? ((distEscolhido || {}).nome || "") : "",
           observacao: observacao.trim(), recomendadoPor: recomendadoPor.trim(),
-          produtos: [...produtosCalculados.filter((p) => p.nome && num(p.dose)).map((p) => (p.continuacao && p.continuacao.nome ? { ...p, continuacao: { ...p.continuacao, fracao: fracaoContinuacao(produtosCalculados, vazao, capacidadeTanque, areaSel) } } : p)).map((p) => (mod.usaSemeadura && ehSementeReceita(p) ? { ...p, uso: "semente", sementesPorBag: infoSementeDe(p.nome, estoque).porBag, pms: infoSementeDe(p.nome, estoque).pms || null, ...(cadeiaSemente && cadeiaSemente.length > 1 && cadeiaSemente.every((v) => v.nome) ? { variedades: cadeiaSemente } : {}) } : p)).map((p) => (p.unidade === "dose" ? { ...p, mlPorDose: num(p.mlPorDose) > 0 ? num(p.mlPorDose) : (num((acharProduto(p.nome) || {}).mlPorDose) > 0 ? num(acharProduto(p.nome).mlPorDose) : null) } : p)),
+          produtos: [...produtosCalculados.filter((p) => p.nome && num(p.dose)).map((p) => (p.continuacao && p.continuacao.nome ? { ...p, continuacao: { ...p.continuacao, fracao: fracaoContinuacao(produtosCalculados, vazao, capacidadeTanque, areaSel) } } : p)).map((p) => (mod.usaSemeadura && ehSementeReceita(p) ? { ...p, uso: "semente", sementesPorBag: infoSementeDe(p.nome, estoque).porBag, pms: infoSementeDe(p.nome, estoque).pms || null, ...(cadeiaSemente && cadeiaSemente.length > 1 && cadeiaSemente.every((v) => v.nome) ? (porTalhaoSemente ? (cadeiaSemente.filter((v) => v.talhoes.length).length > 1 ? { variedades: cadeiaSemente.filter((v) => v.talhoes.length) } : (() => { const so = cadeiaSemente.find((v) => v.talhoes.length); return so && chaveProduto(so.nome) !== chaveProduto(p.nome) ? { nome: so.nome, dose: so.dose, sementesPorBag: so.sementesPorBag, pms: so.pms } : {}; })()) : { variedades: cadeiaSemente }) : {}) } : p)).map((p) => (p.unidade === "dose" ? { ...p, mlPorDose: num(p.mlPorDose) > 0 ? num(p.mlPorDose) : (num((acharProduto(p.nome) || {}).mlPorDose) > 0 ? num(acharProduto(p.nome).mlPorDose) : null) } : p)),
             ...(mod.usaSemeadura ? produtosSulco.filter((p) => p.nome && num(p.dose) > 0).map((p) => ({ ...p, uso: "sulco", ...(p.unidade === "dose" ? { mlPorDose: num(p.mlPorDose) > 0 ? num(p.mlPorDose) : (num((acharProduto(p.nome) || {}).mlPorDose) > 0 ? num(acharProduto(p.nome).mlPorDose) : null) } : {}) })) : [])], talhaoIds: talhoesSel,
           // guarda só o que foge do talhão cheio: se a área do talhão mudar
           // depois, quem não dividiu continua acompanhando o cadastro
