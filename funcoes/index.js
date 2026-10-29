@@ -331,7 +331,7 @@ exports.lembretesDiarios = onSchedule({ schedule: "every day 06:30", timeZone: "
         const daFaz = await db.collection("usuarios").where("fazendas", "array-contains", fazendaId).get();
         await mandar(tokensDe(filtrarDestinatarios([...daFaz.docs, ...consultoria.docs], contaFz)),
           `🌱 Provável emergência hoje — ${nome}`,
-          `${emergNovas.join(", ")}: 4 dias após o plantio. Confira no campo; se for outro dia, corrija em Dados da lavoura.`,
+          `${emergNovas.join(", ")}: meio do plantio + 4 dias. Confira no campo; se for outro dia, corrija em Dados da lavoura.`,
           destino(fazendaId, "lavoura"));
       }
 

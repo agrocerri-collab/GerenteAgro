@@ -918,7 +918,7 @@ teste("monitoramento: doenças da cultura entram na ficha por presença (pano e 
     && fer.pct === 50 && lag.media === 2 && acima.length === 1 && acima[0].unidade === "%" && acima[0].valor === 50;
 });
 
-teste("plantio feito → emergência prevista 4 dias após o fim do plantio; etapas viram partes com emergência própria; não mexe no que já estava", () => {
+teste("plantio feito → emergência prevista (meio do plantio + 4 dias); etapas viram partes com emergência própria; não mexe no que já estava", () => {
   const t2 = { id: "t2", nome: "02", areaHa: 100, cultura: "Soja" };
   const apl = { modulo: "semeadura", cultura: "Soja", produtos: [{ nome: "M8808", uso: "semente", dose: 1, unidade: "bag" }] };
   const r1 = C.lavouraComEmergenciaDoPlantio([], t2, apl, { data: "2026-10-05T15:00:00.000Z", areaExecutada: 100 }, "l-novo");
@@ -1209,7 +1209,7 @@ teste("plantio executado vence a data planejada em Dados da lavoura e refaz a em
   const ex = { data: "2026-10-05T15:00:00.000Z", dataFim: "2026-10-07" };
   const a = C.lavouraComEmergenciaDoPlantio([{ id: "l1", talhaoId: "t2", cultura: "Soja", variedade: "M8808", dataPlantio: "2026-09-30", dataEmergencia: "2026-10-04", emergenciaAuto: true }], t2, apl, ex, "x");
   const b = C.lavouraComEmergenciaDoPlantio([{ id: "l1", talhaoId: "t2", cultura: "Soja", variedade: "M8808", dataPlantio: "2026-09-30", dataEmergencia: "2026-10-12" }], t2, apl, ex, "x");
-  return a.registro.dataPlantio === "2026-10-05" && a.registro.dataPlantioFim === "2026-10-07" && a.registro.dataEmergencia === "2026-10-11" && a.registro.emergenciaAuto === true
+  return a.registro.dataPlantio === "2026-10-05" && a.registro.dataPlantioFim === "2026-10-07" && a.registro.dataEmergencia === "2026-10-10" && a.registro.emergenciaAuto === true
     && b.registro.dataPlantio === "2026-10-05" && b.registro.dataEmergencia === "2026-10-12";
 });
 
@@ -1248,6 +1248,16 @@ teste("estande do monitoramento: vale o último, a média junta as contagens da 
   return l.estandeFinal === "260000" && r.ultimo === 260000 && r.media === 270000 && r.n === 2 && r.data === "2026-10-27"
     && p.partes[1].estandeFinal === "300000" && !p.partes[0].estandeFinal && !p.estandeFinal
     && ordem.join("|") === "pluviômetro 1|Pluviômetro 2|Pluviômetro 10|Talhão 1|Talhão 6";
+});
+
+teste("emergência prevista conta do MEIO do plantio: 1 a 8 → meio dia 5 → emergência dia 9; plantio de um dia só → +4", () => {
+  const t = { id: "t1", nome: "01", areaHa: 100, cultura: "Soja" };
+  const apl = { modulo: "semeadura", cultura: "Soja", produtos: [{ nome: "M8808", uso: "semente", dose: 1, unidade: "bag" }] };
+  const a = C.lavouraComEmergenciaDoPlantio([], t, apl, { data: "2026-10-01T12:00:00.000Z", dataFim: "2026-10-08" }, "x");
+  const b = C.lavouraComEmergenciaDoPlantio([], t, apl, { data: "2026-10-01T12:00:00.000Z" }, "y");
+  const c = C.lavouraComEmergenciaDoPlantio([], t, apl, { data: "2026-10-01T12:00:00.000Z", etapas: [{ inicio: "2026-10-01", fim: "2026-10-08", areaHa: 60 }, { inicio: "2026-10-15", fim: "2026-10-17", areaHa: 40 }] }, "z");
+  return a.registro.dataEmergencia === "2026-10-09" && b.registro.dataEmergencia === "2026-10-05"
+    && c.registro.partes[0].dataEmergencia === "2026-10-09" && c.registro.partes[1].dataEmergencia === "2026-10-20";
 });
 
 teste("visita: 'mais opções' tem daninhas do cerrado e entra no dicionário da transcrição", () => {

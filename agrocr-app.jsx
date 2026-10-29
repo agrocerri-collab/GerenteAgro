@@ -637,8 +637,8 @@ const chaveProduto = (nome) => (nome || "").trim().toLowerCase();
 // Devolve [{nome, v, base, real:true|false}] — A e B em linhas separadas.
 // semente da receita de semeadura: produto marcado como semente, ou em bag, ou o primeiro
 const sementeDaReceita = (a) => (a && a.produtos || []).find((p) => p && (p.uso === "semente" || p.unidade === "bag")) || ((a && a.produtos) || [])[0] || null;
-// Plantio marcado como feito → emergência PREVISTA 4 dias depois do fim do plantio (a pessoa edita se
-// for diferente). Com etapas (plantio que parou e voltou), cada parte ganha a sua emergência.
+// Plantio marcado como feito → emergência PREVISTA no MEIO do período de plantio + 4 dias (Daniel: plantou de 1 a 8,
+// parte já nasceu antes do fim — conta do dia 5). A pessoa edita se for diferente. Com etapas (plantio que parou e voltou), cada parte ganha a sua emergência.
 // A data REAL do plantio (da execução) vence a que estava planejada; a emergência é refeita quando ainda
 // era a prevista (ou vazia) — a que a pessoa digitou fica. Devolve null quando não há o que mudar.
 const DIAS_ATE_EMERGENCIA = 4;
@@ -669,17 +669,19 @@ function lavouraComEmergenciaDoPlantio(lavoura, t, apl, ex, novoId) {
   const existe = (lavoura || []).some((l) => l.talhaoId === t.id);
   const atual = (lavoura || []).find((l) => l.talhaoId === t.id) || { id: novoId, talhaoId: t.id };
   const fimDe = (e) => dia(e.fim) || dia(e.inicio);
+  // meio do plantio da etapa (início a fim): é dali que conta a emergência
+  const meioDe = (e) => { const i = dia(e.inicio), f = fimDe(e); if (!i || !f || f <= i) return f || i; return somarDias(i, Math.round(diasEntreISO(i, f) / 2)); };
   const inicio = etapas.map((e) => dia(e.inicio)).filter(Boolean).sort()[0] || "";
   const fim = etapas.map(fimDe).filter(Boolean).sort().pop() || inicio;
   const nova = { ...atual, cultura: atual.cultura || apl.cultura || t.cultura || "", variedade: atual.variedade || variedadeRec, dataPlantio: inicio || atual.dataPlantio || "", dataPlantioFim: fim || atual.dataPlantioFim || "" };
-  if ((!atual.dataEmergencia || atual.emergenciaAuto) && fimDe(etapas[0])) { nova.dataEmergencia = somarDias(fimDe(etapas[0]), DIAS_ATE_EMERGENCIA); nova.emergenciaAuto = true; }
+  if ((!atual.dataEmergencia || atual.emergenciaAuto) && fimDe(etapas[0])) { nova.dataEmergencia = somarDias(meioDe(etapas[0]), DIAS_ATE_EMERGENCIA); nova.emergenciaAuto = true; }
   if (etapas.length >= 2) {
     const antes = Array.isArray(atual.partes) ? atual.partes : [];
     nova.partes = etapas.map((e, k) => {
       const p = antes[k] || {}; const f = fimDe(e);
       const manual = !!p.dataEmergencia && !p.emergenciaAuto;
       return { ...p, id: p.id || `p${k}`, variedade: p.variedade || e.variedade || variedadeRec, areaHa: num(e.areaHa) || num(p.areaHa), dataPlantio: dia(e.inicio) || p.dataPlantio || "", dataPlantioFim: f || p.dataPlantioFim || "",
-        dataEmergencia: manual ? p.dataEmergencia : (f ? somarDias(f, DIAS_ATE_EMERGENCIA) : (p.dataEmergencia || "")), emergenciaAuto: manual ? false : !!f || !!p.emergenciaAuto };
+        dataEmergencia: manual ? p.dataEmergencia : (f ? somarDias(meioDe(e), DIAS_ATE_EMERGENCIA) : (p.dataEmergencia || "")), emergenciaAuto: manual ? false : !!f || !!p.emergenciaAuto };
     });
   }
   if (JSON.stringify(nova) === JSON.stringify(atual)) return null;
@@ -20538,7 +20540,7 @@ function SecaoLavoura({ fazenda, lavoura, apls, prog, consultor, registrar, onSa
                     {l.culturaAnterior ? <div style={{ color: C.navyEscuro }}>antes: {l.culturaAnterior}{l.variedadeAnterior ? ` ${l.variedadeAnterior}` : ""}{l.tecnologiaAnterior ? ` · ${l.tecnologiaAnterior}` : ""}</div> : null}
                     <div>
                       Plantio {fmtD(l.dataPlantio)}{l.dataPlantioFim && l.dataPlantioFim !== l.dataPlantio ? ` a ${fmtD(l.dataPlantioFim)}` : ""}{dap != null ? ` (${dap} DAP)` : ""}
-                      {l.dataEmergencia ? ` · emergência ${fmtD(l.dataEmergencia)}${l.emergenciaAuto ? " (prevista: 4 dias após o plantio — confira)" : ""}` : " · emergência não informada"}
+                      {l.dataEmergencia ? ` · emergência ${fmtD(l.dataEmergencia)}${l.emergenciaAuto ? " (prevista: meio do plantio + 4 dias — confira)" : ""}` : " · emergência não informada"}
                     </div>
                     {(l.espacamento || l.populacaoSemeada) && (
                       <div>
@@ -29831,14 +29833,14 @@ function SecaoAplicacoes({ maquinas, podeApagar, fazenda, apls, modulo, estoque,
         fotos: [...((atual && atual.fotos) || []), ...(dadosEx.fotos || [])].slice(0, 6), etapas, areaExecutada: soma, aberto, produtosReais: null };
       onSalvar(apls.map((x) => (x.id === apl.id ? { ...x, execucoes: { ...(x.execucoes || {}), [tid]: ex } } : x)));
       const emerg = onAtualizarLavoura ? lavouraComEmergenciaDoPlantio(lavoura, t, apl, ex, idNovo()) : null;
-      if (emerg) { onAtualizarLavoura(emerg.lista); registrar && registrar("Emergência prevista", `${t ? t.nome : ""} · ${emerg.partes >= 2 ? `${emerg.partes} partes, cada uma` : fmtD(emerg.emergencia)} ${DIAS_ATE_EMERGENCIA} dias após o fim do plantio — confira em Dados da lavoura`); }
+      if (emerg) { onAtualizarLavoura(emerg.lista); registrar && registrar("Emergência prevista", `${t ? t.nome : ""} · ${emerg.partes >= 2 ? `${emerg.partes} partes, cada uma` : fmtD(emerg.emergencia)} meio do plantio + ${DIAS_ATE_EMERGENCIA} dias — confira em Dados da lavoura`); }
       registrar && registrar(aberto ? "Plantio em andamento" : "Plantio concluído", `${t ? t.nome : ""} · ${etapas.length}ª etapa ${fmtD(dadosEx.etapa.inicio)}${dadosEx.etapa.fim !== dadosEx.etapa.inicio ? " a " + fmtD(dadosEx.etapa.fim) : ""} · ${fmtN(dadosEx.etapa.areaHa)} ha${dadosEx.etapa.variedade ? " · " + dadosEx.etapa.variedade : ""} · ${fmtN(soma)} de ${fmtN(areaTal)} ha${aberto ? " · em aberto" : ""}`);
       return;
     }
     const exNovo = { data: new Date().toISOString(), ...dadosEx };
     onSalvar(apls.map((x) => (x.id === apl.id ? { ...x, execucoes: { ...(x.execucoes || {}), [tid]: exNovo } } : x)));
     const emergS = onAtualizarLavoura ? lavouraComEmergenciaDoPlantio(lavoura, t, apl, exNovo, idNovo()) : null;
-    if (emergS) { onAtualizarLavoura(emergS.lista); registrar && registrar("Emergência prevista", `${t ? t.nome : ""} · ${fmtD(emergS.emergencia)} (${DIAS_ATE_EMERGENCIA} dias após o plantio) — confira em Dados da lavoura`); }
+    if (emergS) { onAtualizarLavoura(emergS.lista); registrar && registrar("Emergência prevista", `${t ? t.nome : ""} · ${fmtD(emergS.emergencia)} (meio do plantio + ${DIAS_ATE_EMERGENCIA} dias) — confira em Dados da lavoura`); }
     registrar && registrar(`${(MODULOS[moduloDe(apl)] || MODULOS.pulverizacao).nome} executada`,
       `${t ? t.nome : ""} · ${apl.tipo} · aplicado por ${dadosEx.operador}` +
       ((dadosEx.produtosReais || []).length ? ` · gasto real informado` : ""));
