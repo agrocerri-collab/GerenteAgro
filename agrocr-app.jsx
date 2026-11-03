@@ -1049,6 +1049,8 @@ const COLUNAS = {
   obs: ["observacao", "obs", "nota", "fornecedor", "nf"],
   ciclo: ["ciclo", "epoca", "safra", "periodo"],
   cultura: ["cultura", "lavoura"],
+  lote: ["lote"],
+  validade: ["validade", "data de validade"],
 };
 const UNIDADES = ["L", "mL", "kg", "g", "t", "sc", "bag", "un", "dose"];   // dose: inoculante, biológico e afins vendidos "por dose"
 // Ninguém preenche planilha escrevendo "L": escreve litro, litros, lt.
@@ -1198,7 +1200,7 @@ function interpretarCompras(linhas, padrao) {
   for (const campo of Object.keys(COLUNAS)) col[campo] = achaCol(COLUNAS[campo]);
   const temCabecalho = col.produto >= 0 || col.qtd >= 0;
   // sem cabeçalho reconhecido, assume a ordem do nosso modelo
-  if (!temCabecalho) { col.produto = 0; col.categoria = 1; col.qtd = 2; col.unidade = 3; col.preco = 4; col.obs = 5; }
+  if (!temCabecalho) { col.produto = 0; col.categoria = 1; col.qtd = 2; col.unidade = 3; col.preco = 4; col.obs = 5; col.lote = -1; col.validade = -1; }
 
   const itens = [], avisos = [];
   const corpo = temCabecalho ? linhas.slice(1) : linhas;
@@ -1236,7 +1238,11 @@ function interpretarCompras(linhas, padrao) {
     const cultura = CULTURAS.find((c) => semAcento(c) === semAcento(culturaTxt)) || (!culturaTxt && padrao && padrao.cultura) || "";
     if (culturaTxt && !cultura) avisos.push(`Linha ${nLinha}: cultura "${culturaTxt}" não está na lista, deixei em branco.`);
 
-    itens.push({ produto, categoria, qtd, unidade, preco: pega(col.preco), obs: pega(col.obs), data: hojeISO(), ciclo, cultura });
+    // lote e validade (opcionais): entram na compra e o estoque usa primeiro o que vence antes
+    const lote = pega(col.lote), valTxt = pega(col.validade);
+    const validade = valTxt ? validadeDePlanilha(valTxt) : "";
+    if (valTxt && !validade) avisos.push(`Linha ${nLinha}: validade "${valTxt}" não é uma data — use dd/mm/aaaa ou mm/aaaa. Ficou sem validade.`);
+    itens.push({ produto, categoria, qtd, unidade, preco: pega(col.preco), obs: pega(col.obs), data: hojeISO(), ciclo, cultura, ...(lote ? { lote } : {}), ...(validade ? { validade } : {}) });
   });
 
   if (itens.length === 0 && avisos.length === 0) avisos.push("Não encontrei nenhuma linha com produto e quantidade.");
@@ -1244,8 +1250,8 @@ function interpretarCompras(linhas, padrao) {
 }
 
 const MODELO_COMPRAS = [
-  "produto;categoria;ciclo;cultura;quantidade;unidade;preco;observacao",
-  "Glifosato 480;Herbicida;Safra;Soja;500;L;22,50;NF 1234 - fornecedor X",
+  "produto;categoria;ciclo;cultura;quantidade;unidade;preco;observacao;lote;validade",
+  "Glifosato 480;Herbicida;Safra;Soja;500;L;22,50;NF 1234 - fornecedor X;ABC123;31/10/2027",
   "Óleo Mineral;Adjuvante;Ambas;;100;L;;",
   "Semente Soja BMX Olimpo;Sementes;Safra;Soja;20;bag;;",
   "MAP;Fertilizante / Adubo;Safra;Soja;60;t;;",
@@ -1273,8 +1279,8 @@ const MODELO_PEDIDO = [
   "Cultura (Soja, Milho...);",
   "Observações;",
   "",
-  "produto;categoria;quantidade;unidade;preco unitario;observacao",
-  "Glifosato 480 (exemplo - apague esta linha);Herbicida;500;L;22,50;",
+  "produto;categoria;quantidade;unidade;preco unitario;observacao;lote;validade",
+  "Glifosato 480 (exemplo - apague esta linha);Herbicida;500;L;22,50;;ABC123;31/10/2027",
 ].join("\r\n");
 // data de planilha → aaaa-mm-dd: dd/mm/aaaa, aaaa-mm-dd ou o número de data do Excel
 function dataDePlanilha(v) {
@@ -1284,6 +1290,13 @@ function dataDePlanilha(v) {
   m = s.match(/^(\d{4})-(\d{2})-(\d{2})/); if (m) return `${m[1]}-${m[2]}-${m[3]}`;
   if (/^\d{5}(\.\d+)?$/.test(s)) { const d = new Date(Math.round((Number(s) - 25569) * 86400000)); return isNaN(d) ? "" : d.toISOString().slice(0, 10); }
   return "";
+}
+// validade do produto na planilha: como a data, e também só mês/ano ("10/2027" vale até o último dia do mês)
+function validadeDePlanilha(v) {
+  const s = String(v == null ? "" : v).trim(); if (!s) return "";
+  const m = s.match(/^(\d{1,2})[\/.-](\d{4}|\d{2})$/);
+  if (m && num(m[1]) >= 1 && num(m[1]) <= 12) { const a = m[2].length === 2 ? 2000 + num(m[2]) : num(m[2]); const ult = new Date(Date.UTC(a, num(m[1]), 0)).getUTCDate(); return `${a}-${String(num(m[1])).padStart(2, "0")}-${String(ult).padStart(2, "0")}`; }
+  return dataDePlanilha(s);
 }
 // é a planilha do fornecedor? (tem o cabeçalho de rótulos antes da tabela de itens)
 const ehPedidoFornecedor = (linhas) => (linhas || []).slice(0, 25).some((l) => /^(fornecedor|forma de pagamento|numero do pedido)/.test(semAcento(l && l[0])));
@@ -10260,7 +10273,7 @@ function SecaoProgramacao({ prog, consultor, registrar, fornecedores, onSalvarFo
                   <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "7px 10px", borderBottom: `1px solid ${C.borda}`, fontSize: 13 }}>
                     <span style={{ minWidth: 0 }}>
                       <b>{it.produto}</b><Ativo nome={it.produto} ativo={it.ativo} />
-                      <div style={{ color: C.cinza, fontSize: 12 }}>{it.categoria}{it.obs ? ` · ${it.obs}` : ""}</div>
+                      <div style={{ color: C.cinza, fontSize: 12 }}>{it.categoria}{it.obs ? ` · ${it.obs}` : ""}{it.lote ? ` · lote ${it.lote}` : ""}{it.validade ? ` · validade ${fmtD(it.validade)}` : ""}</div>
                     </span>
                     <span style={{ textAlign: "right", flex: "none" }}><b style={{ whiteSpace: "nowrap" }}>{fmtN(num(it.qtd))} {it.unidade}</b>{num(it.preco) > 0 && <div style={{ fontSize: 11.5, color: C.cinza }}>{fmtMoeda(num(it.preco))}/{it.unidade}</div>}</span>
                   </div>

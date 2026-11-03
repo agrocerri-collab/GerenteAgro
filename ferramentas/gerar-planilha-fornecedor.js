@@ -20,7 +20,7 @@ const linhas = [];   // { r, alt?, cels: [[col, valor|null, estilo]] }
 const merges = [], validacoes = [];
 const cel = (col, r, v, s) => (v == null || v === "" ? `<c r="${col}${r}" s="${s}"/>` : `<c r="${col}${r}" s="${s}" t="inlineStr"><is><t xml:space="preserve">${esc(v)}</t></is></c>`);
 const add = (r, cels, alt) => linhas.push({ r, alt, xml: cels.map(([c, v, s]) => cel(c, r, v, s)).join("") });
-const faixa = (r, texto, estilo, alt) => { add(r, ["A", "B", "C", "D", "E", "F", "G", "H"].map((c, i) => [c, i === 0 ? texto : null, estilo]), alt); merges.push(`A${r}:H${r}`); };
+const faixa = (r, texto, estilo, alt) => { add(r, ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"].map((c, i) => [c, i === 0 ? texto : null, estilo]), alt); merges.push(`A${r}:J${r}`); };
 const campo = (r, rotulo, estilo, dica, lista) => {
   add(r, [["A", rotulo, E.rotulo], ["B", null, estilo], ["C", null, estilo], ["D", null, estilo], ["E", null, estilo], ["F", dica || null, E.dica], ["G", null, E.dica], ["H", null, E.dica]], 21);
   merges.push(`B${r}:E${r}`, `F${r}:H${r}`);
@@ -53,10 +53,10 @@ campo(23, "Observações", E.campoTexto, "frete, local de entrega, prazo de entr
 
 faixa(25, "4. ITENS — um produto por linha", E.secao, 22);
 const R_CAB = 26;
-add(R_CAB, [["A", "Produto", E.cabTabela], ["B", "Categoria", E.cabTabela], ["C", "Quantidade", E.cabTabela], ["D", "Unidade", E.cabTabela], ["E", "Preço unitário", E.cabTabela], ["F", "Ciclo (opcional)", E.cabTabela], ["G", "Cultura (opcional)", E.cabTabela], ["H", "Observação", E.cabTabela]], 30);
+add(R_CAB, [["A", "Produto", E.cabTabela], ["B", "Categoria", E.cabTabela], ["C", "Quantidade", E.cabTabela], ["D", "Unidade", E.cabTabela], ["E", "Preço unitário", E.cabTabela], ["F", "Ciclo (opcional)", E.cabTabela], ["G", "Cultura (opcional)", E.cabTabela], ["H", "Observação", E.cabTabela], ["I", "Lote", E.cabTabela], ["J", "Validade (dd/mm/aaaa ou mm/aaaa)", E.cabTabela]], 30);
 for (let i = 1; i <= N_ITENS; i++) {
   const r = R_CAB + i;
-  add(r, [["A", null, E.celTexto], ["B", null, E.celTexto], ["C", null, E.celNumero], ["D", null, E.celTexto], ["E", null, E.celNumero], ["F", null, E.celTexto], ["G", null, E.celTexto], ["H", null, E.celTexto]], 19);
+  add(r, [["A", null, E.celTexto], ["B", null, E.celTexto], ["C", null, E.celNumero], ["D", null, E.celTexto], ["E", null, E.celNumero], ["F", null, E.celTexto], ["G", null, E.celTexto], ["H", null, E.celTexto], ["I", null, E.celTexto], ["J", null, E.celTexto]], 19);
 }
 const r1 = R_CAB + 1, rN = R_CAB + N_ITENS;
 const lista = (col, itens) => `<dataValidation type="list" allowBlank="1" showInputMessage="1" showErrorMessage="0" sqref="${col}${r1}:${col}${rN}"><formula1>"${itens.join(",")}"</formula1></dataValidation>`;
@@ -66,7 +66,7 @@ const sheet1 = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
 <sheetViews><sheetView workbookViewId="0" showGridLines="0"><selection activeCell="B5" sqref="B5"/></sheetView></sheetViews>
 <sheetFormatPr defaultRowHeight="15"/>
-<cols><col min="1" max="1" width="36" customWidth="1"/><col min="2" max="2" width="24" customWidth="1"/><col min="3" max="3" width="13" customWidth="1"/><col min="4" max="4" width="11" customWidth="1"/><col min="5" max="5" width="16" customWidth="1"/><col min="6" max="6" width="16" customWidth="1"/><col min="7" max="7" width="18" customWidth="1"/><col min="8" max="8" width="34" customWidth="1"/></cols>
+<cols><col min="1" max="1" width="36" customWidth="1"/><col min="2" max="2" width="24" customWidth="1"/><col min="3" max="3" width="13" customWidth="1"/><col min="4" max="4" width="11" customWidth="1"/><col min="5" max="5" width="16" customWidth="1"/><col min="6" max="6" width="16" customWidth="1"/><col min="7" max="7" width="18" customWidth="1"/><col min="8" max="8" width="34" customWidth="1"/><col min="9" max="9" width="16" customWidth="1"/><col min="10" max="10" width="20" customWidth="1"/></cols>
 <sheetData>${linhas.map((l) => `<row r="${l.r}"${l.alt ? ` ht="${l.alt}" customHeight="1"` : ""}>${l.xml}</row>`).join("")}</sheetData>
 <mergeCells count="${merges.length}">${merges.map((m) => `<mergeCell ref="${m}"/>`).join("")}</mergeCells>
 <dataValidations count="${validacoes.length}">${validacoes.join("")}</dataValidations>
@@ -124,7 +124,8 @@ const ajuda = [
   ["3. Se for BARTER: informe o total de sacas de soja do pacote; o preço da saca travado é opcional. O preço unitário dos itens pode ficar em branco.", E.padrao],
   ["4. Se for em DÓLAR: escolha US$ em Moeda, informe o dólar do negócio e coloque o preço unitário em dólar.", E.padrao],
   ["5. Itens: um produto por linha, com categoria, quantidade e unidade. Ciclo e cultura só se forem diferentes do que está no bloco 2.", E.padrao],
-  ["6. Salve e devolva este mesmo arquivo (Excel .xlsx ou CSV). Não mude os títulos em cinza nem os títulos da tabela.", E.padrao],
+  ["6. Lote e validade: copie do rótulo da embalagem (validade em dd/mm/aaaa ou só mês/ano, ex.: 10/2027). O aplicativo usa primeiro o que vence antes.", E.padrao],
+  ["7. Salve e devolva este mesmo arquivo (Excel .xlsx ou CSV). Não mude os títulos em cinza nem os títulos da tabela.", E.padrao],
   ["", E.padrao],
   ["Categorias: " + CATEGORIAS.join(" · "), E.dica],
   ["Unidades: " + UNIDADES.join(" · ") + "  (sc = saco · bag = big bag · t = tonelada · un = unidade)", E.dica],
