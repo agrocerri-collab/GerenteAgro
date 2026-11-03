@@ -381,19 +381,27 @@ exports.lembretesDiarios = onSchedule({ schedule: "every day 06:30", timeZone: "
       const visitas = await base.collection("visitas").get();
       const ultMon = {};
       visitas.forEach((d) => { const v = d.data(); if (v.ehMonitoramento && v.talhaoId && v.data && (!ultMon[v.talhaoId] || v.data > ultMon[v.talhaoId])) ultMon[v.talhaoId] = v.data; });
-      const atrasados = [];
+      // 1º monitoramento até 5 dias depois da emergência (foco no ESTANDE); depois soja/demais a cada 10, algodão a cada 7
+      const atrasados = [], primeiros = [];
       for (const d of lavoura.docs) {
         const l = d.data();
         if (!l.talhaoId || !l.dataEmergencia) continue;
         const dae = diasEntre(l.dataEmergencia, hoje);
-        if (dae < 7 || dae > 240) continue;
-        const dias = ultMon[l.talhaoId] ? diasEntre(ultMon[l.talhaoId], hoje) : null;
-        if (dias === null || dias >= intervaloMon(l.cultura)) atrasados.push(`${nomeTalhao(l.talhaoId)}${dias === null ? "" : ` (${dias} d)`}`);
+        if (dae < 0 || dae > 240) continue;
+        const ult = ultMon[l.talhaoId] && String(ultMon[l.talhaoId]).slice(0, 10) >= l.dataEmergencia ? String(ultMon[l.talhaoId]).slice(0, 10) : null;
+        if (!ult) { if (dae >= 2 && dae <= 5) primeiros.push({ nome: nomeTalhao(l.talhaoId), id: l.talhaoId, em: l.dataEmergencia }); else if (dae > 5) atrasados.push(`${nomeTalhao(l.talhaoId)} (1º, estande)`); continue; }
+        const dias = diasEntre(ult, hoje);
+        if (dias >= intervaloMon(l.cultura)) atrasados.push(`${nomeTalhao(l.talhaoId)} (${dias} d)`);
+      }
+      // um aviso por talhão para o 1º monitoramento (a partir do 2º dia depois da emergência)
+      for (const p of primeiros) {
+        if (await jaAvisou(fazendaId, `mon1-${p.id}-${p.em}`)) continue;
+        await mandar(todos, `🌱 1º monitoramento — ${nome}`, `${p.nome}: fazer o 1º monitoramento até 5 dias depois da emergência, priorizando o ESTANDE.`, destino(fazendaId, "visitas"));
       }
       // uma vez por semana por fazenda (segunda) ou quando entra em atraso
       const semana = `${hoje.slice(0, 4)}-${Math.floor((new Date(hoje + "T12:00:00Z") - new Date(hoje.slice(0, 4) + "-01-01T12:00:00Z")) / (7 * 86400000))}`;
       if (atrasados.length && !(await jaAvisou(fazendaId, `mon-${semana}`))) {
-        await mandar(todos, `Monitoramento de pragas — ${nome}`, `Talhões para monitorar: ${atrasados.join(", ")}. Algodão a cada 7 dias, demais culturas a cada 10.`, destino(fazendaId, "visitas"));
+        await mandar(todos, `Monitoramento de pragas — ${nome}`, `Talhões para monitorar: ${atrasados.join(", ")}. 1º até 5 dias depois da emergência (estande); depois soja e demais a cada 10 dias, algodão toda semana.`, destino(fazendaId, "visitas"));
       }
 
       // ---- recomendação parada há 3 dias (não prévia, sem execução em algum talhão) ----

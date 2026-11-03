@@ -7945,6 +7945,23 @@ const regraFungicida = (fazenda, cultura) => {
 const diasEntreISO = (de, ate) => Math.round((new Date(ate + "T12:00:00") - new Date(de + "T12:00:00")) / 86400000);
 // Monitoramento de pragas: intervalo por cultura (Daniel) — algodão 7 dias, soja/milho/demais 10
 const intervaloMonitoramento = (cultura) => (/algod/i.test(String(cultura || "")) ? 7 : 10);
+// 1º monitoramento: até 5 dias depois da emergência, e o foco é o ESTANDE (Daniel, 03/11/2026)
+const PRIMEIRO_MONIT_DAE = 5;
+// Agenda de um talhão (ou parte): o 1º até a emergência + 5; depois o último + intervalo da cultura.
+// Monitoramento feito antes da emergência não conta. status: primeiro (janela do 1º aberta) · emdia ·
+// fazer (venceu há 0–2 dias) · atrasado (1º passou do DAE 5, ou 3+ dias além do intervalo).
+function agendaMonitoramento(emergencia, ultimo, cultura, hoje) {
+  if (!emergencia) return null;
+  const h = hoje || hojeISO();
+  const dae = diasEntreISO(emergencia, h);
+  const intervalo = intervaloMonitoramento(cultura);
+  const ult = ultimo && String(ultimo).slice(0, 10) >= emergencia ? String(ultimo).slice(0, 10) : "";
+  const primeiro = !ult;
+  const proxima = primeiro ? somarDias(emergencia, PRIMEIRO_MONIT_DAE) : somarDias(ult, intervalo);
+  const atraso = diasEntreISO(proxima, h);
+  const status = primeiro ? (atraso > 0 ? "atrasado" : "primeiro") : atraso < 0 ? "emdia" : atraso < 3 ? "fazer" : "atrasado";
+  return { dae, intervalo, primeiro, proxima, atraso, dias: ult ? diasEntreISO(ult, h) : null, status, precisa: status !== "emdia" };
+}
 function resumoFungicidas(fazenda, apls, lavoura, hoje) {
   const talhoes = (fazenda && fazenda.talhoes) || [];
   const out = [];
@@ -8287,18 +8304,22 @@ function PainelHoje({ fazenda, apls, lavoura, visitas, notas, chuvas, veFinancei
   if (venc.length || prox.length) linhas.push({ cor: venc.length ? C.vermelho : C.amarelo, icone: "🛡️", titulo: venc.length ? `Fungicida vencida em ${venc.map((f) => f.t.nome).join(", ")}` : `Fungicida vence em até 3 dias: ${prox.map((f) => f.t.nome).join(", ")}`, sub: venc.length && prox.length ? `e vence em breve em ${prox.map((f) => f.t.nome).join(", ")}` : "programa por cultura em 🛡️ Fungicidas", ir: () => irPara("fungicidas") });
   // monitoramento semanal
   const mons = (visitas || []).filter((v) => v.ehMonitoramento);
-  const atrasados = (fazenda.talhoes || []).filter((t) => {
-    const lv = (lavoura || []).find((l) => l.talhaoId === t.id); if (!lv || !lv.dataEmergencia) return false;
-    const dae = diasEntreISO(lv.dataEmergencia, hoje); if (dae < 0 || dae > 240) return false;
-    const ult = mons.filter((m) => m.talhaoId === t.id).map((m) => m.data).sort().pop();
-    return !ult || diasEntreISO(ult, hoje) >= intervaloMonitoramento(lv.cultura || t.cultura);
-  });
+  const agendas = (fazenda.talhoes || []).map((t) => {
+    const lv = (lavoura || []).find((l) => l.talhaoId === t.id); if (!lv || !lv.dataEmergencia) return null;
+    const ult = mons.filter((m) => m.talhaoId === t.id).map((m) => String(m.data || "").slice(0, 10)).sort().pop();
+    const ag = agendaMonitoramento(lv.dataEmergencia, ult, lv.cultura || t.cultura, hoje);
+    return ag && ag.dae >= 0 && ag.dae <= 240 && ag.precisa ? { t, ag } : null;
+  }).filter(Boolean);
+  // 1º monitoramento (até 5 DAE, foco no estande) separado dos que já estão na rotina
+  const primeiros = agendas.filter((x) => x.ag.primeiro).map((x) => x.t);
+  const atrasados = agendas.filter((x) => !x.ag.primeiro).map((x) => x.t);
   const de10 = new Date(hojeMs - 10 * 86400000).toISOString().slice(0, 10);
   const ultimoPorTalhao = {};
   for (const m of mons) if (m.talhaoId && (m.data || "") >= de10 && (!ultimoPorTalhao[m.talhaoId] || m.data > ultimoPorTalhao[m.talhaoId].data)) ultimoPorTalhao[m.talhaoId] = m;
   const acimaNivel = Object.values(ultimoPorTalhao).map((m) => ({ m, acima: pragasAcima(fazenda, m) })).filter((x) => x.acima.length);
   if (acimaNivel.length) linhas.push({ cor: C.vermelho, icone: "🐛", titulo: `Praga acima do nível: ${acimaNivel.map((x) => x.m.talhaoNome).join(", ")}`, sub: acimaNivel.slice(0, 2).map((x) => `${x.m.talhaoNome}: ${x.acima.map((a) => `${a.nome} ${fmtN(a.valor)}${a.unidade}`).join(", ")}`).join(" · ") + " · recomendar", ir: () => irPara("apl", "pulverizacao") });
-  if (atrasados.length) linhas.push({ cor: C.amarelo, icone: "🐛", titulo: `Monitorar pragas: ${atrasados.map((t) => t.nome).join(", ")}`, sub: "algodão a cada 7 dias, demais a cada 10, da emergência à colheita", ir: () => irPara("visitas") });
+  if (primeiros.length) linhas.push({ cor: agendas.some((x) => x.ag.primeiro && x.ag.status === "atrasado") ? C.vermelho : C.amarelo, icone: "🌱", titulo: `1º monitoramento (estande): ${primeiros.map((t) => t.nome).join(", ")}`, sub: "até 5 dias depois da emergência — priorize a contagem do estande", ir: () => irPara("visitas") });
+  if (atrasados.length) linhas.push({ cor: C.amarelo, icone: "🐛", titulo: `Monitorar pragas: ${atrasados.map((t) => t.nome).join(", ")}`, sub: "soja e demais a cada 10 dias, algodão toda semana, até a colheita", ir: () => irPara("visitas") });
   // contas a pagar: ficam no painel do Financeiro (pedido do Daniel, 16/09/2026)
   // chuva dos últimos 7 dias (média entre pluviômetros)
   const de7 = new Date(hojeMs - 7 * 86400000).toISOString().slice(0, 10);
@@ -22323,11 +22344,12 @@ function panoramaDaLavoura(fazenda, lavoura, apls, visitas, hoje) {
       const dae = al.emergencia ? diasEntreISO(al.emergencia, hoje) : null;
       const intervalo = intervaloMonitoramento(cultura);
       const diasMon = um ? diasEntreISO(String(um.data).slice(0, 10), hoje) : null;
+      const agenda = al.emergencia ? agendaMonitoramento(al.emergencia, um ? um.data : "", cultura, hoje) : null;
       const fz = fung.find((x) => x.t.id === t.id && (x.parte || null) === (al.parte || null)) || null;
       linhas.push({ talhaoId: t.id, talhao: t.nome, parte: al.parte, areaHa: al.areaHa, cultura, variedade: al.variedade, plantio: al.plantio, emergencia: al.emergencia, dae, estande: al.estande,
         ultima: feitas[feitas.length - 1] || null, fungicidas: feitas.filter((f) => f.fungicida).length, proxFungicida: fz && !fz.encerrado ? { data: fz.proxima, status: fz.status } : null,
-        monitoramento: um ? { data: String(um.data).slice(0, 10), dias: diasMon, emDia: diasMon < intervalo, acima: pragasAcima(fazenda, um) } : null,
-        monitorar: dae != null && dae >= 0 && dae <= 240, intervalo, pendencias });
+        monitoramento: um ? { data: String(um.data).slice(0, 10), dias: diasMon, emDia: agenda ? !agenda.precisa : diasMon < intervalo, acima: pragasAcima(fazenda, um) } : null,
+        monitorar: dae != null && dae >= 0 && dae <= 240, intervalo, pendencias, agenda });
     }
   }
   return linhas.sort((a, b) => String(a.talhao).localeCompare(String(b.talhao), "pt-BR", { numeric: true }) || String(a.parte || "").localeCompare(String(b.parte || "")));
@@ -22475,7 +22497,7 @@ function SecaoRelatorios({ fazenda, prog, apls, ajustes, chuvas, visitas, kml, e
               <div style={{ color: C.cinza }}>{l.plantio ? `Plantio ${fmtD(l.plantio)}` : "Plantio não lançado"}{l.emergencia ? ` · emergência ${fmtD(l.emergencia)}` : ""}{l.estande > 0 ? ` · estande ${fmtN(l.estande)} pl/ha` : " · estande não contado"}</div>
               <div><b>Última aplicação:</b> {l.ultima ? `${fmtD(l.ultima.data)} — ${nomeMod(l.ultima.modulo)}${l.ultima.tipo ? ` ${l.ultima.tipo}` : ""}${l.ultima.alvo ? ` (${l.ultima.alvo})` : ""}${l.ultima.produtos ? `: ${l.ultima.produtos}` : ""}` : "nenhuma executada"}</div>
               <div><b>Fungicidas:</b> {l.fungicidas} {l.fungicidas === 1 ? "aplicação feita" : "aplicações feitas"}{f ? <span style={{ color: f.status === "vencida" ? C.vermelho : f.status === "proxima" ? "#7A5C00" : C.verdeEscuro, fontWeight: 800 }}> · próxima {fmtD(f.data)}{f.status === "vencida" ? " (ATRASADA)" : f.status === "proxima" ? " (chegando)" : ""}</span> : null}</div>
-              <div><b>Monitoramento:</b> {m ? <>{fmtD(m.data)} (há {m.dias} dia{m.dias === 1 ? "" : "s"}) <span style={{ color: m.emDia ? C.verdeEscuro : C.vermelho, fontWeight: 800 }}>{m.emDia ? "✓ em dia" : `⚠ atrasado (a cada ${l.intervalo} dias)`}</span></> : <span style={{ color: l.monitorar ? C.vermelho : C.cinza, fontWeight: l.monitorar ? 800 : 500 }}>{l.monitorar ? "⚠ nunca monitorado" : "—"}</span>}
+              <div><b>Monitoramento:</b> {m ? <>{fmtD(m.data)} (há {m.dias} dia{m.dias === 1 ? "" : "s"}) <span style={{ color: m.emDia ? C.verdeEscuro : C.vermelho, fontWeight: 800 }}>{m.emDia ? `✓ em dia${l.agenda ? ` · próximo ${fmtD(l.agenda.proxima)}` : ""}` : l.agenda && l.agenda.primeiro ? `⚠ falta o 1º monitoramento (estande) — era até ${fmtD(l.agenda.proxima)}` : `⚠ atrasado (a cada ${l.intervalo} dias)`}</span></> : <span style={{ color: l.monitorar ? (l.agenda && l.agenda.status === "primeiro" ? "#7A5C00" : C.vermelho) : C.cinza, fontWeight: l.monitorar ? 800 : 500 }}>{l.monitorar ? (l.agenda && l.agenda.status === "primeiro" ? `🌱 1º monitoramento (estande) até ${fmtD(l.agenda.proxima)}` : l.agenda && l.agenda.primeiro ? `⚠ falta o 1º monitoramento (estande) — era até ${fmtD(l.agenda.proxima)}` : "⚠ nunca monitorado") : "—"}</span>}
                 {m && m.acima.length > 0 && <span style={{ color: C.vermelho, fontWeight: 800 }}> · acima do nível: {m.acima.map((a) => `${a.nome} ${fmtN(a.valor)}${a.unidade}`).join(", ")}</span>}</div>
               {l.pendencias > 0 && <div style={{ color: "#7A5C00", fontWeight: 700 }}>⏳ {l.pendencias} {l.pendencias === 1 ? "recomendação esperando" : "recomendações esperando"} execução</div>}
             </div>
@@ -26856,7 +26878,7 @@ function quadroPragas(mon) {
 }
 const rotuloItem = (q) => (q.grupo && q.nome ? `${q.grupo} · ${q.nome}` : q.nome || q.grupo);
 
-function MonitoramentoPragas({ fazenda, lavoura, kml, usuario, onFechar, onSalvar, onAtualizarLavoura, podeEditarLavoura, talhaoInicial }) {
+function MonitoramentoPragas({ fazenda, lavoura, kml, usuario, onFechar, onSalvar, onAtualizarLavoura, podeEditarLavoura, talhaoInicial, monitoramentos }) {
   const talhoes = fazenda.talhoes || [];
   const temKml = kml && kml.poligonos && kml.poligonos.length > 0;
   const [talhaoId, setTalhaoId] = useState("");
@@ -26895,7 +26917,20 @@ function MonitoramentoPragas({ fazenda, lavoura, kml, usuario, onFechar, onSalva
   const semEstande = !!t && (parteObj ? !(num(parteObj.estandeFinal) > 0) : !(num(lv && lv.estandeFinal) > 0));
   // já tem estande: o técnico pode contar de novo (vira o último; a média junta com as outras contagens)
   const [contarEstande, setContarEstande] = useState(false);
-  const pedeEstande = semEstande || contarEstande;
+  // 1º monitoramento depois da emergência (nenhum desde ela, neste talhão/parte): o foco é o ESTANDE
+  const primeiroMon = !!t && !!emergencia && !(monitoramentos || []).some((m) => m.talhaoId === t.id && (!parteObj || !m.parteNome || m.parteNome === parteObj.nome) && String(m.data || "").slice(0, 10) >= emergencia);
+  const pedeEstande = semEstande || contarEstande || primeiroMon;
+  const blocoEstande = () => (pedeEstande && atual && atual.estande ? (
+                <div style={{ background: "#fff", borderRadius: 10, padding: "8px 10px", marginTop: 8 }}>
+                  <div style={{ fontWeight: 800, color: C.navy, fontSize: 12.5 }}>🌱 Estande <span style={{ fontWeight: 600, color: C.cinza }}>{semEstande ? "· o talhão ainda não tem estande lançado — conte as plantas aqui" : "· nova contagem — vira o último estande; a média junta com as anteriores"}</span></div>
+                  <div style={{ display: "flex", gap: 6, alignItems: "flex-end", marginTop: 4, flexWrap: "wrap" }}>
+                    <div><label style={{ marginTop: 0, fontSize: 10.5 }}>Plantas contadas</label><input type="number" inputMode="numeric" value={atual.estande.plantas} onChange={(e) => setAtual({ ...atual, estande: { ...atual.estande, plantas: e.target.value } })} placeholder="ex.: 12" style={{ width: 80, marginTop: 0, textAlign: "center", fontWeight: 800 }} /></div>
+                    <div><label style={{ marginTop: 0, fontSize: 10.5 }}>em quantos metros</label><input type="number" inputMode="decimal" value={atual.estande.metros} onChange={(e) => setAtual({ ...atual, estande: { ...atual.estande, metros: e.target.value } })} style={{ width: 70, marginTop: 0, textAlign: "center" }} /></div>
+                    <div><label style={{ marginTop: 0, fontSize: 10.5 }}>espaçamento (cm)</label><input type="number" inputMode="decimal" value={atual.estande.espacamento} onChange={(e) => setAtual({ ...atual, estande: { ...atual.estande, espacamento: e.target.value } })} style={{ width: 70, marginTop: 0, textAlign: "center" }} /></div>
+                    <div style={{ flex: 1, fontWeight: 900, color: C.verdeEscuro, fontSize: 13, paddingBottom: 8 }}>{plantasHaDe(atual.estande) > 0 ? `${fmtN(Math.round(plantasHaDe(atual.estande)))} plantas/ha` : "—"}</div>
+                  </div>
+                </div>
+  ) : null);
   const espacamentoPadrao = (lv && num(lv.espacamento) > 0) ? String(lv.espacamento) : (cultura === "Algodão" ? "76" : cultura === "Milho" ? "50" : "45");
   const plantasHaDe = (e) => { const esp = num(e && e.espacamento) / 100, m = num(e && e.metros), pl = num(e && e.plantas); return esp > 0 && m > 0 && pl > 0 ? (pl / m) * (10000 / esp) : 0; };
   // GPS ao vivo enquanto o monitoramento está aberto (para guiar até o ponto)
@@ -27110,7 +27145,9 @@ function MonitoramentoPragas({ fazenda, lavoura, kml, usuario, onFechar, onSalva
           {atual && (
             <div style={{ background: C.verdeBg, borderRadius: 12, padding: "10px 12px", marginTop: 6 }}>
               <div style={{ fontWeight: 900, color: C.verdeEscuro, fontSize: 14 }}>Ponto {atual.n} <span style={{ fontWeight: 600, fontSize: 12, color: C.cinza }}>· {atual.hora}{coordOk(atual.lat) && atual.lat != null ? ` · ${Number(atual.lat).toFixed(5)}, ${Number(atual.lng).toFixed(5)}` : " · sem posição"}</span></div>
-              <div style={{ fontSize: 11.5, color: C.cinza, marginBottom: 4 }}>{metodo === "pano" ? "Quantos por metro de linha no pano de batida" : "Marque o que está presente neste ponto"}</div>
+              {primeiroMon && <div style={{ background: C.amareloBg, color: "#7A5C00", borderRadius: 10, padding: "7px 10px", fontSize: 12.5, fontWeight: 800, marginBottom: 6 }}>🌱 1º monitoramento depois da emergência: o principal é o ESTANDE — conte as plantas neste ponto primeiro.</div>}
+              {primeiroMon && blocoEstande()}
+              <div style={{ fontSize: 11.5, color: C.cinza, marginBottom: 4, marginTop: primeiroMon ? 8 : 0 }}>{metodo === "pano" ? "Quantos por metro de linha no pano de batida" : "Marque o que está presente neste ponto"}</div>
               <button onClick={() => setIdentificando(true)} style={{ width: "100%", marginBottom: 6, padding: "9px 10px", background: C.verdeBg, color: C.verdeEscuro, border: "none", borderRadius: 10, fontWeight: 800, fontSize: 12.5 }}>🔍 Não sei o que é — identificar pela foto (guia)</button>
               {itens.map((it, idx) => {
                 const v = atual.pragas[it.chave];
@@ -27148,17 +27185,7 @@ function MonitoramentoPragas({ fazenda, lavoura, kml, usuario, onFechar, onSalva
               {!semEstande && !atual.estande && (
                 <button onClick={() => { setContarEstande(true); setAtual({ ...atual, estande: { plantas: "", metros: "1", espacamento: espacamentoPadrao } }); }} style={{ marginTop: 8, padding: "7px 12px", background: C.verdeBg, color: C.verdeEscuro, border: "none", borderRadius: 10, fontWeight: 800, fontSize: 12.5 }}>🌱 Contar o estande de novo neste ponto</button>
               )}
-              {pedeEstande && atual.estande && (
-                <div style={{ background: "#fff", borderRadius: 10, padding: "8px 10px", marginTop: 8 }}>
-                  <div style={{ fontWeight: 800, color: C.navy, fontSize: 12.5 }}>🌱 Estande <span style={{ fontWeight: 600, color: C.cinza }}>{semEstande ? "· o talhão ainda não tem estande lançado — conte as plantas aqui" : "· nova contagem — vira o último estande; a média junta com as anteriores"}</span></div>
-                  <div style={{ display: "flex", gap: 6, alignItems: "flex-end", marginTop: 4, flexWrap: "wrap" }}>
-                    <div><label style={{ marginTop: 0, fontSize: 10.5 }}>Plantas contadas</label><input type="number" inputMode="numeric" value={atual.estande.plantas} onChange={(e) => setAtual({ ...atual, estande: { ...atual.estande, plantas: e.target.value } })} placeholder="ex.: 12" style={{ width: 80, marginTop: 0, textAlign: "center", fontWeight: 800 }} /></div>
-                    <div><label style={{ marginTop: 0, fontSize: 10.5 }}>em quantos metros</label><input type="number" inputMode="decimal" value={atual.estande.metros} onChange={(e) => setAtual({ ...atual, estande: { ...atual.estande, metros: e.target.value } })} style={{ width: 70, marginTop: 0, textAlign: "center" }} /></div>
-                    <div><label style={{ marginTop: 0, fontSize: 10.5 }}>espaçamento (cm)</label><input type="number" inputMode="decimal" value={atual.estande.espacamento} onChange={(e) => setAtual({ ...atual, estande: { ...atual.estande, espacamento: e.target.value } })} style={{ width: 70, marginTop: 0, textAlign: "center" }} /></div>
-                    <div style={{ flex: 1, fontWeight: 900, color: C.verdeEscuro, fontSize: 13, paddingBottom: 8 }}>{plantasHaDe(atual.estande) > 0 ? `${fmtN(Math.round(plantasHaDe(atual.estande)))} plantas/ha` : "—"}</div>
-                  </div>
-                </div>
-              )}
+              {!primeiroMon && blocoEstande()}
               <input value={atual.obs} onChange={(e) => setAtual({ ...atual, obs: e.target.value })} placeholder="observação deste ponto (estádio, dano, inimigo natural…)" style={{ marginTop: 6 }} />
               <FotosCampo fotos={atual.fotos || []} onMudar={(l) => setAtual({ ...atual, fotos: l })} max={3} rotulo="foto da praga"
                 jaUsado={contarFotos([...fotosGeral, ...pontos.filter((p) => p.n !== atual.n).flatMap((p) => p.fotos || [])])} />
@@ -27750,16 +27777,16 @@ function SecaoVisitas({ podeApagar, fazenda, lavoura, kml, visitas, consultor, u
               if (!lv || !lv.dataEmergencia) return null;
               const dae = Math.floor((hojeMs - new Date(lv.dataEmergencia + "T12:00:00").getTime()) / 86400000);
               if (dae < 0 || dae > 240) return null;                     // ainda não emergiu / já passou do ciclo (algodão vai a ~220 DAE)
-              const ult = monitoramentos.filter((m) => m.talhaoId === t.id).map((m) => m.data).sort().pop();
-              const dias = ult ? Math.floor((hojeMs - new Date(ult + "T12:00:00").getTime()) / 86400000) : null;
-              return { t, cultura: lv.cultura || t.cultura, dae, ult, dias, intervalo: intervaloMonitoramento(lv.cultura || t.cultura) };
-            }).filter(Boolean).sort((a, b) => (b.dias == null ? 999 : b.dias) - (a.dias == null ? 999 : a.dias));
+              const ult = monitoramentos.filter((m) => m.talhaoId === t.id).map((m) => String(m.data || "").slice(0, 10)).sort().pop();
+              const ag = agendaMonitoramento(lv.dataEmergencia, ult, lv.cultura || t.cultura, hojeISO());
+              return { t, cultura: lv.cultura || t.cultura, dae, ult, dias: ag.dias, intervalo: ag.intervalo, ag };
+            }).filter(Boolean).sort((a, b) => b.ag.atraso - a.ag.atraso);
             if (!linhas.length) return null;
-            const atrasados = linhas.filter((l) => l.dias == null || l.dias >= l.intervalo).length;
+            const atrasados = linhas.filter((l) => l.ag.precisa).length;
             return (
               <div style={{ background: "#fff", border: `1.5px solid ${C.borda}`, borderRadius: 12, padding: "10px 12px", marginBottom: 12 }}>
                 <div style={{ fontWeight: 900, color: C.navy, fontSize: 13.5 }}>📆 Semana de monitoramento <span style={{ fontWeight: 600, fontSize: 12, color: atrasados ? C.vermelho : C.verdeEscuro }}>· {atrasados ? `${atrasados} ${atrasados > 1 ? "talhões" : "talhão"} para fazer` : "tudo em dia"}</span></div>
-                <div style={{ fontSize: 11.5, color: C.cinza, marginBottom: 6 }}>Da emergência ao início da colheita: algodão a cada 7 dias, soja, milho e demais a cada 10. Toque no talhão para começar nele.</div>
+                <div style={{ fontSize: 11.5, color: C.cinza, marginBottom: 6 }}>1º monitoramento até 5 dias depois da emergência, priorizando o estande. Depois, até a colheita: soja, milho e demais a cada 10 dias, algodão toda semana. Toque no talhão para começar nele.</div>
                 {onAtualizarFazenda && consultor && (
                   <button className="nao-imprimir" onClick={() => setEditandoNiveis(!editandoNiveis)} style={{ marginBottom: 6, background: C.fundo, border: "none", borderRadius: 8, padding: "6px 10px", fontWeight: 800, fontSize: 12, color: C.navy }}>⚙️ Níveis de controle por praga {editandoNiveis ? "▴" : "▾"}</button>
                 )}
@@ -27779,13 +27806,13 @@ function SecaoVisitas({ podeApagar, fazenda, lavoura, kml, visitas, consultor, u
                     <button onClick={salvarNiveis} style={{ width: "100%", padding: 10, background: C.verde, color: "#fff", border: "none", borderRadius: 10, fontWeight: 800, fontSize: 13 }}>Salvar níveis de controle</button>
                   </div>
                 )}
-                {linhas.map(({ t, cultura, dae, ult, dias, intervalo }) => {
-                  const cor = dias == null || dias >= intervalo + 3 ? C.vermelho : dias >= intervalo ? C.amarelo : C.verdeEscuro;
-                  const fundo = dias == null || dias >= intervalo + 3 ? "#FFF0F0" : dias >= intervalo ? C.amareloBg : C.verdeBg;
+                {linhas.map(({ t, cultura, dae, ult, dias, intervalo, ag }) => {
+                  const cor = ag.status === "atrasado" ? C.vermelho : ag.status === "emdia" ? C.verdeEscuro : "#7A5C00";
+                  const fundo = ag.status === "atrasado" ? "#FFF0F0" : ag.status === "emdia" ? C.verdeBg : C.amareloBg;
                   return (
                     <button key={t.id} onClick={() => consultor && setMonitorando(t.id)} style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, background: fundo, border: "none", borderRadius: 8, padding: "7px 10px", marginBottom: 4, textAlign: "left" }}>
                       <span style={{ fontSize: 13 }}><b style={{ color: C.navy }}>{t.nome}</b> <span style={{ color: C.cinza }}>· {cultura} · {dae} DAE</span></span>
-                      <span style={{ fontWeight: 800, fontSize: 12, color: cor, flex: "none" }}>{dias == null ? "nunca monitorado" : dias === 0 ? "hoje ✓" : `há ${dias} dia${dias > 1 ? "s" : ""}${dias >= intervalo ? " · fazer" : ` ✓ (volta em ${intervalo - dias} d)`}`}</span>
+                      <span style={{ fontWeight: 800, fontSize: 12, color: cor, flex: "none", textAlign: "right" }}>{ag.primeiro ? (ag.status === "atrasado" ? `🌱 1º (estande) atrasado — era até ${fmtD(ag.proxima)}` : `🌱 1º (estande) até ${fmtD(ag.proxima)}`) : dias === 0 ? "hoje ✓" : `há ${dias} dia${dias > 1 ? "s" : ""}${ag.precisa ? " · fazer" : ` ✓ (próximo ${fmtD(ag.proxima)})`}`}</span>
                     </button>
                   );
                 })}
@@ -27813,7 +27840,7 @@ function SecaoVisitas({ podeApagar, fazenda, lavoura, kml, visitas, consultor, u
       {modal && <ModalVisita onFechar={() => setModal(false)} onSalvar={(v) => { onSalvar([...visitas, { id: idNovo(), ...v }]); setModal(false); }} />}
       {chat && <ChatVisita fazenda={fazenda} lavoura={lavoura} kml={kml} usuario={usuario} onFechar={() => setChat(false)}
         onSalvar={(v) => { const nova = { id: idNovo(), ...v }; onSalvar([...visitas, nova]); setChat(false); setAberta(nova.id); }} />}
-      {monitorando && <MonitoramentoPragas fazenda={fazenda} lavoura={lavoura} kml={kml} usuario={usuario} onFechar={() => setMonitorando(false)} talhaoInicial={typeof monitorando === "string" ? monitorando : null} onAtualizarLavoura={onAtualizarLavoura} podeEditarLavoura={podeEditarLavoura}
+      {monitorando && <MonitoramentoPragas fazenda={fazenda} lavoura={lavoura} kml={kml} usuario={usuario} monitoramentos={monitoramentos} onFechar={() => setMonitorando(false)} talhaoInicial={typeof monitorando === "string" ? monitorando : null} onAtualizarLavoura={onAtualizarLavoura} podeEditarLavoura={podeEditarLavoura}
         onSalvar={(m) => { const novo = { id: idNovo(), ...m }; onSalvar([...visitas, novo]); setMonitorando(false); setAberta(novo.id); }} />}
       {reg === "pulv" && <RegPulverizador usuario={usuario} onFechar={() => setReg(null)} onSalvar={salvarReg} />}
       {reg === "lanco" && <RegLanco usuario={usuario} maquinas={maquinas} onFechar={() => setReg(null)} onSalvar={salvarReg} />}
