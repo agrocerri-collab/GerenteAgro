@@ -6148,6 +6148,8 @@ function TelaFazenda({ fazenda, fazendas, grupos, papel, usuario, naNuvem, equip
     return () => clearTimeout(t);
   }, []);
 
+  // talhões divididos em partes (A/B): todos os mapas desenham a divisão
+  const divisoesMapa = React.useMemo(() => divisoesDaLavoura(lavoura, fazenda.talhoes), [lavoura, fazenda.talhoes]);
   if (!pronto) return <div style={{ padding: 40, textAlign: "center", color: C.cinza }}>Carregando dados da fazenda…</div>;
 
   const ICONES = [
@@ -6228,6 +6230,7 @@ function TelaFazenda({ fazenda, fazendas, grupos, papel, usuario, naNuvem, equip
   ];
 
   return (
+    <DivisoesCtx.Provider value={divisoesMapa}>
     <div style={{ maxWidth: 760, margin: "0 auto", padding: 16 }}>
       <div className="nao-imprimir" style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
         {secao !== "inicio" ? (
@@ -6840,6 +6843,7 @@ function TelaFazenda({ fazenda, fazendas, grupos, papel, usuario, naNuvem, equip
         produtosCatalogo={produtosCatalogo} fornecedores={fornecedores} onSalvarFornecedores={onSalvarFornecedores} notas={notas} entregas={entregas}
         salvarEntregas={(v) => gravar(kEnt(fazenda.id, safra), v, setEntregas, entregas)} />
     </div>
+    </DivisoesCtx.Provider>
   );
 }
 
@@ -9190,6 +9194,8 @@ function SecaoMapa({ fazenda, kml, apls, consultor, registrar, fotosMapa, onSalv
             </g>
           );
         })}
+
+        {(kml.poligonos).map((pg, i) => <DivisaoNoMapa key={"dv" + i} talhaoId={pg.talhaoId} anel={pg.aneis[0]} proj={([x, y]) => mundo(x, y)} fonte={fonte} />)}
 
         {satelite && (
           <text x={W - folga / 2} y={H - folga / 2} textAnchor="end" fontSize={fonte * 0.55}
@@ -18295,6 +18301,7 @@ function MapaSoloFazenda({ kml, talhoes, grupos, atributo, inverter, unidade, ao
               <text x={tq.x} y={tq.y - fonte * 0.95} textAnchor="middle" fontSize={fonte * 1.15} fontWeight="900" fill="#fff" stroke="#17335F" strokeWidth={fonte / 4} paintOrder="stroke">{tq.estimado ? "≈ " : ""}{fmtN(Math.round(tq.valor * 100) / 100)}</text>
             </g>
           )}
+          {(pols).map((pg, i) => <DivisaoNoMapa key={"dv" + i} talhaoId={pg.talhaoId} anel={pg.aneis[0]} proj={proj} fonte={fonte} />)}
         </svg>
       </div>
       {tq ? (
@@ -18942,6 +18949,7 @@ function MapeamentoTalhoes({ fazenda, kml, podeGravar, registrar, onSalvarKml, o
             return <g key={"k" + i}><path d={d(pg.aneis)} fillRule="evenodd" fill={selK ? "rgba(255,214,0,.22)" : "rgba(255,255,255,.08)"} stroke={selK ? "#FFD600" : "rgba(255,255,255,.75)"} strokeWidth={selK ? 2.5 : 1.2} strokeDasharray={selK ? "" : "5 4"} />
               {nome && vista.z >= 13 && <text x={x} y={y} textAnchor="middle" fontSize={11} fontWeight="800" fill="#fff" stroke="rgba(0,0,0,.6)" strokeWidth={2.5} paintOrder="stroke">{nome}</text>}</g>;
           })}
+          {temKml && kml.poligonos.map((pg, i) => <DivisaoNoMapa key={"dv" + i} talhaoId={pg.talhaoId} anel={pg.aneis[0]} proj={naTela} fonte={12} />)}
           {/* desenhados agora */}
           {desenhados.map((dd) => {
             const [x, y] = centroTela(dd.aneis[0]); const sel = dd.id === selecionado;
@@ -20367,6 +20375,7 @@ function MapaVariedadesSvg({ kml, talhoes, linhas, cores }) {
           </g>
         );
       })}
+      {(poligonos).map((pg, i) => <DivisaoNoMapa key={"dv" + i} talhaoId={pg.talhaoId} anel={pg.aneis[0]} proj={([x, y]) => paraMundo(x, y, zoom)} fonte={fonte} />)}
     </svg>
   );
 }
@@ -23233,6 +23242,7 @@ function MapaImpresso({ kml, talhoes, soLigados }) {
           </g>
         );
       })}
+      {(poligonos).map((pg, i) => <DivisaoNoMapa key={"dv" + i} talhaoId={pg.talhaoId} anel={pg.aneis[0]} proj={([x, y]) => paraMundo(x, y, zoom)} fonte={fonte} />)}
     </svg>
   );
 }
@@ -25590,6 +25600,66 @@ function lerCoordenada(txt) {
 const parteDoPonto = (partes, lon, lat) => (partes || []).find((p) => p.anel && pontoNoAnel(lon, lat, p.anel)) || null;
 // Corta o contorno do talhão por uma reta (dois pontos [lng, lat]) → [lado esquerdo, lado direito]
 // (anéis fechados, olhando do 1º para o 2º ponto). Conta em metros, no plano local.
+// ---- divisão do talhão nos MAPAS: {talhaoId: {linha: [[lng,lat],[lng,lat]] | null, partes: [{nome, anel}]}} ----
+// (na sala de teste o React é de mentira: sem createContext, os mapas só não desenham a divisão)
+const DivisoesCtx = typeof React !== "undefined" && React.createContext ? React.createContext(null) : null;
+function divisoesDaLavoura(lavoura, talhoes) {
+  const m = {};
+  for (const l of lavoura || []) {
+    if (!l || !l.talhaoId) continue;
+    const t = (talhoes || []).find((x) => x.id === l.talhaoId) || { id: l.talhaoId };
+    const ps = partesDaLavoura(l, t);
+    if (ps.length < 2) continue;
+    const linha = Array.isArray(l.divisao) && l.divisao.length === 2 ? l.divisao.map((q) => (Array.isArray(q) ? [num(q[0]), num(q[1])] : [num(q && q.x), num(q && q.y)])) : null;
+    const partes = ps.filter((p) => p.anel && p.anel.length >= 4).map((p) => ({ nome: p.nome, anel: p.anel }));
+    if (linha || partes.length >= 2) m[l.talhaoId] = { linha, partes };
+  }
+  return m;
+}
+// trecho da reta p1→p2 (prolongada) que fica dentro do anel: [[lng,lat],[lng,lat]] ou null
+function segmentoNoAnel(anel, p1, p2) {
+  if (!anel || anel.length < 3 || !p1 || !p2) return null;
+  const dx = p2[0] - p1[0], dy = p2[1] - p1[1];
+  if (Math.abs(dx) + Math.abs(dy) < 1e-12) return null;
+  const ts = [];
+  for (let i = 0; i < anel.length; i++) {
+    const a = anel[i], b = anel[(i + 1) % anel.length]; const ex = b[0] - a[0], ey = b[1] - a[1];
+    const den = dx * ey - dy * ex; if (Math.abs(den) < 1e-18) continue;
+    const tt = ((a[0] - p1[0]) * ey - (a[1] - p1[1]) * ex) / den, u = ((a[0] - p1[0]) * dy - (a[1] - p1[1]) * dx) / den;
+    if (u >= -1e-9 && u <= 1 + 1e-9) ts.push(tt);
+  }
+  if (ts.length < 2) return null;
+  const t0 = Math.min(...ts), t1 = Math.max(...ts);
+  return t1 - t0 > 1e-12 ? [[p1[0] + dx * t0, p1[1] + dy * t0], [p1[0] + dx * t1, p1[1] + dy * t1]] : null;
+}
+// o que desenhar num polígono: a linha da divisão dentro dele e o ponto da etiqueta de cada parte
+function geometriaDaDivisao(dv, anel) {
+  if (!dv || !anel) return null;
+  const seg = dv.linha ? segmentoNoAnel(anel, dv.linha[0], dv.linha[1]) : null;
+  const centro = (a) => { const pts = a.slice(0, a.length > 1 && a[0][0] === a[a.length - 1][0] && a[0][1] === a[a.length - 1][1] ? -1 : undefined); return [pts.reduce((s, p) => s + p[0], 0) / pts.length, pts.reduce((s, p) => s + p[1], 0) / pts.length]; };
+  // a etiqueta só vale para a parte que cai neste polígono (talhão com mais de um polígono no KML)
+  const rotulos = (dv.partes || []).map((p) => ({ nome: p.nome, ponto: centro(p.anel) })).filter((r) => pontoNoAnel(r.ponto[0], r.ponto[1], anel));
+  if (!seg && !rotulos.length) return null;
+  return { seg, rotulos };
+}
+// desenho no SVG de qualquer mapa: proj([lng,lat]) → [x,y] na escala do mapa; fonte = letra do nome do talhão
+function DivisaoNoMapa({ talhaoId, anel, proj, fonte }) {
+  const divs = DivisoesCtx ? React.useContext(DivisoesCtx) : null;
+  const geo = divs && talhaoId ? geometriaDaDivisao(divs[talhaoId], anel) : null;
+  if (!geo) return null;
+  const f = num(fonte) > 0 ? num(fonte) : 12, w = f / 7;
+  const s = geo.seg ? geo.seg.map(proj) : null;
+  return (
+    <g style={{ pointerEvents: "none" }}>
+      {s && <line x1={s[0][0]} y1={s[0][1]} x2={s[1][0]} y2={s[1][1]} stroke="#fff" strokeWidth={w * 2.6} strokeLinecap="round" opacity="0.9" />}
+      {s && <line x1={s[0][0]} y1={s[0][1]} x2={s[1][0]} y2={s[1][1]} stroke="#E65100" strokeWidth={w * 1.4} strokeDasharray={`${w * 5} ${w * 3}`} strokeLinecap="round" />}
+      {geo.rotulos.map((r) => { const [x, y] = proj(r.ponto); return (
+        <g key={r.nome}><circle cx={x} cy={y} r={f * 0.95} fill="#E65100" stroke="#fff" strokeWidth={w * 1.3} />
+          <text x={x} y={y + f * 0.4} textAnchor="middle" fontSize={f * 1.15} fontWeight="900" fill="#fff">{r.nome}</text></g>
+      ); })}
+    </g>
+  );
+}
 function dividirAnelPorLinha(anel, p1, p2) {
   const pts = fecharAnel(anel || []); if (pts.length < 4 || !p1 || !p2) return null;
   const lat0 = pts.reduce((s, p) => s + p[1], 0) / pts.length;
@@ -28349,6 +28419,7 @@ function TabelaSemeadura({ espacamento, populacao, talhoes, semente }) {
 // Mapa de localização: satélite + desenho do mapa da fazenda, com os talhões pedidos em destaque (nome e ha).
 // A janela é a dos talhões em destaque, com folga para aparecerem os vizinhos e as estradas.
 function MapaLocalTalhoes({ kml, talhoes, ids, altura }) {
+  const divisoes = DivisoesCtx ? React.useContext(DivisoesCtx) : null;
   const pols = ((kml && kml.poligonos) || []).filter((g) => g.aneis && g.aneis[0] && g.aneis[0].length >= 3);
   const sel = pols.filter((g) => g.talhaoId && (ids || []).includes(g.talhaoId));
   const ref = useRef(null);
@@ -28363,7 +28434,7 @@ function MapaLocalTalhoes({ kml, talhoes, ids, altura }) {
   if (temSel) for (let z = 17; z >= 10; z--) { const a = paraMundo(minX, maxY, z), b = paraMundo(maxX, minY, z); if (b[0] - a[0] <= 1100 && b[1] - a[1] <= 1100) { zoom = z; break; } }
   const canto = temSel ? paraMundo(minX, maxY, zoom) : [0, 0], fimP = temSel ? paraMundo(maxX, minY, zoom) : [120, 120];
   const vbX = canto[0], vbY = canto[1], W = Math.max(fimP[0] - canto[0], 120), H = Math.max(fimP[1] - canto[1], 120);
-  const chave = temSel ? [zoom, vbX.toFixed(0), vbY.toFixed(0), W.toFixed(0), H.toFixed(0), sel.map((g) => g.talhaoId).join(",")].join("|") : "";
+  const chave = temSel ? [zoom, vbX.toFixed(0), vbY.toFixed(0), W.toFixed(0), H.toFixed(0), sel.map((g) => g.talhaoId).join(","), JSON.stringify(sel.map((g) => (divisoes || {})[g.talhaoId] || null))].join("|") : "";
   useEffect(() => {
     if (!temSel) return;
     const cv = ref.current; if (!cv) return;
@@ -28388,6 +28459,15 @@ function MapaLocalTalhoes({ kml, talhoes, ids, altura }) {
         g.font = `900 ${fonte}px Archivo, "Instrument Sans", system-ui, sans-serif`;
         if (comSatelite) { g.lineWidth = fonte / 6; g.strokeStyle = "rgba(0,0,0,.75)"; g.strokeText(nome, x, y); g.fillStyle = "#fff"; } else { g.lineWidth = fonte / 6; g.strokeStyle = "rgba(255,255,255,.9)"; g.strokeText(nome, x, y); g.fillStyle = C.navy; }
         g.fillText(nome, x, y);
+        // talhão dividido (A/B): linha tracejada e etiqueta de cada parte
+        const geo = divisoes ? geometriaDaDivisao(divisoes[pg.talhaoId], pg.aneis[0]) : null;
+        if (geo) {
+          g.save(); g.lineCap = "round";
+          if (geo.seg) { const [a, b] = geo.seg.map(([lx, ly]) => mundo(lx, ly)); g.setLineDash([]); g.lineWidth = traco * 3.2; g.strokeStyle = "rgba(255,255,255,.9)"; g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke(); g.setLineDash([traco * 6, traco * 4]); g.lineWidth = traco * 1.8; g.strokeStyle = "#E65100"; g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke(); }
+          g.setLineDash([]);
+          for (const r of geo.rotulos) { const [px, py] = mundo(r.ponto[0], r.ponto[1]); g.beginPath(); g.arc(px, py, fonte * 0.8, 0, Math.PI * 2); g.fillStyle = "#E65100"; g.fill(); g.lineWidth = traco * 1.2; g.strokeStyle = "#fff"; g.stroke(); g.font = `900 ${fonte}px Archivo, "Instrument Sans", system-ui, sans-serif`; g.fillStyle = "#fff"; g.fillText(r.nome, px, py + fonte * 0.35); }
+          g.restore(); g.textAlign = "center";
+        }
         if (tl && num(tl.areaHa) > 0) { const s = `${fmtN(num(tl.areaHa))} ha`; g.font = `800 ${fonte * 0.78}px Archivo, "Instrument Sans", system-ui, sans-serif`; if (comSatelite) { g.lineWidth = fonte / 7; g.strokeStyle = "rgba(0,0,0,.75)"; g.strokeText(s, x, y + fonte * 1.05); g.fillStyle = "#FFE96B"; } else { g.lineWidth = fonte / 7; g.strokeStyle = "rgba(255,255,255,.9)"; g.strokeText(s, x, y + fonte * 1.05); g.fillStyle = "#7A5C00"; } g.fillText(s, x, y + fonte * 1.05); }
       }
       g.restore();
@@ -32816,6 +32896,7 @@ function MapaChuva({ kml, medidores, talhoes }) {
               fill="#fff" stroke="rgba(0,0,0,.55)" strokeWidth={fonte / 12} paintOrder="stroke">{fmtN(p.mm)}</text>
           </g>
         ))}
+        {(temKml ? kml.poligonos : []).map((pg, i) => <DivisaoNoMapa key={"dv" + i} talhaoId={pg.talhaoId} anel={pg.aneis[0]} proj={projAj} fonte={fonte} />)}
       </svg>
       <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8, fontSize: 11, color: C.cinza }}>
         <span>{fmtN(minMm)} mm</span>
@@ -32951,6 +33032,7 @@ function MapaMedicao({ kml, talhaoId, pontos, pos }) {
         {num(pos.acc) > 0 && <circle cx={eu[0]} cy={eu[1]} r={Math.max(traco * 2, num(pos.acc) / mpp)} fill="rgba(33,150,243,.18)" stroke="rgba(33,150,243,.6)" strokeWidth={traco * 0.6} />}
         <circle cx={eu[0]} cy={eu[1]} r={traco * 3.2} fill="#2196F3" stroke="#fff" strokeWidth={traco * 1.2} />
       </g>}
+      {(sel).map((pg, i) => <DivisaoNoMapa key={"dv" + i} talhaoId={pg.talhaoId} anel={pg.aneis[0]} proj={([x, y]) => mundo(x, y)} fonte={fonte} />)}
     </svg>
   );
 }
@@ -33627,6 +33709,7 @@ function MapaMmTalhoes({ kml, talhoes, valores, max }) {
           </g>
         );
       })}
+      {(poligonos).map((pg, i) => <DivisaoNoMapa key={"dv" + i} talhaoId={pg.talhaoId} anel={pg.aneis[0]} proj={([x, y]) => paraMundo(x, y, zoom)} fonte={fonte} />)}
     </svg>
   );
 }
@@ -34559,6 +34642,7 @@ function MapaToque({ kml, medidores, destaque, aoTocar, talhoes, aoArrastar }) {
           <text x={x} y={y - fonte * 0.8} textAnchor="middle" fontSize={fonte * 0.55} fontWeight="800" fill="#fff" stroke="rgba(0,0,0,.55)" strokeWidth={fonte / 14} paintOrder="stroke">{destaque.nome || "novo"}</text>
         </g>
       ); })()}
+      {(kml.poligonos).map((pg, i) => <DivisaoNoMapa key={"dv" + i} talhaoId={pg.talhaoId} anel={pg.aneis[0]} proj={projAj} fonte={fonte * 0.8} />)}
     </svg>
   );
 }
