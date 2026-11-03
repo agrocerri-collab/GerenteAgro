@@ -20513,6 +20513,10 @@ function ModalDivisaoTalhao({ talhao, poligono, partes, divisaoInicial, onFechar
   const anelA = lados ? (inv ? lados[1] : lados[0]) : null, anelB = lados ? (inv ? lados[0] : lados[1]) : null;
   const areaA = inv ? areaD : areaE, areaB = inv ? areaE : areaD;
   const ok = !!(anelA && anelB);
+  // o mapa raramente mede igual ao cadastro do talhão: a diferença (ex.: 0,3 ha) vai para a parte maior
+  const totalTalhao = num(talhao.areaHa);
+  const [fechA, fechB] = ok ? fecharAreaNaMaior([Math.round(areaA * 100) / 100, Math.round(areaB * 100) / 100], totalTalhao) : [0, 0];
+  const difTalhao = ok && totalTalhao > 0 ? Math.round((totalTalhao - Math.round(areaA * 100) / 100 - Math.round(areaB * 100) / 100) * 100) / 100 : 0;
   const tr = Math.max(W, H) / 220, fonte = Math.max(W, H) / 16;
   const pontoDoEvento = (e) => {
     const svg = svgRef.current; if (!svg) return null;
@@ -20565,7 +20569,7 @@ function ModalDivisaoTalhao({ talhao, poligono, partes, divisaoInicial, onFechar
     const arr = (an) => an.map(([x, y]) => ({ x, y }));
     const limpa = (p) => { const { dae, ...r } = p; return r; };
     onSalvar({
-      partes: [{ ...limpa(partes[0]), anel: arr(anelA), ...(usarAreas ? { areaHa: Math.round(areaA * 100) / 100 } : {}) }, { ...limpa(partes[1]), anel: arr(anelB), ...(usarAreas ? { areaHa: Math.round(areaB * 100) / 100 } : {}) }],
+      partes: [{ ...limpa(partes[0]), anel: arr(anelA), ...(usarAreas ? { areaHa: fechA } : {}) }, { ...limpa(partes[1]), anel: arr(anelB), ...(usarAreas ? { areaHa: fechB } : {}) }],
       divisao: arr(pts),
     });
   };
@@ -20625,6 +20629,7 @@ function ModalDivisaoTalhao({ talhao, poligono, partes, divisaoInicial, onFechar
             <input type="checkbox" checked={usarAreas} onChange={(e) => setUsarAreas(e.target.checked)} style={{ width: 20, height: 20, margin: 0 }} />
             <span style={{ fontSize: 12.5 }}>Atualizar a área das partes com o que o mapa mediu</span>
           </label>
+          {usarAreas && difTalhao !== 0 && <div style={{ fontSize: 12, color: C.cinza, marginTop: 4 }}>O mapa mediu {fmtN(Math.abs(difTalhao))} ha {difTalhao > 0 ? "a menos" : "a mais"} que o talhão ({fmtN(totalTalhao)} ha): a diferença vai para a parte maior — fica {nomeA} {fmtN(fechA)} ha e {nomeB} {fmtN(fechB)} ha.</div>}
         </>)}
       </div>
       <BotaoSalvar disabled={!ok || andando} texto="Salvar a divisão" onClick={salvar} />
@@ -20836,20 +20841,20 @@ function ModalLavoura({ talhao, inicial, sugestao, variedades, onFechar, onSalva
   const [obs, setObs] = useState(base.obs || "");
   // Talhão plantado com duas variedades (ou em dias diferentes): cada parte tem
   // hectares, plantio e emergência próprios. Vazio = uma variedade só.
-  const [partes, setPartes] = useState(() => (inicial && inicial.partes && inicial.partes.length ? inicial.partes : (!inicial && sugestao && sugestao.partes && sugestao.partes.length >= 2 ? sugestao.partes : [])).map((p, k) => ({ ...p, id: p.id || `p${k}` })));
+  const [partes, setPartes] = useState(() => partesComIdUnico(inicial && inicial.partes && inicial.partes.length ? inicial.partes : (!inicial && sugestao && sugestao.partes && sugestao.partes.length >= 2 ? sugestao.partes : [])));
   const partesOk = partes.filter((p) => (p.variedade || "").trim() || p.dataPlantio || p.dataEmergencia || num(p.areaHa) > 0);
   const primeiraData = (campo) => partesOk.map((p) => p[campo]).filter(Boolean).sort()[0] || "";
   const somaPartes = partes.reduce((s2, p) => s2 + num(p.areaHa), 0);
   const mudarParte = (id, campo, valor) => setPartes(partes.map((p) => (p.id === id ? { ...p, [campo]: valor } : p)));
-  const novaParte = (areaHa) => ({ id: `p${Date.now()}${partes.length}`, variedade: "", areaHa: areaHa != null ? String(areaHa) : "", dataPlantio: "", dataEmergencia: "" });
+  const novaParte = (areaHa) => ({ id: `p${idNovo()}`, variedade: "", areaHa: areaHa != null ? String(areaHa) : "", dataPlantio: "", dataEmergencia: "" });
   const dividir = () => {
-    if (sugestao && sugestao.partes && sugestao.partes.length >= 2) { setPartes(sugestao.partes.map((p, k) => ({ ...p, id: p.id || `p${k}` }))); return; }
+    if (sugestao && sugestao.partes && sugestao.partes.length >= 2) { setPartes(partesComIdUnico(sugestao.partes)); return; }
     const metade = Math.round((num(talhao.areaHa) / 2) * 100) / 100;
     const vf = variedade === "__outra__" ? outraVariedade.trim() : variedade;
-    setPartes([{ ...novaParte(metade), variedade: vf, dataPlantio, dataEmergencia }, novaParte(Math.round((num(talhao.areaHa) - metade) * 100) / 100)]);
+    setPartes([{ ...novaParte(metade), nome: "A", variedade: vf, dataPlantio, dataEmergencia }, { ...novaParte(Math.round((num(talhao.areaHa) - metade) * 100) / 100), nome: "B", variedade: vf }]);
   };
   // o que vai para o registro do talhão quando há partes: nomes juntos, primeira data de cada
-  const variedadeDasPartes = partesOk.map((p) => (p.variedade || "").trim()).filter(Boolean).join(" + ");
+  const variedadeDasPartes = Array.from(new Set(partesOk.map((p) => (p.variedade || "").trim()).filter(Boolean))).join(" + ");
   // o que estava no talhão antes desta lavoura: pesa no manejo (herbicida, tiguera, inoculante)
   const [culturaAnterior, setCulturaAnterior] = useState(base.culturaAnterior || "");
   const [variedadeAnterior, setVariedadeAnterior] = useState(base.variedadeAnterior || "");
@@ -20938,7 +20943,7 @@ function ModalLavoura({ talhao, inicial, sugestao, variedades, onFechar, onSalva
             </div>
           ) : null; })()}
           <button onClick={dividir} style={{ marginTop: 8, width: "100%", padding: 9, background: "#fff", color: C.navy, border: `1.5px dashed ${C.navy}`, borderRadius: 10, fontWeight: 800, fontSize: 13 }}>
-            🌱🌱 Duas variedades neste talhão (dividir a área)
+            🌱🌱 Plantado em partes (datas diferentes ou outra variedade)
           </button>
           {sugestao && sugestao.partes && sugestao.partes.length >= 2 && (
             <div style={{ fontSize: 12, color: C.verdeEscuro, fontWeight: 700, marginTop: 4 }}>Este talhão teve {sugestao.partes.length} semeaduras executadas — toque acima para trazer as partes.</div>
@@ -20946,7 +20951,7 @@ function ModalLavoura({ talhao, inicial, sugestao, variedades, onFechar, onSalva
         </div>
       ) : (
         <div style={{ background: C.fundo, borderRadius: 10, padding: "8px 10px", marginTop: 8 }}>
-          <div style={{ fontWeight: 800, fontSize: 13, color: C.navy }}>Variedades dentro do talhão · {fmtN(num(talhao.areaHa))} ha no total</div>
+          <div style={{ fontWeight: 800, fontSize: 13, color: C.navy }}>Partes do talhão · {fmtN(num(talhao.areaHa))} ha no total</div>
           <div style={{ fontSize: 11.5, color: C.cinza, marginBottom: 6 }}>Cada parte com os seus hectares, plantio e emergência. O DAE de cada uma aparece no cartão do talhão.</div>
           <datalist id="variedades-lavoura">{variedades.map((v) => <option key={v} value={v} />)}</datalist>
           {partes.map((p, k) => {
@@ -20954,7 +20959,7 @@ function ModalLavoura({ talhao, inicial, sugestao, variedades, onFechar, onSalva
             return (
               <div key={p.id} style={{ background: "#fff", border: `1.5px solid ${C.borda}`, borderRadius: 10, padding: "8px 10px", marginBottom: 6 }}>
                 <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
-                  <div style={{ flex: 2, minWidth: 0 }}><label style={{ marginTop: 0 }}>Variedade {k + 1}</label><input list="variedades-lavoura" value={p.variedade || ""} onChange={(e) => mudarParte(p.id, "variedade", e.target.value)} placeholder="Ex.: M8808" /></div>
+                  <div style={{ flex: 2, minWidth: 0 }}><label style={{ marginTop: 0 }}>Parte {p.nome || NOMES_PARTES[k] || k + 1} · variedade</label><input list="variedades-lavoura" value={p.variedade || ""} onChange={(e) => mudarParte(p.id, "variedade", e.target.value)} placeholder="Ex.: M8808" /></div>
                   <div style={{ flex: 1, minWidth: 80 }}><label style={{ marginTop: 0 }}>Hectares</label><input type="number" inputMode="decimal" value={p.areaHa} onChange={(e) => mudarParte(p.id, "areaHa", e.target.value)} /></div>
                   {partes.length > 1 && <button onClick={() => setPartes(partes.filter((x) => x.id !== p.id))} title="tirar esta parte" style={{ flex: "none", background: "none", border: "none", color: C.vermelho, fontSize: 18, padding: "6px 4px" }}>✕</button>}
                 </div>
@@ -20972,11 +20977,14 @@ function ModalLavoura({ talhao, inicial, sugestao, variedades, onFechar, onSalva
             );
           })}
           <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-            <button onClick={() => setPartes([...partes, novaParte(Math.max(0, Math.round((num(talhao.areaHa) - somaPartes) * 100) / 100) || null)])} style={{ background: C.verdeBg, color: C.verdeEscuro, border: "none", borderRadius: 8, padding: "7px 12px", fontWeight: 800, fontSize: 12.5 }}>+ outra variedade</button>
-            <button onClick={() => setPartes([])} style={{ background: "#fff", color: C.cinza, border: `1px solid ${C.borda}`, borderRadius: 8, padding: "7px 12px", fontWeight: 700, fontSize: 12.5 }}>uma variedade só</button>
+            <button onClick={() => setPartes([...partes, { ...novaParte(Math.max(0, Math.round((num(talhao.areaHa) - somaPartes) * 100) / 100) || null), nome: NOMES_PARTES[partes.length] || String(partes.length + 1) }])} style={{ background: C.verdeBg, color: C.verdeEscuro, border: "none", borderRadius: 8, padding: "7px 12px", fontWeight: 800, fontSize: 12.5 }}>+ outra parte</button>
+            <button onClick={() => setPartes([])} style={{ background: "#fff", color: C.cinza, border: `1px solid ${C.borda}`, borderRadius: 8, padding: "7px 12px", fontWeight: 700, fontSize: 12.5 }}>plantio único (sem partes)</button>
             <span style={{ fontSize: 12.5, fontWeight: 800, color: Math.abs(somaPartes - num(talhao.areaHa)) <= 0.05 ? C.verdeEscuro : C.amarelo, marginLeft: "auto" }}>
               {Math.abs(somaPartes - num(talhao.areaHa)) <= 0.05 ? `✓ fecha ${fmtN(somaPartes)} ha` : somaPartes < num(talhao.areaHa) ? `faltam ${fmtN(num(talhao.areaHa) - somaPartes)} ha` : `passa ${fmtN(somaPartes - num(talhao.areaHa))} ha`}
             </span>
+            {Math.abs(somaPartes - num(talhao.areaHa)) > 0.05 && num(talhao.areaHa) > 0 && partes.some((p) => num(p.areaHa) > 0) && (
+              <button onClick={() => { const v = fecharAreaNaMaior(partes.map((p) => p.areaHa), talhao.areaHa); setPartes(partes.map((p, i) => ({ ...p, areaHa: String(v[i]) }))); }} style={{ background: C.navy, color: "#fff", border: "none", borderRadius: 8, padding: "7px 12px", fontWeight: 800, fontSize: 12.5, width: "100%" }}>Fechar a área: a diferença vai para a parte maior</button>
+            )}
           </div>
         </div>
       )}
@@ -25652,8 +25660,29 @@ function pontoNoAnel(lon, lat, anel) {
 // lista) — aí o GPS sabe em que parte a pessoa está, e cada parte tem o seu DAE para o manejo.
 const NOMES_PARTES = ["A", "B", "C", "D", "E", "F"];
 const anelDeObjetos = (a) => (Array.isArray(a) && a.length >= 4 ? a.map((q) => (Array.isArray(q) ? q : [num(q.x), num(q.y)])) : null);
+// cada parte com id próprio: o botão antigo criava as duas no mesmo milésimo com o MESMO id,
+// e mexer numa mudava a outra (Agrobrazil, talhão 06). Repetido ganha "_k" (fixo entre uma tela e outra).
+function partesComIdUnico(lista) {
+  const vistos = new Set();
+  return (lista || []).filter(Boolean).map((p, k) => {
+    let id = p.id || `p${k}`;
+    if (vistos.has(id)) id = `${id}_${k}`;
+    vistos.add(id);
+    return id === p.id ? p : { ...p, id };
+  });
+}
+// área das partes que não fecha com o talhão (o mapa mede 0,3 ha a menos, por exemplo): a diferença vai para a parte maior
+function fecharAreaNaMaior(areas, total) {
+  const v = (areas || []).map((a) => num(a)), tot = num(total);
+  if (!v.length || !(tot > 0)) return v;
+  const soma = v.reduce((a, b) => a + b, 0), dif = Math.round((tot - soma) * 100) / 100;
+  if (!dif) return v;
+  let k = 0; v.forEach((a, i) => { if (a > v[k]) k = i; });
+  if (v[k] + dif <= 0) return v;
+  return v.map((a, i) => (i === k ? Math.round((a + dif) * 100) / 100 : a));
+}
 function partesDaLavoura(l, t, hoje) {
-  const lista = l && Array.isArray(l.partes) ? l.partes.filter(Boolean) : [];
+  const lista = l && Array.isArray(l.partes) ? partesComIdUnico(l.partes) : [];
   if (lista.length < 2) return [];
   const h = hoje || hojeISO();
   return lista.map((p, k) => ({ ...p, id: p.id || `p${k}`, nome: p.nome || NOMES_PARTES[k] || String(k + 1), areaHa: num(p.areaHa), dae: p.dataEmergencia ? diasEntreISO(p.dataEmergencia, h) : null, anel: anelDeObjetos(p.anel) }));
