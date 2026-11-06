@@ -31408,13 +31408,54 @@ function ModalLerTalhoes({ onFechar, onLancar }) {
 // ---------- PDF de verdade, para compartilhar ----------
 // Desenha a parte imprimível da tela (html2canvas), corta em páginas A4 e monta o PDF (jsPDF). Quem usa
 // não precisa salvar nada: no celular abre o compartilhar com o arquivo; no computador o arquivo baixa.
+// <image> dentro de SVG (satélite, NDVI) o html2canvas não desenha: saía o ícone de imagem quebrada repetido
+// (laudo NDVI da Agrobrazil). Antes de desenhar, cada mapa SVG com imagem vira uma figura com as imagens embutidas.
+const dataUrlDoBlob = (b) => new Promise((ok, err) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = () => err(r.error); r.readAsDataURL(b); });
+const svgsComImagem = (raiz) => Array.from(raiz.querySelectorAll("svg")).filter((s) => !(s.parentElement && s.parentElement.closest("svg")) && s.querySelector("image"));
+async function svgComoFigura(svg, escala) {
+  const box = svg.getBoundingClientRect(), w = Math.round(box.width), h = Math.round(box.height);
+  if (!(w > 0 && h > 0)) return null;
+  const copia = svg.cloneNode(true);
+  copia.setAttribute("xmlns", "http://www.w3.org/2000/svg"); copia.setAttribute("xmlns:xlink", "http://www.w3.org/1999/xlink");
+  copia.setAttribute("width", w); copia.setAttribute("height", h);
+  await Promise.all(Array.from(copia.querySelectorAll("image")).map(async (im) => {
+    const href = im.getAttribute("href") || im.getAttribute("xlink:href") || "";
+    if (!href || href.startsWith("data:")) return;
+    try {
+      const ctl = typeof AbortController !== "undefined" ? new AbortController() : null;
+      const relogio = ctl ? setTimeout(() => ctl.abort(), 15000) : null;
+      const r = await fetch(href, { mode: "cors", signal: ctl ? ctl.signal : undefined });
+      if (relogio) clearTimeout(relogio);
+      if (!r.ok) throw new Error(String(r.status));
+      im.setAttribute("href", await dataUrlDoBlob(await r.blob())); im.removeAttribute("xlink:href");
+    } catch (e) { im.remove(); }   // sem internet ou sem permissão: fica o fundo e os contornos, sem ícone quebrado
+  }));
+  const url = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(copia)], { type: "image/svg+xml;charset=utf-8" }));
+  try {
+    const img = await new Promise((ok, err) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => err(new Error("svg")); i.src = url; });
+    const cv = document.createElement("canvas"); cv.width = Math.round(w * escala); cv.height = Math.round(h * escala);
+    const g = cv.getContext("2d"); g.fillStyle = getComputedStyle(svg).backgroundColor || "#fff"; g.fillRect(0, 0, cv.width, cv.height);
+    g.drawImage(img, 0, 0, cv.width, cv.height);
+    return { src: cv.toDataURL("image/jpeg", 0.9), w, h };
+  } finally { URL.revokeObjectURL(url); }
+}
 // desenha a parte imprimível da tela num canvas (base do PDF e da imagem)
 async function canvasDaTela(alvo) {
   const el = (typeof alvo === "function" ? alvo() : alvo) || document.querySelector(".imprimivel") || document.querySelector("main") || document.body;
   if (!window.html2canvas) throw new Error("o gerador não carregou — atualize o app");
+  const figuras = await Promise.all(svgsComImagem(el).map((s) => svgComoFigura(s, 2).catch(() => null)));
   return await window.html2canvas(el, {
     scale: 2, useCORS: true, allowTaint: false, backgroundColor: "#ffffff", logging: false, windowWidth: 860,
-    onclone: (doc, elClone) => { doc.documentElement.classList.add("pdf-modo"); if (elClone && elClone.style) { elClone.style.width = "820px"; elClone.style.maxWidth = "820px"; elClone.style.position = "static"; } },
+    onclone: (doc, elClone) => {
+      doc.documentElement.classList.add("pdf-modo");
+      if (elClone && elClone.style) { elClone.style.width = "820px"; elClone.style.maxWidth = "820px"; elClone.style.position = "static"; }
+      if (elClone) svgsComImagem(elClone).forEach((s, i) => {
+        const f = figuras[i]; if (!f || !s.parentNode) return;
+        const im = doc.createElement("img"); im.src = f.src;
+        im.style.cssText = `width:${f.w}px;max-width:100%;height:auto;display:block;border-radius:${getComputedStyle(s).borderRadius || "0"}`;
+        s.parentNode.replaceChild(im, s);
+      });
+    },
   });
 }
 // Relatório como uma imagem só (JPEG): abre direto na conversa do WhatsApp. Imagem muito comprida é
@@ -31538,11 +31579,11 @@ function BotaoPdfWhats({ nome, titulo, alvo, rotulo, estilo, compacto, semImagem
   const base = { padding: compacto ? "8px 12px" : "9px 14px", background: "#25D366", color: "#fff", border: "none", borderRadius: compacto ? 8 : 10, fontWeight: 800, fontSize: compacto ? 12 : 14, opacity: estado === "gerando" ? 0.7 : 1, ...(estilo || {}) };
   return (
     <>
-      <button onClick={() => clicar(false)} disabled={estado === "gerando"} title="Gera o PDF e abre o compartilhar — escolha o WhatsApp" style={base}>
+      <button className="nao-imprimir" onClick={() => clicar(false)} disabled={estado === "gerando"} title="Gera o PDF e abre o compartilhar — escolha o WhatsApp" style={base}>
         {texto}
       </button>
       {!semImagem && estado !== "gerando" && estado !== "erro" && (
-        <button onClick={() => clicar(true)} title="Manda o relatório como uma figura — abre direto na conversa do WhatsApp"
+        <button className="nao-imprimir" onClick={() => clicar(true)} title="Manda o relatório como uma figura — abre direto na conversa do WhatsApp"
           style={{ ...base, background: "#fff", color: "#128C7E", border: "1.5px solid #25D366", marginLeft: 6, padding: compacto ? "8px 10px" : "9px 12px" }}>
           🖼 Imagem
         </button>
