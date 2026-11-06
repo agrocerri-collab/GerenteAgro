@@ -25982,12 +25982,14 @@ function FotosCampo({ fotos, onMudar, max = 3, jaUsado = 0, rotulo }) {
   async function pegar(e) {
     const arquivos = Array.from(e.target.files || []).slice(0, Math.max(0, max - lista.length));
     e.target.value = "";
-    const novas = [];
-    for (const f of arquivos) { try { novas.push(await comprimirFoto(f, 560, 0.5)); } catch (err) {} }
-    if (!novas.length) return;
+    const lidas = [];
+    for (const f of arquivos) { try { lidas.push(await comprimirFoto(f, 560, 0.5)); } catch (err) {} }
+    // a mesma foto escolhida de novo (ou tirada e depois pega na galeria) entra uma vez só
+    const novas = fotosSemRepetir(lidas).filter((d) => !lista.includes(d));
+    if (!novas.length) { if (lidas.length) setErro("Essa foto já está aqui."); return; }
     const total = [...lista, ...novas];
     if (jaUsado + total.length > MAX_FOTOS_VISITA) { setErro(`Este registro já tem ${jaUsado + lista.length} fotos — o máximo é ${MAX_FOTOS_VISITA}. Tire alguma ou abra outro registro.`); return; }
-    setErro(""); onMudar(total);
+    setErro(novas.length < lidas.length ? "Foto repetida não entrou de novo." : ""); onMudar(total);
   }
   return (
     <div style={{ marginTop: 6 }}>
@@ -26016,6 +26018,10 @@ function FotosCampo({ fotos, onMudar, max = 3, jaUsado = 0, rotulo }) {
   );
 }
 const fotosDaObs = (o) => (o && o.fotos && o.fotos.length ? o.fotos : (o && o.img ? [o.img] : []));
+// a mesma foto (mesma imagem ou a mesma referência na nuvem) entra uma vez só no relatório
+const fotosSemRepetir = (lista) => { const vistas = new Set(); return (lista || []).filter((f) => f && !vistas.has(f) && vistas.add(f)); };
+// frase terminada com ponto: não põe outro ("lavoura.." no relatório)
+const comPonto = (t) => { const x = String(t || "").trimEnd(); return /[.!?…:]$/.test(x) ? x : x + "."; };
 
 // contexto do talhão para o relatório da visita: área, cultura, variedade e DAE
 function contextoDoTalhao(t, lavoura) {
@@ -26151,8 +26157,8 @@ function itensPorTalhao(visita, talhoes, lavoura) {
   return nomes.map((n) => {
     const dele = obs.filter((o) => (o.talhaoNome || "Geral") === n);
     const t = (talhoes || []).find((x) => x.nome === n);
-    const linha = (o) => `• ${String(o.cat || "").split(" ")[0]} ${o.item}` + (o.pressao ? ` — pressão ${o.pressao.toUpperCase()}` : "") + (o.acao ? ` · ${o.acao}` : "") + (o.nota ? ` (${o.nota})` : "") + ".";
-    return { titulo: t ? `${n} — ${contextoDoTalhao(t, lavoura)}` : n, texto: dele.map(linha).join("\n"), fotos: dele.flatMap(fotosDaObs).slice(0, 12) };
+    const linha = (o) => comPonto(`• ${String(o.cat || "").split(" ")[0]} ${o.item}` + (o.pressao ? ` — pressão ${o.pressao.toUpperCase()}` : "") + (o.acao ? ` · ${o.acao}` : "") + (o.nota ? ` (${o.nota})` : ""));
+    return { titulo: t ? `${n} — ${contextoDoTalhao(t, lavoura)}` : n, texto: dele.map(linha).join("\n"), fotos: fotosSemRepetir(dele.flatMap(fotosDaObs)).slice(0, 12) };
   });
 }
 // texto do relatório para mandar no WhatsApp (sem fotos): uma escrita só da fazenda inteira
@@ -26392,7 +26398,7 @@ function montarVisitaFinal(itens, grupos, talhoes, lavoura) {
   const secoes = gs.map((g) => {
     const doGrupo = itensDoGrupo(prontos, g);
     const resumo = String(g.resumo || "").trim();
-    return { titulo: tituloDoGrupo(g, prontos, talhoes, lavoura), texto: resumo || doGrupo.map((it) => "• " + linhaItemVisita(it)).join("\n"), fotos: doGrupo.flatMap((it) => it.fotos || []).slice(0, 12), talhoes: g.talhoes.slice(), porIA: !!(resumo && g.porIA) };
+    return { titulo: tituloDoGrupo(g, prontos, talhoes, lavoura), texto: resumo || doGrupo.map((it) => "• " + linhaItemVisita(it)).join("\n"), fotos: fotosSemRepetir(doGrupo.flatMap((it) => it.fotos || [])).slice(0, 12), talhoes: g.talhoes.slice(), porIA: !!(resumo && g.porIA) };
   });
   const CAT = { foto: "📷 Foto", audio: "🎙 Fala", texto: "📝 Anotação" };
   const obsCampo = prontos.map((it) => ({ id: it.id, hora: it.hora || "", talhaoId: it.talhaoId || null, talhaoNome: it.talhaoNome || null, parteNome: it.parteNome || null,
@@ -28078,12 +28084,18 @@ function ModalEditarVisita({ visita, onFechar, onSalvar }) {
   );
 }
 // de qual talhão é a foto (e o que é): a mesma foto está nas observações da visita, com o talhão
-function legendaDaFoto(visita, f) {
+function legendaDaFoto(visita, f, textoAcima, jaComentou) {
   const o = ((visita && visita.obsCampo) || []).find((x) => fotosDaObs(x).includes(f));
   if (!o) return "";
   const onde = o.talhaoNome || "Geral";
-  const oque = String(o.item || "").trim();
-  return oque && oque !== "foto" ? `${onde} — ${oque}` : onde;
+  const oque = String(o.item || "").trim().replace(/\s+/g, " ");
+  if (!oque || oque === "foto") return onde;
+  // o texto do item já traz o comentário (talhão por talhão) → a legenda fica só com o talhão
+  const acima = String(textoAcima || "").replace(/\s+/g, " ");
+  if (acima && acima.includes(oque.slice(0, 60))) return onde;
+  // várias fotos do mesmo comentário: ele aparece só na primeira
+  if (jaComentou) { if (jaComentou.has(o)) return onde; jaComentou.add(o); }
+  return `${onde} — ${oque.length > 120 ? oque.slice(0, 117).trimEnd() + "…" : oque}`;
 }
 function RelatorioVisita({ fazenda, visita, lavoura, podeEditar, onAtualizar, onVoltar }) {
   const [visao, setVisao] = useState("resumo");   // resumo (para enviar) · talhao (talhão por talhão)
@@ -28171,12 +28183,12 @@ function RelatorioVisita({ fazenda, visita, lavoura, podeEditar, onAtualizar, on
             {it.texto && <div style={{ fontSize: 14, padding: "6px 10px", whiteSpace: "pre-wrap" }}>{it.texto}</div>}
             {(it.fotos || []).length > 0 && (
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", padding: "4px 10px" }}>
-                {it.fotos.map((f, j) => { const lg = legendaDaFoto(visita, f); return (
+                {(() => { const ja = new Set(); return fotosSemRepetir(it.fotos).map((f, j) => { const lg = legendaDaFoto(visita, f, it.texto, ja); return (
                   <figure key={j} style={{ margin: 0, width: 160 }}>
                     <FotoNuvem src={f} style={{ width: 160, borderRadius: 8, display: "block" }} />
                     {lg && <figcaption style={{ fontSize: 11.5, color: C.navyEscuro, fontWeight: 700, lineHeight: 1.25, marginTop: 3 }}>📍 {lg}</figcaption>}
                   </figure>
-                ); })}
+                ); }); })()}
               </div>
             )}
           </div>
