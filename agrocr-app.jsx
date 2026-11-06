@@ -26963,7 +26963,8 @@ const PRAGAS_PADRAO = {
   Feijão: ["Mosca-branca", "Vaquinha", "Cigarrinha-verde", "Lagarta-das-vagens", "Ácaro"],
   Sorgo: ["Pulgão", "Lagarta-do-cartucho", "Percevejo"],
 };
-const metodoPadraoDe = (cultura) => (cultura === "Algodão" ? "presenca" : "pano");
+// Daniel (08/11/2026): soja e feijão = pano de batida (nº por metro linear); algodão e milho = presença/ausência (%)
+const metodoPadraoDe = (cultura) => (/algod|milho/i.test(String(cultura || "")) ? "presenca" : "pano");
 // Níveis de controle (nível de ação): pano = indivíduos por metro; presença = % dos pontos com a praga.
 // Soja vem com a referência do MIP-Soja (Embrapa): lagartas 20/m, percevejos 2/m (1/m em campo de semente).
 // As demais culturas o Daniel preenche em Visitas → Monitoramento → ⚙️ Níveis; cada fazenda pode ter o seu.
@@ -27334,9 +27335,11 @@ function MonitoramentoPragas({ fazenda, lavoura, kml, usuario, onFechar, onSalva
             <button onClick={() => trocarMetodo("pano")} style={{ ...chip(metodo === "pano"), flex: 1 }}>Pano de batida · nº por metro</button>
             <button onClick={() => trocarMetodo("presenca")} style={{ ...chip(metodo === "presenca"), flex: 1 }}>Presença / ausência · %</button>
           </div>
+          <div style={{ fontSize: 11.5, color: C.cinza, marginBottom: 4 }}>Soja e feijão: pano de batida, nº por metro linear. Algodão e milho: presença / ausência. O app já escolhe pela cultura; troque só se precisar.</div>
           {temFicha ? (
             metodo === "pano"
               ? <div style={{ fontSize: 12, color: C.cinza, marginBottom: 4 }}>Lagartas contadas em duas linhas por metro: <b>pequena (até 1 cm)</b> e <b>grande (acima de 1 cm)</b>. As somas saem separadas; o nível de controle compara a soma das duas.</div>
+              : !FICHAS[cultura] ? <div style={{ fontSize: 12, color: C.cinza, marginBottom: 4 }}>Em cada ponto marque o que está presente (pragas e doenças); o resultado sai em % dos pontos.</div>
               : <div style={{ fontSize: 12, color: C.cinza, marginBottom: 4 }}>Ficha do algodoeiro: {[...new Set(itens.map((x) => x.grupo).filter(Boolean))].join(", ")}. Em cada ponto marque o que está presente; "posição" diz onde na planta e "nó" o nó da doença. <b>Vale sempre a praga maior</b>: marcando "Grande", a "Pequena" da mesma praga sai sozinha.</div>
           ) : (
             <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 4 }}>
