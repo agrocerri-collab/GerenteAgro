@@ -25976,6 +25976,39 @@ function FotoNuvem({ src, style, alt, ...rest }) {
   if (!d) return <div style={{ width: 84, minHeight: 60, ...style, background: C.fundo }} />;
   return <img src={d} alt={alt || ""} style={style} {...rest} />;
 }
+// "Impressão digital" da foto: tons de cinza 8×8 (o desenho da cena) + cores em 64 faixas. Duas fotos seguidas da
+// mesma cena (Agro São Bento 05/11, SL 1-A) dão desenho parecido (correlação ≥ 0,55) E cores quase iguais (≥ 0,85);
+// fotos diferentes do mesmo talhão ficaram abaixo (o par mais perto: 0,27 e 0,90).
+function assinaturaDaFoto(dataUrl) {
+  return new Promise((ok) => {
+    try {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const cv = document.createElement("canvas"); const g = cv.getContext("2d");
+          cv.width = 8; cv.height = 8; g.drawImage(img, 0, 0, 8, 8);
+          const p8 = g.getImageData(0, 0, 8, 8).data, cinza = [];
+          for (let i = 0; i < p8.length; i += 4) cinza.push(p8[i] * 0.3 + p8[i + 1] * 0.59 + p8[i + 2] * 0.11);
+          cv.width = 32; cv.height = 32; g.drawImage(img, 0, 0, 32, 32);
+          const p32 = g.getImageData(0, 0, 32, 32).data, cores = new Array(64).fill(0);
+          for (let i = 0; i < p32.length; i += 4) cores[(p32[i] >> 6) * 16 + (p32[i + 1] >> 6) * 4 + (p32[i + 2] >> 6)] += 1 / 1024;
+          ok({ cinza, cores });
+        } catch (e) { ok(null); }
+      };
+      img.onerror = () => ok(null);
+      img.src = dataUrl;
+    } catch (e) { ok(null); }
+  });
+}
+function fotosParecidas(a, b) {
+  if (!a || !b || !a.cinza || !b.cinza || a.cinza.length !== b.cinza.length) return false;
+  const m = (v) => v.reduce((x, y) => x + y, 0) / v.length;
+  const ma = m(a.cinza), mb = m(b.cinza); let sab = 0, saa = 0, sbb = 0;
+  for (let i = 0; i < a.cinza.length; i++) { const x = a.cinza[i] - ma, y = b.cinza[i] - mb; sab += x * y; saa += x * x; sbb += y * y; }
+  const correl = saa > 0 && sbb > 0 ? sab / Math.sqrt(saa * sbb) : (saa === sbb ? 1 : 0);
+  const cores = a.cores.reduce((x, v, i) => x + Math.min(v, b.cores[i] || 0), 0);
+  return correl >= 0.55 && cores >= 0.85;
+}
 function FotosCampo({ fotos, onMudar, max = 3, jaUsado = 0, rotulo }) {
   const lista = fotos || [];
   const [erro, setErro] = useState("");
@@ -25985,8 +26018,21 @@ function FotosCampo({ fotos, onMudar, max = 3, jaUsado = 0, rotulo }) {
     const lidas = [];
     for (const f of arquivos) { try { lidas.push(await comprimirFoto(f, 560, 0.5)); } catch (err) {} }
     // a mesma foto escolhida de novo (ou tirada e depois pega na galeria) entra uma vez só
-    const novas = fotosSemRepetir(lidas).filter((d) => !lista.includes(d));
+    let novas = fotosSemRepetir(lidas).filter((d) => !lista.includes(d));
     if (!novas.length) { if (lidas.length) setErro("Essa foto já está aqui."); return; }
+    // foto quase igual a outra deste registro (duas fotos seguidas da mesma cena): pergunta antes de pôr
+    try {
+      const jaTem = [];
+      for (const d of lista) if (ehDataFoto(d)) jaTem.push(await assinaturaDaFoto(d));
+      const ficam = [];
+      for (const d of novas) {
+        const a = await assinaturaDaFoto(d);
+        const parecida = a && jaTem.some((b) => fotosParecidas(a, b));
+        if (!parecida || window.confirm("Esta foto parece igual a outra que já está aqui (mesmo lugar, mesmo ângulo). Colocar mesmo assim?")) { ficam.push(d); if (a) jaTem.push(a); }
+      }
+      if (!ficam.length) { setErro("Foto parecida não entrou."); return; }
+      novas = ficam;
+    } catch (er) {}
     const total = [...lista, ...novas];
     if (jaUsado + total.length > MAX_FOTOS_VISITA) { setErro(`Este registro já tem ${jaUsado + lista.length} fotos — o máximo é ${MAX_FOTOS_VISITA}. Tire alguma ou abra outro registro.`); return; }
     setErro(novas.length < lidas.length ? "Foto repetida não entrou de novo." : ""); onMudar(total);
