@@ -145,6 +145,9 @@ const AREAS_FAZENDA = ITENS_ACESSO.filter((i) => !i[3]).map(([k, r]) => [k, r]);
 // funções de campo (operador, monitor): tela curta, sem Financeiro/Cotações/Programa por padrão
 const funcaoDeCampo = (f) => /operador|monitor/i.test(String(f || ""));
 const funcaoMonitor = (f) => /monitor/i.test(String(f || ""));
+// relatório completo do monitoramento (mapa, ponto a ponto, fotos) para quem é da fazenda e faz o monitoramento;
+// os demais da fazenda (no AgroCR) veem só o quadro das pragas
+const veRelatorioCompletoPragas = (f) => /monitor|agr[ôo]nomo/i.test(String(f || ""));
 // "apagar" e "insumosGrupo": Produtor e Gerente podem sem marcar; os outros só se a consultoria liberar
 const padraoAreaFazenda = (funcao, chave) => chave === "apagar" || chave === "insumosGrupo" ? /produtor|gerente/i.test(String(funcao || "")) : LANCAR_FAZENDA.includes(chave) ? false : !(["financeiro", "cotacoes", "programa"].includes(chave) && funcaoDeCampo(funcao));
 // O que cada função pode, por padrão, nos acessos da EQUIPE (GerenteAgro): o titular escolhe a função e
@@ -6710,7 +6713,7 @@ function TelaFazenda({ fazenda, fazendas, grupos, papel, usuario, naNuvem, equip
         }}
         onSalvarAjustes={(v) => gravar(kAju(fazenda.id, safra), v, setAjustes, ajustes)}
         onSalvarEntregas={(v) => gravar(kEnt(fazenda.id, safra), v, setEntregas, entregas)} />}
-      {secao === "visitas" && mostrar("visitas") && <SecaoVisitas podeApagar={podeApagar} soResumoPragas={!MARCA_VENDA && !consultor} fazenda={fazenda} lavoura={lavoura} kml={kml} visitas={visitas} consultor={mostrar("visitas")} usuario={usuario} maquinas={maquinas} apls={apls}
+      {secao === "visitas" && mostrar("visitas") && <SecaoVisitas podeApagar={podeApagar} soResumoPragas={!MARCA_VENDA && !consultor && !veRelatorioCompletoPragas(funcaoDe)} fazenda={fazenda} lavoura={lavoura} kml={kml} visitas={visitas} consultor={mostrar("visitas")} usuario={usuario} maquinas={maquinas} apls={apls}
         podeEditarLavoura={consultor} onAtualizarFazenda={consultor || podeCad ? onAtualizarFazenda : null} onAtualizarLavoura={(v) => gravar(kLavoura(fazenda.id, safra), v, setLavoura, lavoura)} onSalvar={gravarVisitas} />}
       {secao === "apl" && !modulo && (
         <div>
@@ -27858,7 +27861,7 @@ function SecaoVisitas({ podeApagar, fazenda, lavoura, kml, visitas, consultor, u
         onSalvar={(nv) => { onSalvar(visitas.map((x) => (x.id === v.id ? nv : x))); setEditandoVisita(false); }} />
     ) : null;
     const rel = v && v.ehRegulagem ? <RelatorioRegulagem fazenda={fazenda} reg={v} onVoltar={() => setAberta(null)} />
-      : v && v.ehMonitoramento ? <RelatorioMonitoramento fazenda={fazenda} mon={v} kml={kml} soResumo={soResumoPragas} onVoltar={() => setAberta(null)} />
+      : v && v.ehMonitoramento ? <RelatorioMonitoramento fazenda={fazenda} mon={v} kml={kml} soResumo={soResumoPragas && !(v.quem && usuario && v.quem === usuario.nomeUsuario)} onVoltar={() => setAberta(null)} />
       : <RelatorioVisita fazenda={fazenda} visita={v} lavoura={lavoura} podeEditar={podeEditar} onAtualizar={(nv) => onSalvar(visitas.map((x) => (x.id === v.id ? nv : x)))} onVoltar={() => setAberta(null)} />;
     return <div>{botaoApagar}{rel}{modalEditar}</div>;
   }
