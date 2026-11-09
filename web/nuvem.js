@@ -807,6 +807,9 @@ window.Nuvem = (function () {
       body: JSON.stringify(corpo),
     });
     const j = await r.json().catch(() => ({}));
+    // conta da IA sem crédito ou sobrecarregada: mensagem que a pessoa entende, em vez do texto cru da API
+    if (!r.ok && /credit balance|billing|purchase credits/i.test(j.erro || "")) throw new Error("a leitura por IA está sem créditos no momento — avise o administrador do app (a nota pode ser lançada pelo XML ou à mão)");
+    if (!r.ok && /overloaded|rate.?limit|529|429/i.test(j.erro || "")) throw new Error("a IA está ocupada agora — tente de novo em alguns minutos");
     if (!r.ok) throw new Error(j.erro || ("falha na leitura (" + r.status + ")"));
     return j;
   }
