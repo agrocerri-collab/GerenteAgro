@@ -10086,7 +10086,7 @@ function SecaoProgramacao({ prog, consultor, registrar, fornecedores, onSalvarFo
         moeda: cabP.moeda, dolarTravado: cabP.moeda === "US$" && cabP.dolar > 0 ? cabP.dolar : null, valor: null, data: cabP.data || hojeISO(), ciclo: (importacao.itens[0] || {}).ciclo || "Safra", talhaoId: null, quem: (usuario && usuario.nomeUsuario) || "" });
       registrar && registrar("Barter lançado pela planilha do fornecedor", `${cabP.fornecedor || ""} · ${fmtN(cabP.sacas)} sacas de soja`);
     }
-    const novos = importacao.itens.map((it) => ({ id: idNovo(), ...(fornecedorId ? { fornecedorId } : {}), ...it, ...(importarComoAntigo ? { origem: "anterior", preco: null, pagamento: "", vencimento: "", barter: false, obs: [it.obs, "estoque já na fazenda"].filter(Boolean).join(" · ") } : {}) }));
+    const novos = importacao.itens.map((it) => ({ id: idNovo(), ...(fornecedorId ? { fornecedorId } : {}), ...it, ...(importarComoAntigo ? { origem: "anterior", preco: num(it.preco) > 0 ? it.preco : null, pagamento: "", vencimento: "", barter: false, obs: [it.obs, "estoque já na fazenda"].filter(Boolean).join(" · ") } : {}) }));
     const arquivoNome = importacao.arquivo; setImportacao(null);
     const listaFinal = await lancarConferindo(novos);
     if (!listaFinal) return;
@@ -10298,16 +10298,62 @@ function SecaoProgramacao({ prog, consultor, registrar, fornecedores, onSalvarFo
               <div style={{ fontWeight: 900, color: C.navy, margin: "12px 0 6px" }}>
                 {importacao.itens.length} itens prontos para lançar
               </div>
-              <div style={{ maxHeight: 260, overflowY: "auto", border: `1px solid ${C.borda}`, borderRadius: 8 }}>
-                {importacao.itens.map((it, i) => (
-                  <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "7px 10px", borderBottom: `1px solid ${C.borda}`, fontSize: 13 }}>
-                    <span style={{ minWidth: 0 }}>
-                      <b>{it.produto}</b><Ativo nome={it.produto} ativo={it.ativo} />
-                      <div style={{ color: C.cinza, fontSize: 12 }}>{it.categoria}{it.obs ? ` · ${it.obs}` : ""}{it.lote ? ` · lote ${it.lote}` : ""}{it.validade ? ` · validade ${fmtD(it.validade)}` : ""}</div>
-                    </span>
-                    <span style={{ textAlign: "right", flex: "none" }}><b style={{ whiteSpace: "nowrap" }}>{fmtN(num(it.qtd))} {it.unidade}</b>{num(it.preco) > 0 && <div style={{ fontSize: 11.5, color: C.cinza }}>{fmtMoeda(num(it.preco))}/{it.unidade}</div>}</span>
+              {(() => {
+                // a planilha nem sempre traz cultura, ciclo e preço: dá para completar aqui antes de lançar
+                const itensImp = importacao.itens;
+                const mudarTodos = (campo, valor) => setImportacao({ ...importacao, itens: itensImp.map((x) => ({ ...x, [campo]: valor })) });
+                const culturaComum = itensImp.every((x) => (x.cultura || "") === (itensImp[0].cultura || "")) ? (itensImp[0].cultura || "") : "__varias__";
+                const cicloComum = itensImp.every((x) => (x.ciclo || "Safra") === (itensImp[0].ciclo || "Safra")) ? (itensImp[0].ciclo || "Safra") : "";
+                const semPreco = itensImp.filter((x) => !(num(x.preco) > 0)).length;
+                const totalLista = itensImp.reduce((t, x) => t + num(x.qtd) * num(x.preco), 0);
+                return (
+                  <div style={{ background: C.fundo, borderRadius: 10, padding: "8px 10px", marginBottom: 8 }}>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
+                      <div style={{ flex: "1 1 150px" }}>
+                        <label style={{ marginTop: 0 }}>Cultura de todos os itens</label>
+                        <select value={culturaComum} onChange={(e) => { if (e.target.value !== "__varias__") mudarTodos("cultura", e.target.value); }}>
+                          {culturaComum === "__varias__" && <option value="__varias__">(cada item com a sua)</option>}
+                          <option value="">— sem cultura —</option>
+                          {CULTURAS.map((c) => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                      </div>
+                      <div style={{ flex: "1 1 150px" }}>
+                        <label style={{ marginTop: 0 }}>Ciclo</label>
+                        <div style={{ display: "flex", gap: 4 }}>
+                          {CICLOS.map((c) => <button key={c} onClick={() => mudarTodos("ciclo", c)} style={{ flex: 1, padding: "8px 4px", borderRadius: 8, fontWeight: 800, fontSize: 12, background: cicloComum === c ? C.navy : "#fff", color: cicloComum === c ? "#fff" : C.navyEscuro, border: `1.5px solid ${cicloComum === c ? C.navy : C.borda}` }}>{c}</button>)}
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 11.5, color: semPreco ? "#7A5C00" : C.verdeEscuro, marginTop: 6, fontWeight: 700 }}>
+                      {semPreco ? `${semPreco} ${semPreco === 1 ? "item está" : "itens estão"} sem preço — preencha o R$ por unidade em cada um abaixo (ou deixe em branco).` : `Todos com preço · total ${fmtMoeda(totalLista)}`}
+                    </div>
                   </div>
-                ))}
+                );
+              })()}
+              <div style={{ maxHeight: 340, overflowY: "auto", border: `1px solid ${C.borda}`, borderRadius: 8 }}>
+                {importacao.itens.map((it, i) => {
+                  const mudarItem = (campo, valor) => setImportacao({ ...importacao, itens: importacao.itens.map((x, j) => (j === i ? { ...x, [campo]: valor } : x)) });
+                  return (
+                  <div key={i} style={{ padding: "7px 10px", borderBottom: `1px solid ${C.borda}`, fontSize: 13 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                      <span style={{ minWidth: 0 }}>
+                        <b>{it.produto}</b><Ativo nome={it.produto} ativo={it.ativo} />
+                        <div style={{ color: C.cinza, fontSize: 12 }}>{it.categoria}{it.obs ? ` · ${it.obs}` : ""}{it.lote ? ` · lote ${it.lote}` : ""}{it.validade ? ` · validade ${fmtD(it.validade)}` : ""}</div>
+                      </span>
+                      <b style={{ whiteSpace: "nowrap", flex: "none" }}>{fmtN(num(it.qtd))} {it.unidade}</b>
+                    </div>
+                    <div style={{ display: "flex", gap: 6, marginTop: 4, alignItems: "center" }}>
+                      <span style={{ fontSize: 11.5, color: C.cinza, flex: "none" }}>R$</span>
+                      <input value={it.preco == null ? "" : String(it.preco)} onChange={(e) => mudarItem("preco", e.target.value)} inputMode="decimal" placeholder={`preço por ${it.unidade}`} style={{ marginTop: 0, flex: "1 1 90px", minWidth: 0, fontSize: 13, padding: "6px 8px" }} />
+                      <select value={it.cultura || ""} onChange={(e) => mudarItem("cultura", e.target.value)} style={{ marginTop: 0, flex: "1 1 110px", minWidth: 0, fontSize: 13, padding: "6px 8px" }}>
+                        <option value="">sem cultura</option>
+                        {CULTURAS.map((c) => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                      {num(it.preco) > 0 && <span style={{ fontSize: 11.5, color: C.cinza, flex: "none", whiteSpace: "nowrap" }}>= {fmtMoeda(num(it.qtd) * num(it.preco))}</span>}
+                    </div>
+                  </div>
+                  );
+                })}
               </div>
               <label>O que é esta lista?</label>
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -10315,7 +10361,7 @@ function SecaoProgramacao({ prog, consultor, registrar, fornecedores, onSalvarFo
                   <button key={String(v)} onClick={() => setImportarComoAntigo(v)} style={{ flex: 1, padding: "8px 10px", borderRadius: 10, fontWeight: 800, fontSize: 12.5, background: importarComoAntigo === v ? C.navy : "#fff", color: importarComoAntigo === v ? "#fff" : C.navyEscuro, border: `1.5px solid ${importarComoAntigo === v ? C.navy : C.borda}` }}>{rot}</button>
                 ))}
               </div>
-              {importarComoAntigo && <div style={{ fontSize: 11.5, color: C.cinza, marginTop: 3 }}>Entra como "estoque anterior": já conta como entregue, sem preço e sem custo novo.</div>}
+              {importarComoAntigo && <div style={{ fontSize: 11.5, color: C.cinza, marginTop: 3 }}>Entra como "estoque anterior": já conta como entregue e não vira compra nova; o preço fica guardado como valor do produto.</div>}
               <BotaoSalvar texto={importarComoAntigo ? `Lançar ${importacao.itens.length} itens como estoque antigo` : `Lançar ${importacao.itens.length} itens na programação`} onClick={confirmarImportacao} />
             </>
           )}
