@@ -179,11 +179,14 @@ service cloud.firestore {
     // Do lado da fazenda, o Financeiro (custos em R$) é do PRODUTOR e do
     // GERENTE — a função é marcada pela consultoria ao criar o acesso.
     // dinheiro do lado da fazenda: vale o que a consultoria marcou para a
-    // pessoa em permissoes.financeiro; sem marcação, produtor e gerente veem
+    // pessoa em permissoes.financeiro; sem marcação, o mesmo padrão do app
+    // (padraoAreaFazenda): todos veem, menos Monitor de campo e Operador de máquinas.
+    // Antes o padrão aqui era só Produtor/Gerente e a Engenheira da Agrobrazil
+    // via o Financeiro no app mas a nuvem recusava as notas (09/11/2026).
     function produtorLiberado(fazendaId) {
       return temPerfil() && meuPerfil().get('papel', '') == 'fazenda' &&
         meuPerfil().get('permissoes', {}).get('financeiro',
-          meuPerfil().get('funcao', '') in ['Produtor', 'Gerente']) == true &&
+          !meuPerfil().get('funcao', '').lower().matches('.*(operador|monitor).*')) == true &&
         fazendaId in meuPerfil().get('fazendas', []);
     }
     function ehProdutorNa(fazendaId) {
