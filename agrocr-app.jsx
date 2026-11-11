@@ -24474,7 +24474,18 @@ const GUIA_FOTOS_FIXAS = (() => {
   const percevejos = junta(fases("p-percevejomarrom", "percevejo-marrom"), fases("p-barrigaverde", "barriga-verde"), fases("p-percevejoverde", "percevejo-verde"),
     fases("p-verdepequeno", "verde-pequeno"), fases("p-asapreta", "asa-preta"));
   const besouros = junta(besouro("p-tamandua", "tamandua"), besouro("p-vaquinha", "diabrotica"), besouro("p-cerotoma", "cerotoma"), besouro("p-diphaulaca", "diphaulaca"), besouro("p-astylus", "astylus"));
-  return junta(milho, soja, pragas, percevejos, besouros);
+  // 3º lote: mais besouros, mosca-branca, tripes, bicheira e sínfilo (o inseto em fundo branco + no campo)
+  const foto = (arq, rotulo, extra) => ({ url: `guia/pragas/${arq}.jpg`, cultura: null, rotulo, ...(extra || {}) });
+  const lote3 = {
+    "p-metaleiro": [foto("metaleiro-adulto", "adulto", { branco: true }), foto("metaleiro-campo", "na folha")],
+    "p-idiamin": [foto("idiamin-adulto", "adulto", { retrato: true }), foto("idiamin-campo", "na folha")],
+    "p-bicheira": [foto("bicheira-adulto", "mosca adulta", { largo: true }), foto("bicheira-dano", "larva na semente germinando")],
+    "p-moscabranca": [foto("moscabranca-adulto", "adulto", { largo: true }), foto("moscabranca-ninfas", "formas jovens (ninfas)"), foto("moscabranca-ninfas2", "ninfas transparentes")],
+    "p-tripes": [foto("frankliniella-adulto", "Frankliniella · adulto", { largo: true }), foto("frankliniella-flor", "Frankliniella · na flor"),
+      foto("caliothrips-adulto", "Caliothrips · adulto", { largo: true }), foto("caliothrips-folha", "Caliothrips · no folíolo")],
+    "p-sinfilo": [foto("sinfilo-adulto", "sínfilo", { largo: true }), foto("sinfilo-campo", "no solo, junto da raiz")],
+  };
+  return junta(milho, soja, pragas, percevejos, besouros, lote3);
 })();
 // todas as imagens que vêm com o app (fotos de referência, figuras e ilustrações de estádio) — para baixar de uma vez
 const urlsFixasDoGuia = () => [...Object.values(GUIA_FOTOS_FIXAS).flat().map((f) => f.url), ...GUIA_CAMPO.flatMap((g) => [...(g.figuras || []).map((f) => f.url), ...(g.estagios || []).map((e) => e[4]).filter(Boolean)])];
@@ -24772,7 +24783,7 @@ const GUIA_CAMPO = [
     quando: "Tempo úmido e quente; lavoura jovem.",
     manejo: "Acaricida assim que aparece o sintoma no ponteiro (abamectina, espiromesifeno, enxofre)." } },
   { id: "p-tripes", tipo: "praga", nome: "Tripes", cientifico: "Frankliniella schultzei / Caliothrips brasiliensis / Thrips tabaci", culturas: ["Soja", "Algodão", "Milho"], texto: {
-    reconhecer: "Insetos alongados de 1 mm, amarelos ou pretos, correm quando a folha é batida no papel; folhas com prateado e pontos pretos (fezes), ponteiro encarquilhado em plântulas.",
+    reconhecer: "Insetos alongados de 1 a 2,5 mm, amarelos ou pretos, correm quando a folha é batida no papel; folhas com prateado e pontos pretos (fezes), ponteiro encarquilhado em plântulas. Na soja: Frankliniella é clarinho e fica mais nas flores; Caliothrips é escuro, com faixa clara nas asas, e fica nos folíolos, raspando a folha.",
     confunde: "Com mosca-branca (branca e voa) e ácaro (não anda rápido).",
     dano: "Em plântula de algodão, folhas deformadas e atraso; na soja, vetor de vírus (queima-do-broto).",
     quando: "Estiagem no início da cultura (até 30 dias).",
@@ -24807,6 +24818,30 @@ const GUIA_CAMPO = [
     dano: "O adulto raspa e fura as folhas novas; o ataque costuma ser em reboleira e na lavoura jovem.",
     quando: "Começo do ciclo, nas primeiras folhas trifolioladas.",
     manejo: "Somar na desfolha das vaquinhas e cascudinhos; aplicação só quando a desfolha passa do nível." } },
+  { id: "p-metaleiro", tipo: "praga", nome: "Metaleiro", cientifico: "Megascelis spp.", culturas: ["Soja"], texto: {
+    reconhecer: "Besourinho de 5 a 7 mm, verde-metálico brilhante com reflexo dourado e estrias finas ao longo dos élitros; antenas compridas.",
+    confunde: "Com outros cascudinhos (Maecolaspis, verde-metálico mais arredondado; Diphaulaca, azul com cabeça castanha).",
+    dano: "O adulto come as folhas, deixando furos e bordas recortadas; costuma ser praga secundária.",
+    quando: "Lavoura jovem e vegetativo, em reboleiras.",
+    manejo: "Entra na conta da desfolha junto com vaquinhas e cascudinhos; raramente pede aplicação só para ele." } },
+  { id: "p-idiamin", tipo: "praga", nome: "Besouro idi-amin", cientifico: "Lagria villosa", culturas: ["Soja"], texto: {
+    reconhecer: "Besouro alongado e estreito, de 1 cm, castanho-escuro a bronzeado, com o corpo coberto de pelos curtos.",
+    confunde: "Com o tamanduá-da-soja (preto com faixas claras e 'focinho') e com o Astylus (amarelo com manchas pretas).",
+    dano: "O adulto rói as folhas, mas o dano costuma ser pequeno; a larva vive na palha e no solo e se alimenta de matéria orgânica.",
+    quando: "Do começo do vegetativo à floração; aparece mais em plantio direto com muita palha.",
+    manejo: "Na maioria das vezes não pede controle; somar na desfolha só se o ataque nas folhas for forte." } },
+  { id: "p-bicheira", tipo: "praga", nome: "Bicheira-da-semente (bicheira-do-feijoeiro)", cientifico: "Delia platura", culturas: ["Soja", "Milho"], texto: {
+    reconhecer: "A mosca adulta é pequena (cerca de 5 mm), acinzentada, parecida com a mosca doméstica. O que estraga é a larva: branca, sem pernas, de ponta fina, que entra na semente germinando e no caulinho.",
+    confunde: "Com sementes podres por fungo e com o ataque do sínfilo e da lagarta-elasmo; abrir a semente e procurar a larva tira a dúvida.",
+    dano: "Sementes furadas e apodrecidas, plântula que nem chega a nascer ou nasce fraca: falha no estande.",
+    quando: "Na semeadura e emergência, com solo úmido e frio e muita matéria orgânica em decomposição (palha verde ou adubo orgânico incorporado pouco antes).",
+    manejo: "Tratamento de sementes; não semear logo depois de incorporar massa verde; semear com boa umidade e temperatura para a planta nascer rápido. Conferir o estande no 1º monitoramento." } },
+  { id: "p-sinfilo", tipo: "praga", nome: "Sínfilo", cientifico: "Scutigerella immaculata", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    reconhecer: "Não é inseto: é um artrópode branco, de 5 a 8 mm, com 12 pares de pernas e antenas compridas em contas. Muito ágil, foge da luz e se esconde nas fendas do solo.",
+    confunde: "Com centopeias pequenas (que são escuras e mais rápidas) e com larvas de besouro no solo.",
+    dano: "Come pelos e pontas de raiz, sementes e plântulas: plantas raquíticas e falhadas em reboleiras, que crescem pouco mesmo com chuva.",
+    quando: "Implantação da lavoura, em solo úmido e rico em matéria orgânica, comum em plantio direto.",
+    manejo: "Achar pelo solo: abrir a terra junto das plantas ruins logo cedo ou usar iscas (batata ou beterraba cortada) enterradas. Tratamento de sementes e inseticida no sulco ajudam pouco; o foco é conhecer as áreas com histórico." } },
   { id: "p-astylus", tipo: "praga", nome: "Astylus", cientifico: "Astylus variegatus", culturas: ["Soja", "Milho"], texto: {
     reconhecer: "Besouro alongado e mole, de 1 cm, amarelo-palha com manchas pretas grandes e irregulares nos élitros; antenas compridas. A larva é escura e fica no solo.",
     confunde: "Com a vaquinha-cerotoma (oval, manchas pretas em blocos) e com joaninhas (redondas e duras).",
