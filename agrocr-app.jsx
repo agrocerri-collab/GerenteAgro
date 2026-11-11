@@ -24465,7 +24465,16 @@ const GUIA_FOTOS_FIXAS = (() => {
     larvas("p-helicoverpa", [["helicoverpa"]]), larvas("p-cartucho", [["s-frugiperda"]]), larvas("p-brocaaxilas", [["broca-axilas"]]),
     larvas("p-enroladeira", [["enroladeira"]]),
     larvas("p-spodopteras", [["s-cosmioides", "S. cosmioides"], ["s-eridania", "S. eridania"], ["s-albula", "S. albula"]]));
-  return junta(milho, soja, pragas);
+  // percevejos: as fases lado a lado (ovos, ninfas de 3º, 4º e 5º ínstar, adulto) e o adulto na folha
+  const FASES = [["ovos", "ovos (postura)"], ["ninfa3", "ninfa de 3º ínstar"], ["ninfa4", "ninfa de 4º ínstar"], ["ninfa5", "ninfa de 5º ínstar"], ["adulto", "adulto"]];
+  const fases = (id, arq) => ({ [id]: [...FASES.map(([f, r]) => ({ url: `guia/pragas/${arq}-${f}.jpg`, cultura: null, retrato: true, rotulo: r })),
+    { url: `guia/pragas/${arq}-campo.jpg`, cultura: null, rotulo: "adulto na folha" }] });
+  // besouros: o adulto visto de cima e na folha
+  const besouro = (id, arq) => ({ [id]: [{ url: `guia/pragas/${arq}-adulto.jpg`, cultura: null, branco: true, rotulo: "adulto" }, { url: `guia/pragas/${arq}-campo.jpg`, cultura: null, rotulo: "na folha" }] });
+  const percevejos = junta(fases("p-percevejomarrom", "percevejo-marrom"), fases("p-barrigaverde", "barriga-verde"), fases("p-percevejoverde", "percevejo-verde"),
+    fases("p-verdepequeno", "verde-pequeno"), fases("p-asapreta", "asa-preta"));
+  const besouros = junta(besouro("p-tamandua", "tamandua"), besouro("p-vaquinha", "diabrotica"), besouro("p-cerotoma", "cerotoma"), besouro("p-diphaulaca", "diphaulaca"), besouro("p-astylus", "astylus"));
+  return junta(milho, soja, pragas, percevejos, besouros);
 })();
 // todas as imagens que vêm com o app (fotos de referência, figuras e ilustrações de estádio) — para baixar de uma vez
 const urlsFixasDoGuia = () => [...Object.values(GUIA_FOTOS_FIXAS).flat().map((f) => f.url), ...GUIA_CAMPO.flatMap((g) => [...(g.figuras || []).map((f) => f.url), ...(g.estagios || []).map((e) => e[4]).filter(Boolean)])];
@@ -24660,6 +24669,12 @@ const GUIA_CAMPO = [
     dano: "Suga as vagens: grãos chochos, enrugados ou abortados; retenção foliar (soja louca). No milho, pica a plântula e deforma.",
     quando: "Do início do enchimento (R3) até R7; no pano de batida, contar adultos e ninfas grandes (≥ 3º ínstar).",
     manejo: "Nível MIP: 2 percevejos/m (1/m em campo de semente). Nas bordas primeiro; inseticida de contato + sistêmico; rotação de grupos (neonicotinoide+piretroide, acefato)." } },
+  { id: "p-asapreta", tipo: "praga", nome: "Percevejo-asa-preta", cientifico: "Edessa meditabunda", culturas: ["Soja"], texto: {
+    reconhecer: "Adulto verde, grande, com as asas (a parte de cima das costas) e os ombros marrom-escuros, contrastando com o corpo verde. Ovos verdes em fileira dupla; ninfas verdes, arredondadas, com pontinhos escuros na borda.",
+    confunde: "Com o percevejo-verde (verde inteiro) e com o barriga-verde (marrom, ombros pontudos).",
+    dano: "Suga mais a haste e os ramos do que o grão; costuma ser praga secundária, mas soma com os outros percevejos.",
+    quando: "Do florescimento ao enchimento de grãos.",
+    manejo: "Contar no pano junto com os outros percevejos (adultos e ninfas grandes) e usar o mesmo nível de controle." } },
   { id: "p-percevejoverde", tipo: "praga", nome: "Percevejo-verde", cientifico: "Nezara viridula", culturas: ["Soja"], texto: {
     reconhecer: "Adulto verde uniforme, 13–15 mm, antenas com anéis; ninfas pretas com pontos brancos e vermelhos; ovos em massa hexagonal amarelo-clara.",
     confunde: "Com o verde-pequeno (menor, com faixa clara nos ombros) e com percevejos predadores (rostro grosso).",
@@ -24672,7 +24687,7 @@ const GUIA_CAMPO = [
     dano: "O mais danoso por grão: picada profunda, grãos chochos e doenças (Nematospora).",
     quando: "R3 a R7; aparece cedo no sul e no cerrado quente.",
     manejo: "Nível 2/m; difícil controle, exige inseticida eficaz e boa cobertura no baixeiro." } },
-  { id: "p-barrigaverde", tipo: "praga", nome: "Percevejo-barriga-verde", cientifico: "Dichelops melacanthus / D. furcatus", culturas: ["Milho", "Soja"], texto: {
+  { id: "p-barrigaverde", tipo: "praga", nome: "Percevejo-barriga-verde", cientifico: "Diceraeus (Dichelops) melacanthus / D. furcatus", culturas: ["Milho", "Soja"], texto: {
     reconhecer: "Adulto marrom-claro com a barriga verde, 10 mm, espinhos pontudos nos ombros; ninfas escuras.",
     confunde: "Com o percevejo-marrom (barriga marrom, espinhos arredondados).",
     dano: "No milho e trigo jovens, pica o colmo na base: folhas com furos em série, 'coração morto', perfilhamento, plantas deformadas. Na soja, grãos.",
@@ -24780,6 +24795,24 @@ const GUIA_CAMPO = [
     dano: "Adulto fura as folhas (furinhos redondos); larva come raízes do milho (plantas tombadas, pescoço-de-ganso).",
     quando: "Adultos em toda a safra; larvas no milho em sucessão a soja/feijão.",
     manejo: "Raramente exige controle na soja (desfolha); no milho, tratamento de semente e inseticida no sulco; nível 30% de desfolha." } },
+  { id: "p-cerotoma", tipo: "praga", nome: "Vaquinha-cerotoma", cientifico: "Cerotoma arcuata", culturas: ["Soja"], texto: {
+    reconhecer: "Besourinho oval e abaulado, de 5 a 6 mm, amarelo-claro (às vezes avermelhado) com manchas pretas grandes e bem marcadas nos élitros; cabeça e pernas alaranjadas.",
+    confunde: "Com a vaquinha Diabrotica (verde com manchas amarelas) e com o Astylus (alongado, mancha preta em desenho irregular).",
+    dano: "O adulto fura as folhas (furinhos arredondados) e as plântulas; a larva vive no solo e come raiz e nódulos.",
+    quando: "Mais na lavoura nova, da emergência ao começo do vegetativo, e na borda vinda de feijão.",
+    manejo: "Entra na conta da desfolha junto com as outras vaquinhas (nível de 30% no vegetativo); raramente exige aplicação só para ela." } },
+  { id: "p-diphaulaca", tipo: "praga", nome: "Cascudinho-azul (vaquinha-azul)", cientifico: "Diphaulaca aulica", culturas: ["Soja"], texto: {
+    reconhecer: "Besourinho pequeno e brilhante: élitros azul-escuros quase pretos, com pontuação fina, e cabeça, pronoto e pernas castanho-alaranjados.",
+    confunde: "Com outros cascudinhos (Maecolaspis verde-metálico, Megascelis com listras douradas) e com a vaquinha Diabrotica.",
+    dano: "O adulto raspa e fura as folhas novas; o ataque costuma ser em reboleira e na lavoura jovem.",
+    quando: "Começo do ciclo, nas primeiras folhas trifolioladas.",
+    manejo: "Somar na desfolha das vaquinhas e cascudinhos; aplicação só quando a desfolha passa do nível." } },
+  { id: "p-astylus", tipo: "praga", nome: "Astylus", cientifico: "Astylus variegatus", culturas: ["Soja", "Milho"], texto: {
+    reconhecer: "Besouro alongado e mole, de 1 cm, amarelo-palha com manchas pretas grandes e irregulares nos élitros; antenas compridas. A larva é escura e fica no solo.",
+    confunde: "Com a vaquinha-cerotoma (oval, manchas pretas em blocos) e com joaninhas (redondas e duras).",
+    dano: "O adulto come pólen e flor e pouco prejudica; a larva no solo ataca semente e plântula, principalmente no milho.",
+    quando: "Adultos na floração (aparecem em grande número nas flores); larvas na semeadura.",
+    manejo: "Adulto na flor não pede aplicação; onde a larva é problema, tratamento de semente." } },
   { id: "p-coro", tipo: "praga", nome: "Coró (bicho-bolo)", cientifico: "Phyllophaga cuyabana / Liogenys", culturas: ["Soja", "Milho", "Algodão"], texto: {
     reconhecer: "Larva branca em C, cabeça marrom, 2–3 cm, no solo junto da raiz; plantas murchas e amareladas em reboleiras, arrancam fácil.",
     confunde: "Com larvas de besouro benéfico (rola-bosta); ver a posição na raiz e as cerdas.",
@@ -25480,7 +25513,7 @@ function GuiaItem({ item, fotos, usuario, fazenda, naNuvem, consultor, onFotos, 
         <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 6, marginBottom: 8, scrollSnapType: "x mandatory" }}>
           {fixas.map((f, i) => (
             <div key={f.url} style={{ flex: "none", scrollSnapAlign: "start" }}>
-              <FotoGuia url={f.url} onClick={() => setGrande({ url: f.url, ref: true, n: i + 1, total: fixas.length, rotulo: f.rotulo ? `${item.nome} · ${f.rotulo}` : "" })} style={{ width: f.largo ? 260 : 200, height: f.largo ? 140 : f.inteira ? 240 : 200, objectFit: f.inteira || f.largo ? "contain" : "cover", background: f.largo ? "#fff" : f.inteira ? "#F4F6F1" : undefined, borderRadius: 12, display: "block", cursor: "zoom-in", boxShadow: "0 1px 4px rgba(0,0,0,.18)" }} />
+              <FotoGuia url={f.url} onClick={() => setGrande({ url: f.url, ref: true, n: i + 1, total: fixas.length, rotulo: f.rotulo ? `${item.nome} · ${f.rotulo}` : "" })} style={{ width: f.largo ? 260 : f.retrato ? 140 : 200, height: f.largo ? 140 : f.retrato ? 210 : f.inteira ? 240 : 200, objectFit: f.inteira || f.largo || f.retrato || f.branco ? "contain" : "cover", background: f.largo || f.retrato || f.branco ? "#fff" : f.inteira ? "#F4F6F1" : undefined, borderRadius: 12, display: "block", cursor: "zoom-in", boxShadow: "0 1px 4px rgba(0,0,0,.18)" }} />
               {f.rotulo && <div style={{ fontSize: 11.5, color: C.navyEscuro, fontWeight: 700, marginTop: 3, textAlign: "center" }}>{f.rotulo}</div>}
             </div>
           ))}

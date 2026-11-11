@@ -1004,7 +1004,7 @@ teste("fenologia da soja: 16 estádios VE–R8 com ilustração, figuras da esca
   const urls = C.urlsFixasDoGuia();
   return cods === "VE,VC,V1,V2,V3,V4,V5,V6,R1,R2,R3,R4,R5,R6,R7,R8" && e.estagios.every((x) => x[4] && fs.existsSync(path.join(raiz, "web", x[4])))
     && e.figuras.length === 2 && e.figuras.every((f) => fs.existsSync(path.join(raiz, "web", f.url))) && e.texto.contar && e.texto.partes
-    && urls.length === 30 + 8 + 16 + 3 + 20 && urls.every((u) => fs.existsSync(path.join(raiz, "web", u)));
+    && urls.length === 30 + 8 + 16 + 3 + 20 + 30 + 10 && urls.every((u) => fs.existsSync(path.join(raiz, "web", u)));
 });
 
 teste("soja: nodulação (3 faixas) e guia de acompanhamento (10 categorias) na fenologia, busca acha 'FBN' e 'nódulos'", () => {
@@ -1414,6 +1414,14 @@ teste("guia: lagartas com foto da lagarta e da mariposa em todas as culturas do 
   return ids.every((id) => C.fotosFixasDe(id, "Soja").length >= 2) && C.fotosFixasDe("p-helicoverpa", "Milho").length === 2 && sp.length === 6
     && sp[0].rotulo === "S. cosmioides · lagarta" && todasExistem && C.GUIA_CAMPO.some((g) => g.id === "p-enroladeira")
     && C.fotosFixasDe("f-diplodiafolha", "Soja").length === 0;
+});
+
+teste("guia: percevejos com as 5 fases + adulto na folha; besouros com adulto e na folha; arquivos existem", () => {
+  const fs2 = require("fs"), path2 = require("path");
+  const perc = ["p-percevejomarrom", "p-barrigaverde", "p-percevejoverde", "p-verdepequeno", "p-asapreta"], bes = ["p-tamandua", "p-vaquinha", "p-cerotoma", "p-diphaulaca", "p-astylus"];
+  const ok = (id) => C.fotosFixasDe(id, "").every((f) => fs2.existsSync(path2.join(raiz, "web", f.url)));
+  return perc.every((id) => C.fotosFixasDe(id, "Soja").length === 6 && ok(id)) && bes.every((id) => C.fotosFixasDe(id, "Soja").length === 2 && ok(id))
+    && C.fotosFixasDe("p-percevejomarrom", "Algodão")[1].rotulo === "ninfa de 3º ínstar" && ["p-asapreta", "p-cerotoma", "p-diphaulaca", "p-astylus"].every((id) => C.GUIA_CAMPO.some((g) => g.id === id));
 });
 
 teste("agenda do monitoramento: 1º até 5 DAE (estande); depois soja a cada 10 e algodão a cada 7", () => {
