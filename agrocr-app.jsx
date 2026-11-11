@@ -24456,11 +24456,20 @@ const GUIA_FOTOS_FIXAS = (() => {
   const soja = umaSoja({ "n-Mg": "deficiencia-Mg", "n-K": "deficiencia-K", "n-Mn": "deficiencia-Mn", "n-Fe": "deficiencia-Fe", "n-Zn": "deficiencia-Zn", "n-B": "deficiencia-B", "n-FeCo": "deficiencia-FeCo", "n-Ni": "deficiencia-Ni" });
   // mesmo verbete com fotos de culturas diferentes: junta as listas
   const junta = (...ms) => { const o = {}; for (const m of ms) for (const [k, v] of Object.entries(m)) o[k] = [...(o[k] || []), ...v]; return o; };
-  return junta(milho, soja);
+  // lagarta e mariposa recortadas dos cartões que o Daniel mandou (11/11/2026); sem cultura = aparece em todas as do verbete
+  const larvas = (id, pares) => ({ [id]: pares.flatMap(([arq, quem]) => [
+    { url: `guia/pragas/${arq}-lagarta.jpg`, cultura: null, largo: true, rotulo: `${quem ? quem + " · " : ""}lagarta` },
+    { url: `guia/pragas/${arq}-mariposa.jpg`, cultura: null, largo: true, rotulo: `${quem ? quem + " · " : ""}mariposa (adulto)` }]) });
+  const pragas = junta(
+    larvas("p-elasmo", [["elasmo"]]), larvas("p-anticarsia", [["anticarsia"]]), larvas("p-medideira", [["falsa-medideira"]]),
+    larvas("p-helicoverpa", [["helicoverpa"]]), larvas("p-cartucho", [["s-frugiperda"]]), larvas("p-brocaaxilas", [["broca-axilas"]]),
+    larvas("p-enroladeira", [["enroladeira"]]),
+    larvas("p-spodopteras", [["s-cosmioides", "S. cosmioides"], ["s-eridania", "S. eridania"], ["s-albula", "S. albula"]]));
+  return junta(milho, soja, pragas);
 })();
 // todas as imagens que vêm com o app (fotos de referência, figuras e ilustrações de estádio) — para baixar de uma vez
 const urlsFixasDoGuia = () => [...Object.values(GUIA_FOTOS_FIXAS).flat().map((f) => f.url), ...GUIA_CAMPO.flatMap((g) => [...(g.figuras || []).map((f) => f.url), ...(g.estagios || []).map((e) => e[4]).filter(Boolean)])];
-const fotosFixasDe = (id, cultura) => (GUIA_FOTOS_FIXAS[id] || []).filter((f) => !cultura || f.cultura === cultura);
+const fotosFixasDe = (id, cultura) => (GUIA_FOTOS_FIXAS[id] || []).filter((f) => !cultura || !f.cultura || f.cultura === cultura);
 const GUIA_CULTURAS = ["Soja", "Milho", "Algodão"];
 const GUIA_CAMPO = [
   // ---------- DANINHAS ----------
@@ -24673,31 +24682,31 @@ const GUIA_CAMPO = [
     reconhecer: "Lagarta verde a escura com linhas longitudinais brancas, 4 pares de falsas pernas, anda 'medindo' só quando pequena; pula quando tocada. Mariposa marrom-acinzentada com linha diagonal nas asas.",
     confunde: "Com a falsa-medideira (só 2 pares de falsas pernas, anda arqueando o corpo).",
     dano: "Desfolha: come da borda para dentro, deixa só nervuras.",
-    quando: "Vegetativo e início reprodutivo; no pano, lagartas > 1,5 cm.",
+    quando: "Mais comum de V5 a R5, comendo as folhas. No pano, conte as lagartas acima de 1,5 cm.",
     manejo: "MIP: 20 lagartas/m ou 30% de desfolha no vegetativo (15% no reprodutivo). Baculovírus, Bt (Intacta controla), inseticidas seletivos." } },
   { id: "p-medideira", tipo: "praga", nome: "Falsa-medideira", cientifico: "Chrysodeixis includens", culturas: ["Soja", "Algodão"], texto: {
     reconhecer: "Lagarta verde-clara com linhas finas brancas, afina na cabeça, 2 pares de falsas pernas (anda arqueando, 'mede palmo'); mariposa escura com duas manchas prateadas na asa.",
     confunde: "Com a lagarta-da-soja (4 pares de falsas pernas, pula).",
     dano: "Come o meio da folha e deixa as nervuras (folha rendada); fica no baixeiro, difícil de atingir.",
-    quando: "Da fase vegetativa tardia até R5; mais em lavoura fechada e após fungicida.",
+    quando: "Pico de V4 a R3, nas folhas e folíolos do meio para baixo; mais em lavoura fechada e depois de fungicida.",
     manejo: "Nível 20/m (> 1,5 cm); produtos de ingestão (benzoilureias, diamidas); boa cobertura no baixeiro; Bt controla parcialmente." } },
   { id: "p-helicoverpa", tipo: "praga", nome: "Helicoverpa", cientifico: "Helicoverpa armigera / H. zea", culturas: ["Soja", "Milho", "Algodão"], texto: {
     reconhecer: "Lagarta de cor variável (verde, marrom, rosada) com listras laterais, pelos finos e pele granulosa (áspera ao toque); 4 pares de falsas pernas; cabeça clara. Mariposa amarelada com mancha escura em forma de rim.",
     confunde: "Com a lagarta-das-maçãs (H. zea) e com Spodoptera (lisa, Y invertido na cabeça). Helicoverpa é áspera e tem pelos.",
     dano: "Ataca flores, vagens, maçãs e espigas (grão por dentro); na soja ponteiro e vagem; no algodão, botão e maçã.",
-    quando: "Do florescimento ao enchimento; ovos solitários no ponteiro.",
+    quando: "Na soja, de R1 a R6, atrás de botão floral, vagem e grão; ovos soltos, um a um, no ponteiro.",
     manejo: "Monitorar ovos e lagartas pequenas; nível baixo em reprodutivo (2 lagartas/m na soja); Bt, diamidas, benzoilureias, baculovírus (HzNPV). Controlar pequena." } },
   { id: "p-cartucho", tipo: "praga", nome: "Lagarta-do-cartucho", cientifico: "Spodoptera frugiperda", culturas: ["Milho", "Algodão", "Soja"], texto: {
     reconhecer: "Lagarta lisa, cinza-esverdeada a marrom, com Y invertido claro na cabeça e quatro pontos pretos em quadrado no penúltimo segmento; mariposa cinza. Ovos em massa com escamas.",
     confunde: "Com S. cosmioides e S. eridania (sem o Y nítido, com triângulos escuros no dorso).",
     dano: "No milho, raspa folhas e entra no cartucho: folhas furadas em série e fezes; no algodão, maçãs; na soja, desfolha e vagens.",
-    quando: "Milho de VE a VT (pior até V8); todo o ciclo no algodão.",
+    quando: "Milho de VE a VT (pior até V8); todo o ciclo no algodão; na soja, de V2 a R6 — começa na plântula e, com muita lagarta, sobe para flor e vagem.",
     manejo: "Milho Bt reduz; nível 20% de plantas com raspagem; produtos dirigidos ao cartucho (diamidas, espinosinas, benzoilureias); evitar piretroide sozinho." } },
-  { id: "p-spodopteras", tipo: "praga", nome: "Lagartas Spodoptera (cosmioides / eridania)", cientifico: "Spodoptera cosmioides / S. eridania", culturas: ["Soja", "Algodão", "Milho"], texto: {
-    reconhecer: "Lagartas lisas, escuras, com fileira de triângulos pretos no dorso (cosmioides maior, até 5 cm, listras laterais claras; eridania menor, cinza com triângulos). Sem o Y nítido na cabeça.",
+  { id: "p-spodopteras", tipo: "praga", nome: "Lagartas Spodoptera (cosmioides / eridania / albula)", cientifico: "Spodoptera cosmioides / S. eridania / S. albula", culturas: ["Soja", "Algodão", "Milho"], texto: {
+    reconhecer: "Lagartas lisas, escuras, com fileira de triângulos pretos no dorso. Cosmioides (lagarta-preta-da-soja): a maior, até 5 cm, quase preta, com faixa lateral clara. Eridania (lagarta-das-folhas): menor, escura, com listras claras bem marcadas ao longo do corpo. Albula: verde-acinzentada, com listras ao longo do corpo e pontinhos escuros. Nenhuma tem o Y nítido na cabeça.",
     confunde: "Com a lagarta-do-cartucho (Y invertido).",
     dano: "Desfolha, vagens e maçãs; lagartas grandes resistem a vários inseticidas; comem até daninhas.",
-    quando: "Final do vegetativo ao enchimento; após dessecação de daninhas migram para a cultura.",
+    quando: "Cosmioides de R1 a R6 (folha, haste e vagem); eridania de V4 a R5 (folha e vagem); albula de V3 a R1 (folha, desfolha parecida com a da eridania). Depois da dessecação, migram das daninhas para a lavoura.",
     manejo: "Controlar pequenas; diamidas, benzoilureias, indoxacarbe; Bt controla parcialmente." } },
   { id: "p-curuquere", tipo: "praga", nome: "Curuquerê-do-algodoeiro", cientifico: "Alabama argillacea", culturas: ["Algodão"], texto: {
     reconhecer: "Lagarta verde com listras longitudinais e pontos pretos, 3 pares de falsas pernas, anda meio medindo; pulsa quando tocada; mariposa marrom-avermelhada.",
@@ -24781,7 +24790,7 @@ const GUIA_CAMPO = [
     reconhecer: "Lagarta fina, verde-azulada com anéis marrons, muito ágil, vive num casulo de seda e terra na base do colmo; perfura o colmo rente ao solo (galeria).",
     confunde: "Com a lagarta-rosca (grossa, cinza, enrola).",
     dano: "'Coração morto': ponteiro seco e colmo broqueado na base; plantas mortas em reboleira em solo arenoso e seco.",
-    quando: "Primeiros 20 dias após a emergência, em veranico.",
+    quando: "Da emergência a V3 (primeiros 20 dias), em veranico; ataca colo, haste e raiz.",
     manejo: "Tratamento de semente (clorantraniliprole, fipronil), umidade no plantio; pulverização dirigida à base tem pouca eficiência." } },
   { id: "p-rosca", tipo: "praga", nome: "Lagarta-rosca", cientifico: "Agrotis ipsilon", culturas: ["Milho", "Soja", "Algodão"], texto: {
     reconhecer: "Lagarta grossa, cinza-escura e lisa, enrola em rosca quando tocada; fica no solo de dia e corta a plântula à noite rente ao chão.",
@@ -24793,8 +24802,14 @@ const GUIA_CAMPO = [
     reconhecer: "Lagarta pequena esverdeada que une as folhas novas do ponteiro com seda e broqueia a axila/haste; ponteiro com folíolos grudados e galeria com fezes.",
     confunde: "Com helicoverpa pequena no ponteiro.",
     dano: "Mata o ponteiro, planta ramifica; mais em soja jovem e precoce.",
-    quando: "Vegetativo (V4–V8).",
+    quando: "Ponteiro no vegetativo (V4–V8) e, depois, ramos e axilas do florescimento até R5 — teia no ponteiro, galeria na haste e ramo quebrado.",
     manejo: "Nível 25–30% de plantas com ponteiro atacado; inseticidas de ingestão; Bt controla." } },
+  { id: "p-enroladeira", tipo: "praga", nome: "Lagarta-enroladeira", cientifico: "Omiodes indicata", culturas: ["Soja"], texto: {
+    reconhecer: "Lagarta fina, verde-clara, meio transparente e muito ágil; vive escondida dentro de folíolos enrolados ou presos uns aos outros com seda. Mariposa pequena, amarelo-parda, com linhas escuras onduladas atravessando as asas.",
+    confunde: "Com a broca-das-axilas (une as folhas do ponteiro e broqueia a haste) e com a falsa-medideira pequena (anda arqueando o corpo e não enrola a folha).",
+    dano: "Enrola os folíolos e come por dentro: a folha fica fechada, raspada e seca, e a planta perde área de folha para fazer fotossíntese.",
+    quando: "Do florescimento ao enchimento (R1 a R6), mais no terço de cima da planta.",
+    manejo: "Abrir os folíolos enrolados para contar e somar com as outras desfolhadoras no nível de desfolha; inseticida de ingestão com boa cobertura, porque a folha enrolada protege a lagarta." } },
   { id: "p-tamandua", tipo: "praga", nome: "Tamanduá-da-soja", cientifico: "Sternechus subsignatus", culturas: ["Soja"], texto: {
     reconhecer: "Gorgulho preto de 8 mm com faixas amarelas; adulto raspa e anela a haste; larva branca dentro de galha na haste (engrossamento).",
     confunde: "Com o bicudo (menor, cinza).",
@@ -25464,7 +25479,10 @@ function GuiaItem({ item, fotos, usuario, fazenda, naNuvem, consultor, onFotos, 
       {fixas.length > 0 && (
         <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 6, marginBottom: 8, scrollSnapType: "x mandatory" }}>
           {fixas.map((f, i) => (
-            <FotoGuia key={f.url} url={f.url} onClick={() => setGrande({ url: f.url, ref: true, n: i + 1, total: fixas.length })} style={{ flex: "none", width: 200, height: f.inteira ? 240 : 200, objectFit: f.inteira ? "contain" : "cover", background: f.inteira ? "#F4F6F1" : undefined, borderRadius: 12, display: "block", cursor: "zoom-in", scrollSnapAlign: "start", boxShadow: "0 1px 4px rgba(0,0,0,.18)" }} />
+            <div key={f.url} style={{ flex: "none", scrollSnapAlign: "start" }}>
+              <FotoGuia url={f.url} onClick={() => setGrande({ url: f.url, ref: true, n: i + 1, total: fixas.length, rotulo: f.rotulo ? `${item.nome} · ${f.rotulo}` : "" })} style={{ width: f.largo ? 260 : 200, height: f.largo ? 140 : f.inteira ? 240 : 200, objectFit: f.inteira || f.largo ? "contain" : "cover", background: f.largo ? "#fff" : f.inteira ? "#F4F6F1" : undefined, borderRadius: 12, display: "block", cursor: "zoom-in", boxShadow: "0 1px 4px rgba(0,0,0,.18)" }} />
+              {f.rotulo && <div style={{ fontSize: 11.5, color: C.navyEscuro, fontWeight: 700, marginTop: 3, textAlign: "center" }}>{f.rotulo}</div>}
+            </div>
           ))}
         </div>
       )}
