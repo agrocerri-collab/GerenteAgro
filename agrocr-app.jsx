@@ -24484,6 +24484,8 @@ const GUIA_FOTOS_FIXAS = (() => {
     "p-tripes": [foto("frankliniella-adulto", "Frankliniella · adulto", { largo: true }), foto("frankliniella-flor", "Frankliniella · na flor"),
       foto("caliothrips-adulto", "Caliothrips · adulto", { largo: true }), foto("caliothrips-folha", "Caliothrips · no folíolo")],
     "p-sinfilo": [foto("sinfilo-adulto", "sínfilo", { largo: true }), foto("sinfilo-campo", "no solo, junto da raiz")],
+    // cartão refeito pelo Daniel em 12/11 (a 1ª mariposa era foto do Bugwood e a 2ª tinha marca d'água de banco de imagem)
+    "p-rosca": [foto("rosca-lagarta", "lagarta"), foto("rosca-mariposa", "mariposa (adulto)", { branco: true })],
   };
   return junta(milho, soja, pragas, percevejos, besouros, lote3);
 })();
@@ -24861,10 +24863,10 @@ const GUIA_CAMPO = [
     quando: "Da emergência a V3 (primeiros 20 dias), em veranico; ataca colo, haste e raiz.",
     manejo: "Tratamento de semente (clorantraniliprole, fipronil), umidade no plantio; pulverização dirigida à base tem pouca eficiência." } },
   { id: "p-rosca", tipo: "praga", nome: "Lagarta-rosca", cientifico: "Agrotis ipsilon", culturas: ["Milho", "Soja", "Algodão"], texto: {
-    reconhecer: "Lagarta grossa, cinza-escura e lisa, enrola em rosca quando tocada; fica no solo de dia e corta a plântula à noite rente ao chão.",
+    reconhecer: "Lagarta grossa e robusta, cinza a marrom, de pele lisa e oleosa; enrola em C (rosca) quando tocada; fica escondida no solo de dia e sai à noite. Mariposa escura, com asas da frente pardas a acinzentadas e uma mancha em forma de adaga no meio de cada asa.",
     confunde: "Com a elasmo (fina e ágil) e com Spodoptera (listrada).",
-    dano: "Plântulas cortadas na base, falhas de estande em reboleira.",
-    quando: "Primeiros 15 dias após emergência.",
+    dano: "Corta a plântula rente ao chão, no colo: planta tombada e falha no estande, muitas vezes em reboleira.",
+    quando: "Da emergência ao começo do vegetativo (VE a V3), nos primeiros 15 dias; ataca colo e haste da plântula.",
     manejo: "Tratamento de semente; iscas; pulverização ao entardecer dirigida à base." } },
   { id: "p-brocaaxilas", tipo: "praga", nome: "Broca-das-axilas", cientifico: "Crocidosema aporema", culturas: ["Soja"], texto: {
     reconhecer: "Lagarta pequena esverdeada que une as folhas novas do ponteiro com seda e broqueia a axila/haste; ponteiro com folíolos grudados e galeria com fezes.",
@@ -24890,11 +24892,11 @@ const GUIA_CAMPO = [
     dano: "Suga raízes: reboleiras de plantas amareladas e raquíticas, pior em solo arenoso e seca.",
     quando: "Trincheira antes do plantio e nas reboleiras; sobe com a umidade.",
     manejo: "Difícil: tratamento de semente, Metarhizium, rotação, evitar revolvimento em seca." } },
-  { id: "p-lagartamaca", tipo: "praga", nome: "Lagarta-das-maçãs", cientifico: "Heliothis virescens / Helicoverpa zea", culturas: ["Algodão", "Soja"], texto: {
+  { id: "p-lagartamaca", tipo: "praga", nome: "Lagarta-das-maçãs", cientifico: "Heliothis (Chloridea) virescens / Helicoverpa zea", culturas: ["Algodão", "Soja"], texto: {
     reconhecer: "Lagartas parecidas com Helicoverpa armigera (listradas, ásperas); H. virescens com microespinhos; furam botões e maçãs por fora.",
     confunde: "Entre as três espécies — para o manejo, trata-se igual; mandar amostra em dúvida.",
-    dano: "Botões, flores e maçãs perfurados e podres.",
-    quando: "Floração e frutificação.",
+    dano: "Fura botões florais, flores e maçãs; estraga fibra e semente, e as estruturas atacadas caem ou apodrecem.",
+    quando: "Fase reprodutiva: do aparecimento dos botões florais até a formação das maçãs. A mariposa é parda, com faixas atravessadas nas asas da frente.",
     manejo: "Bt, diamidas, baculovírus; nível 2 lagartas/100 estruturas." } },
   // ---------- INIMIGOS NATURAIS ----------
   { id: "i-joaninha", tipo: "inimigo", nome: "Joaninha", cientifico: "Coccinellidae (Cycloneda, Hippodamia, Eriopis)", culturas: ["Soja", "Milho", "Algodão"], texto: {
