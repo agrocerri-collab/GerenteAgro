@@ -1004,7 +1004,7 @@ teste("fenologia da soja: 16 estádios VE–R8 com ilustração, figuras da esca
   const urls = C.urlsFixasDoGuia();
   return cods === "VE,VC,V1,V2,V3,V4,V5,V6,R1,R2,R3,R4,R5,R6,R7,R8" && e.estagios.every((x) => x[4] && fs.existsSync(path.join(raiz, "web", x[4])))
     && e.figuras.length === 2 && e.figuras.every((f) => fs.existsSync(path.join(raiz, "web", f.url))) && e.texto.contar && e.texto.partes
-    && urls.length === 30 + 8 + 16 + 3 + 20 + 30 + 10 + 15 + 4 && urls.every((u) => fs.existsSync(path.join(raiz, "web", u)));
+    && urls.length === 30 + 8 + 16 + 3 + 20 + 30 + 10 + 15 + 4 + 40 && urls.every((u) => fs.existsSync(path.join(raiz, "web", u)));
 });
 
 teste("soja: nodulação (3 faixas) e guia de acompanhamento (10 categorias) na fenologia, busca acha 'FBN' e 'nódulos'", () => {
@@ -1420,15 +1420,15 @@ teste("guia: percevejos com as 5 fases + adulto na folha; besouros com adulto e 
   const fs2 = require("fs"), path2 = require("path");
   const perc = ["p-percevejomarrom", "p-barrigaverde", "p-percevejoverde", "p-verdepequeno", "p-asapreta"], bes = ["p-tamandua", "p-vaquinha", "p-cerotoma", "p-diphaulaca", "p-astylus"];
   const ok = (id) => C.fotosFixasDe(id, "").every((f) => fs2.existsSync(path2.join(raiz, "web", f.url)));
-  return perc.every((id) => C.fotosFixasDe(id, "Soja").length === 6 && ok(id)) && bes.every((id) => C.fotosFixasDe(id, "Soja").length === 2 && ok(id))
+  return perc.every((id) => C.fotosFixasDe(id, "Soja").length >= 6 && ok(id)) && bes.every((id) => C.fotosFixasDe(id, "Soja").length >= 2 && ok(id))
     && C.fotosFixasDe("p-percevejomarrom", "Algodão")[1].rotulo === "ninfa de 3º ínstar" && ["p-asapreta", "p-cerotoma", "p-diphaulaca", "p-astylus"].every((id) => C.GUIA_CAMPO.some((g) => g.id === id));
 });
 
 teste("guia: 3º lote (metaleiro, idi-amin, bicheira, mosca-branca, tripes, sínfilo) com fotos que existem", () => {
   const fs2 = require("fs"), path2 = require("path");
   const ids = { "p-metaleiro": 2, "p-idiamin": 2, "p-bicheira": 2, "p-moscabranca": 3, "p-tripes": 4, "p-sinfilo": 2 };
-  return Object.entries(ids).every(([id, n]) => C.fotosFixasDe(id, "Soja").length === n && C.fotosFixasDe(id, "").every((f) => fs2.existsSync(path2.join(raiz, "web", f.url)))
-    && C.GUIA_CAMPO.some((g) => g.id === id)) && C.fotosFixasDe("p-moscabranca", "Algodão").length === 3;
+  return Object.entries(ids).every(([id, n]) => C.fotosFixasDe(id, "Soja").length >= n && C.fotosFixasDe(id, "").every((f) => fs2.existsSync(path2.join(raiz, "web", f.url)))
+    && C.GUIA_CAMPO.some((g) => g.id === id)) && C.fotosFixasDe("p-moscabranca", "Algodão").length >= 3;
 });
 
 teste("acessos: Panorama geral para todos da fazenda; Resumo geral por padrão só Produtor e Escritório", () => {
@@ -1438,6 +1438,14 @@ teste("acessos: Panorama geral para todos da fazenda; Resumo geral por padrão s
     && !C.podeFazenda(p("Engenheiro agrônomo"), "resumoGeral") && !C.podeFazenda(p("Gerente"), "resumoGeral") && !C.podeFazenda(p("Monitor de campo"), "resumoGeral")
     && C.podeFazenda(p("Gerente", { resumoGeral: true }), "resumoGeral") && !C.podeFazenda(p("Produtor", { resumoGeral: false }), "resumoGeral")
     && C.ITENS_ACESSO.some((i) => i[0] === "resumoGeral" && i[3] === "fazenda");
+});
+
+teste("guia: 4º lote (fotos de campo) — verbetes novos e fotos somadas às que já existiam", () => {
+  const fs2 = require("fs"), path2 = require("path");
+  const novos = ["p-maecolaspis", "p-torraozinho", "p-cortadeiras", "p-grilo", "p-gafanhoto", "p-cabecafosforo", "p-piolhocobra", "p-cupim"];
+  const todos = C.GUIA_CAMPO.filter((g) => g.tipo === "praga").every((g) => C.fotosFixasDe(g.id, "").every((f) => fs2.existsSync(path2.join(raiz, "web", f.url))));
+  return novos.every((id) => C.GUIA_CAMPO.some((g) => g.id === id) && C.fotosFixasDe(id, "Soja").length > 0) && todos
+    && C.fotosFixasDe("p-moscabranca", "Soja").length === 6 && C.fotosFixasDe("p-tripes", "Soja").length === 6 && C.fotosFixasDe("p-cortadeiras", "Milho").length === 6;
 });
 
 teste("agenda do monitoramento: 1º até 5 DAE (estande); depois soja a cada 10 e algodão a cada 7", () => {

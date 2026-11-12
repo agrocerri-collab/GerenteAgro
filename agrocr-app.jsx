@@ -24492,7 +24492,30 @@ const GUIA_FOTOS_FIXAS = (() => {
     "p-rosca": [foto("rosca-lagarta", "lagarta"), foto("rosca-mariposa", "mariposa (adulto)", { branco: true })],
     "p-lagartamaca": [foto("maca-lagarta", "lagarta no capulho"), foto("maca-mariposa", "mariposa (adulto)")],
   };
-  return junta(milho, soja, pragas, percevejos, besouros, lote3);
+  // 4º lote: fotos de campo dos cartões "Guia de pragas da soja" (12/11/2026) — somam com as que já existem
+  const campo = (arq, rotulo) => foto(arq, rotulo);
+  const lote4 = {
+    "p-metaleiro": [campo("megascelis-campo", "adultos na folha (campo)")],
+    "p-maecolaspis": [campo("maecolaspis-adulto", "adulto"), campo("maecolaspis-folha", "adulto na folha"), campo("maecolaspis-dano", "dano nas folhas")],
+    "p-cortadeiras": [campo("sauva-formiga", "saúva · operária"), campo("sauva-sauveiro", "saúva · sauveiro (monte de terra solta)"), campo("sauva-dano", "saúva · plantas cortadas"),
+      campo("quenquem-1", "quenquém · operária"), campo("quenquem-2", "quenquém · espinhos no tórax"), campo("quenquem-ninho", "quenquém · ninho pequeno")],
+    "p-grilo": [campo("grilo-1", "grilo na palhada"), campo("grilo-2", "grilo no solo")],
+    "p-moscabranca": [campo("moscabranca-colonia", "colônia na face de baixo da folha"), campo("moscabranca-adulto-ninfa", "adulto e ninfa"), campo("moscabranca-infestacao", "adultos na folha")],
+    "p-tamandua": [campo("tamandua-perfil", "adulto de lado (rostro curto)")],
+    "p-torraozinho": [campo("torraozinho-adulto", "adulto roendo a folha")],
+    "p-acarorajado": [campo("acarorajado-colonia", "colônia na face de baixo da folha")],
+    "p-acarobranco": [campo("acarobranco-sintoma", "sintoma na folha")],
+    "p-brocaaxilas": [campo("broca-lagarta", "lagarta no ponteiro"), campo("broca-mariposa", "mariposa"), campo("broca-dano", "galeria na haste")],
+    "p-gafanhoto": [campo("gafanhoto-1", "adulto"), campo("gafanhoto-2", "na haste"), campo("gafanhoto-3", "adulto camuflado")],
+    "p-cabecafosforo": [campo("cabecafosforo-adulto", "borboleta (adulto)")],
+    "p-anticarsia": [campo("anticarsia-campo", "lagarta na folha"), campo("anticarsia-mariposa-campo", "mariposa de asas abertas"), campo("anticarsia-campo2", "lagarta mais desenvolvida")],
+    "p-coro": [campo("coro-larvas", "larvas no solo")],
+    "p-castanho": [campo("castanho-ninfa", "ninfa"), campo("castanho-adultos", "adultos no solo")],
+    "p-piolhocobra": [campo("piolho-alongado", "esticado no solo"), campo("piolho-enrolado", "enrolado em espiral"), campo("piolho-palhada", "na palhada")],
+    "p-tripes": [campo("caliothrips-campo", "Caliothrips · na folha"), campo("frankliniella-campo", "Frankliniella · na flor")],
+    "p-cupim": [campo("cupim-1", "soldado"), campo("cupim-solo", "colônia no solo"), campo("cupim-planta", "na base da planta")],
+  };
+  return junta(milho, soja, pragas, percevejos, besouros, lote3, lote4);
 })();
 // todas as imagens que vêm com o app (fotos de referência, figuras e ilustrações de estádio) — para baixar de uma vez
 const urlsFixasDoGuia = () => [...Object.values(GUIA_FOTOS_FIXAS).flat().map((f) => f.url), ...GUIA_CAMPO.flatMap((g) => [...(g.figuras || []).map((f) => f.url), ...(g.estagios || []).map((e) => e[4]).filter(Boolean)])];
@@ -24712,7 +24735,7 @@ const GUIA_CAMPO = [
     quando: "Milho de VE a V6 em palhada de soja (ele fica na palha); na soja, R3 a R7.",
     manejo: "Tratamento de semente (neonicotinoide), pulverização nos primeiros 20 dias; dessecar cedo para quebrar a ponte." } },
   { id: "p-anticarsia", tipo: "praga", nome: "Lagarta-da-soja", cientifico: "Anticarsia gemmatalis", culturas: ["Soja"], texto: {
-    reconhecer: "Lagarta verde a escura com linhas longitudinais brancas, 4 pares de falsas pernas, anda 'medindo' só quando pequena; pula quando tocada. Mariposa marrom-acinzentada com linha diagonal nas asas.",
+    reconhecer: "Lagarta verde a escura com linhas longitudinais brancas, 4 pares de falsas pernas, anda 'medindo' só quando pequena; pula quando tocada. Mariposa marrom-acinzentada: de asas abertas, uma linha escura atravessa as duas asas de ponta a ponta.",
     confunde: "Com a falsa-medideira (só 2 pares de falsas pernas, anda arqueando o corpo).",
     dano: "Desfolha: come da borda para dentro, deixa só nervuras.",
     quando: "Mais comum de V5 a R5, comendo as folhas. No pano, conte as lagartas acima de 1,5 cm.",
@@ -24762,7 +24785,7 @@ const GUIA_CAMPO = [
   { id: "p-moscabranca", tipo: "praga", nome: "Mosca-branca", cientifico: "Bemisia tabaci", culturas: ["Soja", "Algodão", "Milho"], texto: {
     reconhecer: "Adulto minúsculo (1–2 mm) branco, voa em nuvem quando a planta é sacudida; ninfas achatadas, ovais, amareladas, na face de baixo da folha; melada e fumagina (fuligem preta).",
     confunde: "Com cigarrinha pequena (que pula) e com tripes (alongado).",
-    dano: "Suga seiva, melada + fumagina (pluma preta no algodão), transmite vírus (mosaico-dourado no feijão, 'pé-de-galinha' na soja).",
+    dano: "Suga seiva e enfraquece a planta; a melada que solta cria fumagina (fuligem preta que tampa a folha e suja a pluma no algodão) e transmite vírus (mosaico-dourado no feijão, necrose da haste na soja). Na soja predomina a raça B (biótipo MEAM1).",
     quando: "Calor e seca; contar ninfas na 3ª–5ª folha do ponteiro.",
     manejo: "Vazio sanitário, eliminar tiguera; inseticidas (piriproxifem, ciantraniliprole, espiromesifeno) em rotação; óleo; fungos entomopatogênicos (Beauveria, Cordyceps)." } },
   { id: "p-pulgaoalgodao", tipo: "praga", nome: "Pulgão-do-algodoeiro", cientifico: "Aphis gossypii", culturas: ["Algodão"], texto: {
@@ -24780,19 +24803,19 @@ const GUIA_CAMPO = [
   { id: "p-acarorajado", tipo: "praga", nome: "Ácaro-rajado", cientifico: "Tetranychus urticae", culturas: ["Soja", "Algodão", "Milho"], texto: {
     reconhecer: "Ácaro minúsculo esverdeado com duas manchas escuras, na face de baixo da folha, com teia fina; folha com pontuações amareladas (bronzeamento) e depois seca; começa em reboleiras nas bordas.",
     confunde: "Com ácaro-verde e ácaro-vermelho; bronzeamento parecido com deficiência ou fitotoxidez. Olhar com lupa a face de baixo.",
-    dano: "Bronzeamento, queda de folhas, perda de área foliar em seca.",
+    dano: "Pontinhos amarelados na folha que viram bronzeamento; com a infestação alta, a folha seca e cai, e a planta perde área de folha justo na seca.",
     quando: "Seca e calor, após piretroide ou fungicida que mata predadores.",
     manejo: "Nível 10% de folhas com ácaros; acaricidas específicos (abamectina, etoxazol, espiromesifeno); evitar piretroide; preservar predadores." } },
   { id: "p-acarobranco", tipo: "praga", nome: "Ácaro-branco", cientifico: "Polyphagotarsonemus latus", culturas: ["Algodão", "Soja"], texto: {
     reconhecer: "Invisível a olho nu; sintoma: folhas novas do ponteiro brilhantes, coriáceas, com bordas viradas para baixo e nervuras salientes (pé-de-galinha no algodão).",
     confunde: "Com fitotoxidez de herbicida e com vírus; a lupa de 20× mostra os ácaros na face de baixo das folhas novas.",
-    dano: "Deformação do ponteiro, atraso de crescimento.",
+    dano: "Folhas novas e brotos bronzeados, duros e deformados, com as bordas viradas; o ponteiro para de crescer. Ao contrário do ácaro-rajado, não faz teia.",
     quando: "Tempo úmido e quente; lavoura jovem.",
     manejo: "Acaricida assim que aparece o sintoma no ponteiro (abamectina, espiromesifeno, enxofre)." } },
   { id: "p-tripes", tipo: "praga", nome: "Tripes", cientifico: "Frankliniella schultzei / Caliothrips brasiliensis / Thrips tabaci", culturas: ["Soja", "Algodão", "Milho"], texto: {
     reconhecer: "Insetos alongados de 1 a 2,5 mm, amarelos ou pretos, correm quando a folha é batida no papel; folhas com prateado e pontos pretos (fezes), ponteiro encarquilhado em plântulas. Na soja: Frankliniella é clarinho e fica mais nas flores; Caliothrips é escuro, com faixa clara nas asas, e fica nos folíolos, raspando a folha.",
     confunde: "Com mosca-branca (branca e voa) e ácaro (não anda rápido).",
-    dano: "Em plântula de algodão, folhas deformadas e atraso; na soja, vetor de vírus (queima-do-broto).",
+    dano: "Raspa folhas, brotos e flores: a folha fica prateada e amarelada, com pontinhos pretos. Em plântula de algodão, folhas deformadas e atraso; na soja, transmite vírus (queima-do-broto). O Caliothrips, menor e com duas faixas claras nas asas, pesa mais na seca.",
     quando: "Estiagem no início da cultura (até 30 dias).",
     manejo: "Tratamento de semente; nível 6 tripes/planta em algodão jovem; neonicotinoides, espinosinas." } },
   { id: "p-cigarrinhamilho", tipo: "praga", nome: "Cigarrinha-do-milho", cientifico: "Dalbulus maidis", culturas: ["Milho"], texto: {
@@ -24825,11 +24848,11 @@ const GUIA_CAMPO = [
     dano: "O adulto raspa e fura as folhas novas; o ataque costuma ser em reboleira e na lavoura jovem.",
     quando: "Começo do ciclo, nas primeiras folhas trifolioladas.",
     manejo: "Somar na desfolha das vaquinhas e cascudinhos; aplicação só quando a desfolha passa do nível." } },
-  { id: "p-metaleiro", tipo: "praga", nome: "Metaleiro", cientifico: "Megascelis spp.", culturas: ["Soja"], texto: {
+  { id: "p-metaleiro", tipo: "praga", nome: "Metaleiro (cascudinho-verde)", cientifico: "Megascelis spp.", culturas: ["Soja"], texto: {
     reconhecer: "Besourinho de 5 a 7 mm, verde-metálico brilhante com reflexo dourado e estrias finas ao longo dos élitros; antenas compridas.",
     confunde: "Com outros cascudinhos (Maecolaspis, verde-metálico mais arredondado; Diphaulaca, azul com cabeça castanha).",
-    dano: "O adulto come as folhas, deixando furos e bordas recortadas; costuma ser praga secundária.",
-    quando: "Lavoura jovem e vegetativo, em reboleiras.",
+    dano: "O adulto come folhas novas, brotos e até botões florais, deixando furos e bordas recortadas; costuma ser praga secundária.",
+    quando: "Lavoura jovem e vegetativo, em reboleiras; anda em grupos de vários besourinhos na mesma folha.",
     manejo: "Entra na conta da desfolha junto com vaquinhas e cascudinhos; raramente pede aplicação só para ele." } },
   { id: "p-idiamin", tipo: "praga", nome: "Besouro idi-amin", cientifico: "Lagria villosa", culturas: ["Soja"], texto: {
     reconhecer: "Besouro alongado e estreito, de 1 cm, castanho-escuro a bronzeado, com o corpo coberto de pelos curtos.",
@@ -24849,6 +24872,54 @@ const GUIA_CAMPO = [
     dano: "Come pelos e pontas de raiz, sementes e plântulas: plantas raquíticas e falhadas em reboleiras, que crescem pouco mesmo com chuva.",
     quando: "Implantação da lavoura, em solo úmido e rico em matéria orgânica, comum em plantio direto.",
     manejo: "Achar pelo solo: abrir a terra junto das plantas ruins logo cedo ou usar iscas (batata ou beterraba cortada) enterradas. Tratamento de sementes e inseticida no sulco ajudam pouco; o foco é conhecer as áreas com histórico." } },
+  { id: "p-maecolaspis", tipo: "praga", nome: "Cascudinho-verde (Maecolaspis)", cientifico: "Maecolaspis spp.", culturas: ["Soja"], texto: {
+    reconhecer: "Besourinho verde-metálico brilhante, mais arredondado e atarracado que o metaleiro, com estrias e pontinhos bem visíveis nas costas; pernas e antenas acastanhadas.",
+    confunde: "Com o metaleiro (Megascelis, mais alongado e liso) e com o cascudinho-azul (Diphaulaca, azul com cabeça castanha).",
+    dano: "Raspa e fura as folhas e os brotos, com cortes nas bordas; em ataque forte a folha fica rendada.",
+    quando: "Do começo do vegetativo à floração, em reboleiras.",
+    manejo: "Somar na desfolha com vaquinhas e outros cascudinhos; aplicação só quando a desfolha passa do nível." } },
+  { id: "p-torraozinho", tipo: "praga", nome: "Torrãozinho", cientifico: "Aracanthus mourei", culturas: ["Soja"], texto: {
+    reconhecer: "Gorgulho pequeno (4 a 5 mm), marrom-acinzentado, coberto de escamas e grudado de terra, parecendo um torrão; quando tocado, encolhe as pernas e se finge de morto.",
+    confunde: "Com o tamanduá-da-soja (preto com faixas claras, anela a haste).",
+    dano: "O adulto recorta as bordas das folhas e pode comer cotilédones e brotos da plântula; a larva vive no solo, nas raízes.",
+    quando: "Emergência e começo do vegetativo, mais em plantio direto.",
+    manejo: "Olhar as plântulas logo na emergência; tratamento de semente onde há histórico; aplicação só com desfolha alta na plântula." } },
+  { id: "p-cortadeiras", tipo: "praga", nome: "Formigas-cortadeiras (saúva e quenquém)", cientifico: "Atta sexdens rubropilosa / Acromyrmex spp.", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    reconhecer: "Saúva: formiga avermelhada, grande, com três pares de espinhos nas costas, e sauveiro de terra solta que pode ter vários metros. Quenquém: menor, escura, com quatro ou mais pares de espinhos, e ninho pequeno, às vezes só um montinho de terra.",
+    confunde: "Com a lagarta-rosca e o grilo, que também cortam plântulas; a formiga deixa trilha e carrega os pedaços para o ninho.",
+    dano: "As operárias cortam folhas, brotos e hastes e levam para o formigueiro; plântulas são desfolhadas ou cortadas em uma noite, deixando falhas.",
+    quando: "O ano todo; o estrago maior é na emergência e na lavoura jovem.",
+    manejo: "Achar e combater os formigueiros antes da semeadura e nas bordas: isca formicida granulada perto das trilhas, com tempo seco; em sauveiro grande, termonebulização ou pó." } },
+  { id: "p-grilo", tipo: "praga", nome: "Grilo-pardo", cientifico: "Anurogryllus muticus", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    reconhecer: "Grilo pardo a escuro, de hábito noturno, que vive em galerias no solo; de dia fica escondido e à noite sai para comer.",
+    confunde: "Com a lagarta-rosca (corta a plântula rente ao chão) e com formigas-cortadeiras.",
+    dano: "Ninfas e adultos cortam plântulas e comem sementes, folhas e raízes; costumam arrastar pedaços de plântula para dentro da galeria.",
+    quando: "Semeadura e emergência, em solo com palha e pouco revolvido.",
+    manejo: "Conferir as falhas logo cedo procurando as galerias; isca tóxica ou tratamento de semente onde é problema." } },
+  { id: "p-gafanhoto", tipo: "praga", nome: "Gafanhoto (tucura)", cientifico: "Rhammatocerus schistocercoides", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    reconhecer: "Gafanhoto de corpo alongado, pardo a esverdeado, com pernas de trás grandes para saltar; muitas vezes some na palha e no solo pela cor.",
+    confunde: "Com o grilo (mais escuro e de hábito noturno).",
+    dano: "Ninfas e adultos comem as folhas; com população alta podem desfolhar a lavoura e andam em bandos que mudam de área.",
+    quando: "Começo das chuvas, quando nascem as ninfas, e em anos de surto.",
+    manejo: "Acompanhar as bordas vizinhas de pasto e cerrado; aplicar nas ninfas, antes de voar; avisar a defesa agropecuária em caso de surto." } },
+  { id: "p-cabecafosforo", tipo: "praga", nome: "Lagarta-cabeça-de-fósforo", cientifico: "Urbanus proteus", culturas: ["Soja"], texto: {
+    reconhecer: "Lagarta verde com a cabeça grande, bem separada do corpo, marrom a avermelhada (parece a cabeça de um fósforo). O adulto é uma borboleta marrom-escura com manchas brancas nas asas da frente e as asas de trás compridas, em rabo.",
+    confunde: "Com a lagarta-enroladeira, que também se esconde em folha dobrada, mas é fina e transparente.",
+    dano: "Come as folhas e dobra ou une pedaços de folha com seda para se esconder dentro.",
+    quando: "Vegetativo e começo do reprodutivo; costuma ser praga secundária.",
+    manejo: "Entra na conta da desfolha com as outras lagartas; raramente pede aplicação só para ela." } },
+  { id: "p-piolhocobra", tipo: "praga", nome: "Piolho-de-cobra", cientifico: "Julus hesperus e outros diplópodes", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    reconhecer: "Bicho comprido, cilíndrico, cinza a marrom-escuro, com muitos anéis e dois pares de pernas por anel; quando mexido, enrola em espiral.",
+    confunde: "Com centopeia (achatada, rápida, um par de pernas por anel) e com o sínfilo (branco e pequeno).",
+    dano: "Come sementes, cotilédones e plântulas, deixando falhas na linha de semeadura.",
+    quando: "Semeadura e emergência, em solo úmido com muita palha.",
+    manejo: "Olhar debaixo da palha nas falhas; tratamento de semente onde há histórico; geralmente só aparece em ano muito úmido." } },
+  { id: "p-cupim", tipo: "praga", nome: "Cupim-subterrâneo", cientifico: "Procornitermes triacifer e outros", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    reconhecer: "Cupins que vivem em galerias no solo, sem montículo aparente; os soldados têm a cabeça castanha grande e mandíbulas escuras, e as operárias são claras.",
+    confunde: "Com formigas (que têm 'cintura' fina; o cupim tem o corpo inteiriço).",
+    dano: "Come sementes e raízes e entra na base da planta: plântulas fracas, murchas e falha de emergência.",
+    quando: "Semeadura e emergência, mais em área de abertura e solo arenoso.",
+    manejo: "Tratamento de semente (fipronil, por exemplo) onde há histórico; abrir trincheiras antes do plantio para ver se há colônia." } },
   { id: "p-astylus", tipo: "praga", nome: "Astylus", cientifico: "Astylus variegatus", culturas: ["Soja", "Milho"], texto: {
     reconhecer: "Besouro alongado e mole, de 1 cm, amarelo-palha com manchas pretas grandes e irregulares nos élitros; antenas compridas. A larva é escura e fica no solo.",
     confunde: "Com a vaquinha-cerotoma (oval, manchas pretas em blocos) e com joaninhas (redondas e duras).",
@@ -24858,7 +24929,7 @@ const GUIA_CAMPO = [
   { id: "p-coro", tipo: "praga", nome: "Coró (bicho-bolo)", cientifico: "Phyllophaga cuyabana / Liogenys", culturas: ["Soja", "Milho", "Algodão"], texto: {
     reconhecer: "Larva branca em C, cabeça marrom, 2–3 cm, no solo junto da raiz; plantas murchas e amareladas em reboleiras, arrancam fácil.",
     confunde: "Com larvas de besouro benéfico (rola-bosta); ver a posição na raiz e as cerdas.",
-    dano: "Come raízes: murcha, morte de plântulas, reboleiras; pior em seca.",
+    dano: "Come raízes: plantas fracas, amareladas e murchas, que morrem e deixam falhas em reboleira; pior em seca. A larva tem três pares de pernas perto da cabeça e fica arqueada em C.",
     quando: "Vistoriar o solo antes da semeadura (trincheira 30×30 cm): 1 larva/trincheira já justifica tratamento.",
     manejo: "Tratamento de semente com fipronil/imidacloprido, Metarhizium; revolver o solo não resolve." } },
   { id: "p-elasmo", tipo: "praga", nome: "Lagarta-elasmo", cientifico: "Elasmopalpus lignosellus", culturas: ["Milho", "Soja", "Algodão"], texto: {
@@ -24873,8 +24944,8 @@ const GUIA_CAMPO = [
     dano: "Corta a plântula rente ao chão, no colo: planta tombada e falha no estande, muitas vezes em reboleira.",
     quando: "Da emergência ao começo do vegetativo (VE a V3), nos primeiros 15 dias; ataca colo e haste da plântula.",
     manejo: "Tratamento de semente; iscas; pulverização ao entardecer dirigida à base." } },
-  { id: "p-brocaaxilas", tipo: "praga", nome: "Broca-das-axilas", cientifico: "Crocidosema aporema", culturas: ["Soja"], texto: {
-    reconhecer: "Lagarta pequena esverdeada que une as folhas novas do ponteiro com seda e broqueia a axila/haste; ponteiro com folíolos grudados e galeria com fezes.",
+  { id: "p-brocaaxilas", tipo: "praga", nome: "Broca-das-axilas", cientifico: "Crocidosema (Epinotia) aporema", culturas: ["Soja"], texto: {
+    reconhecer: "Lagarta pequena, verde meio transparente quando nova e amarelada a rosada quando cresce; une as folhas novas do ponteiro com seda e broqueia a axila e a haste — ponteiro com folíolos grudados e galeria com fezes. Mariposa pequena, cinza com manchas claras.",
     confunde: "Com helicoverpa pequena no ponteiro.",
     dano: "Mata o ponteiro, planta ramifica; mais em soja jovem e precoce.",
     quando: "Ponteiro no vegetativo (V4–V8) e, depois, ramos e axilas do florescimento até R5 — teia no ponteiro, galeria na haste e ramo quebrado.",
@@ -24887,12 +24958,12 @@ const GUIA_CAMPO = [
     manejo: "Abrir os folíolos enrolados para contar e somar com as outras desfolhadoras no nível de desfolha; inseticida de ingestão com boa cobertura, porque a folha enrolada protege a lagarta." } },
   { id: "p-tamandua", tipo: "praga", nome: "Tamanduá-da-soja", cientifico: "Sternechus subsignatus", culturas: ["Soja"], texto: {
     reconhecer: "Gorgulho preto de 8 mm com faixas amarelas; adulto raspa e anela a haste; larva branca dentro de galha na haste (engrossamento).",
-    confunde: "Com o bicudo (menor, cinza).",
-    dano: "Haste anelada quebra, galha interrompe seiva; prejudica em plantio direto contínuo de soja.",
+    confunde: "Com o bicudo (menor, cinza) e com o torrãozinho (cinza, cor de terra, só rói a folha).",
+    dano: "O adulto rói a casca e anela a haste; a larva vive dentro da galha (engrossamento) e corta a seiva. A planta enfraquece e a haste quebra com o vento; pior em plantio direto com soja sobre soja.",
     quando: "Primeiros 40 dias da soja.",
     manejo: "Rotação com milho/gramínea; tratamento de semente com fipronil; pulverização na emergência dos adultos." } },
-  { id: "p-castanho", tipo: "praga", nome: "Percevejo-castanho-da-raiz", cientifico: "Scaptocoris castanea", culturas: ["Soja", "Milho", "Algodão"], texto: {
-    reconhecer: "Percevejo castanho de 7 mm que vive no solo (cheiro forte de percevejo ao cavar), pernas escavadoras; ninfas brancas.",
+  { id: "p-castanho", tipo: "praga", nome: "Percevejo-castanho-da-raiz", cientifico: "Scaptocoris castanea / Atarsocoris brachiariae", culturas: ["Soja", "Milho", "Algodão"], texto: {
+    reconhecer: "Percevejo castanho-amarelado de 5 a 8 mm que vive no solo (cheiro forte de percevejo ao cavar), corpo abaulado e pernas da frente largas, de escavar; ninfas brancas a amareladas. Duas espécies no cerrado: Scaptocoris castanea e Atarsocoris brachiariae.",
     confunde: "Com coró (larva) no sintoma de reboleira.",
     dano: "Suga raízes: reboleiras de plantas amareladas e raquíticas, pior em solo arenoso e seca.",
     quando: "Trincheira antes do plantio e nas reboleiras; sobe com a umidade.",
