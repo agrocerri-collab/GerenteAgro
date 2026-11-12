@@ -203,10 +203,11 @@ service cloud.firestore {
          (resource == null || (resource.data.get('soPonto', false) == true && ehProdutorNa(resource.data.fazendas[0]))) &&
          mesmaConta(request.resource.data)) ||
         // a própria pessoa só pode gravar o endereço de avisos, a marca do
-        // aparelho ativo e o PRÓPRIO NOME — nenhum outro campo, senão ela trocaria o papel
+        // aparelho ativo, o PRÓPRIO NOME e o modo da tela — nenhum outro campo, senão ela trocaria o papel
         (request.auth.uid == uid && resource != null &&
-         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fcmTokens', 'aparelhoAtivo', 'ultimoAcesso', 'nome']) &&
-         (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['nome']) || (request.resource.data.nome is string && request.resource.data.nome.size() <= 80)));
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fcmTokens', 'aparelhoAtivo', 'ultimoAcesso', 'nome', 'modoTela']) &&
+         (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['nome']) || (request.resource.data.nome is string && request.resource.data.nome.size() <= 80)) &&
+         (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['modoTela']) || request.resource.data.modoTela in ['produtor', 'agronomo']));
       allow delete: if ((ehAdmin() ||
         (podeC('acessos') && resource.data.papel == 'fazenda')) &&
         mesmaConta(resource.data)) ||

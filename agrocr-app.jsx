@@ -149,6 +149,10 @@ const funcaoDeCampo = (f) => /operador|monitor/i.test(String(f || ""));
 const funcaoMonitor = (f) => /monitor/i.test(String(f || ""));
 // relatório completo do monitoramento (mapa, ponto a ponto, fotos) para quem é da fazenda e faz o monitoramento;
 // os demais da fazenda (no AgroCR) veem só o quadro das pragas
+// Modo da tela (Daniel 12/11/2026): o app é o mesmo; o "modo engenheiro agrônomo / consultor" só tira da tela o que
+// não é técnico (diesel, financeiro, RH, ponto…). Não mexe em permissão — o que Acessos esconde continua escondido.
+const TELAS_MODO_AGRONOMO = ["panorama", "dados", "lavoura", "apl", "planoins", "compras", "planoop", "estoque", "visitas", "fungicidas", "solo", "mapa", "guia", "chuva", "previsao", "rel"];
+const telaNoModo = (modo, id) => modo !== "agronomo" || TELAS_MODO_AGRONOMO.includes(id);
 const veRelatorioCompletoPragas = (f) => /monitor|agr[ôo]nomo/i.test(String(f || ""));
 // "apagar" e "insumosGrupo": Produtor e Gerente podem sem marcar; os outros só se a consultoria liberar
 const padraoAreaFazenda = (funcao, chave) => chave === "resumoGeral" ? /produtor|escrit/i.test(String(funcao || "")) : chave === "apagar" || chave === "insumosGrupo" ? /produtor|gerente/i.test(String(funcao || "")) : LANCAR_FAZENDA.includes(chave) ? false : !(["financeiro", "cotacoes", "programa"].includes(chave) && funcaoDeCampo(funcao));
@@ -461,7 +465,7 @@ const ICONES_SVG = {
 };
 // qual ícone cada cartão usa (id do cartão → nome acima); sem correspondência, fica o emoji
 const ICONE_DE = {
-  panorama: "panorama", geral: "resumo", dados: "fazenda", lavoura: "lavoura", apl: "trator", fungicidas: "escudo", estoque: "caixa", mapa: "sat", chuva: "chuva", previsao: "previsao",
+  panorama: "panorama", geral: "resumo", compras: "carrinho", planoins: "lista", planoop: "plano", dados: "fazenda", lavoura: "lavoura", apl: "trator", fungicidas: "escudo", estoque: "caixa", mapa: "sat", chuva: "chuva", previsao: "previsao",
   colheita: "colheita", visitas: "visita", cotacoes: "cotacoes", fin: "carteira", diesel: "diesel", ponto: "relogio", rel: "relatorio", comunidade: "comunidade", suporte: "suporte", guia: "guia",
   doc: "documentos", documentos: "documentos", safras: "safras",
   planocompras: "lista", cotacao: "cotacao", prog: "carrinho", notas: "nota", func: "pessoas", rh: "pessoas", maq: "ferramenta", cotpecas: "cotacao", custos: "cifrao", caixa: "caixaFluxo", vendas: "vendas", dre: "dre", plano: "plano", relfin: "relatorio",
@@ -504,7 +508,7 @@ const CLASSE_DO_CARTAO = {
   panorama: "campo", dados: "campo", lavoura: "campo", solo: "campo", apl: "campo", fungicidas: "campo", mapa: "campo", visitas: "campo",
   chuva: "agua", previsao: "agua",
   diesel: "maquinas", colheita: "maquinas", maq: "maquinas", ponto: "maquinas",
-  estoque: "insumos", prog: "insumos", planocompras: "insumos", cotacao: "insumos", cotpecas: "maquinas",
+  estoque: "insumos", compras: "insumos", planoins: "insumos", planoop: "insumos", prog: "insumos", planocompras: "insumos", cotacao: "insumos", cotpecas: "maquinas",
   fin: "dinheiro", geral: "dinheiro", cotacoes: "dinheiro", custos: "dinheiro", caixa: "dinheiro", vendas: "dinheiro", dre: "dinheiro", notas: "dinheiro", plano: "dinheiro", func: "dinheiro", rh: "dinheiro",
   rel: "apoio", relfin: "apoio", comunidade: "apoio", suporte: "apoio", guia: "apoio", doc: "apoio", documentos: "apoio", safras: "apoio",
 };
@@ -1599,6 +1603,7 @@ export default function App() {
         novo = {
           ...perfil,
           nomeUsuario: d.nome || perfil.nomeUsuario,
+          modoTela: d.modoTela || perfil.modoTela || null,
           admin: !!d.admin,
           permissoes: d.permissoes || null,
           fazendasLimitadas: Array.isArray(d.fazendasLimitadas)
@@ -1607,7 +1612,7 @@ export default function App() {
         };
       } else if (perfil.tipo === "fazenda" && Array.isArray(d.fazendas)) {
         // a função (operador / gerente / produtor…) também vem ao vivo: é ela que decide a tela curta
-        novo = { ...perfil, nomeUsuario: d.nome || perfil.nomeUsuario, fazendasNuvem: d.fazendas, soPonto: !!d.soPonto, pontoPessoaId: d.pontoPessoaId || null, permissoes: d.permissoes || null, funcao: d.funcao || perfil.funcao || "Operador" };
+        novo = { ...perfil, nomeUsuario: d.nome || perfil.nomeUsuario, modoTela: d.modoTela || perfil.modoTela || null, fazendasNuvem: d.fazendas, soPonto: !!d.soPonto, pontoPessoaId: d.pontoPessoaId || null, permissoes: d.permissoes || null, funcao: d.funcao || perfil.funcao || "Operador" };
       }
       if (novo && JSON.stringify(novo) !== JSON.stringify(perfil)) {
         setPerfil(novo);
@@ -1852,6 +1857,16 @@ export default function App() {
               {trajetoAtivo ? `🛣 ${fmtN(Math.round(num(trajetoAtivo.km) * 10) / 10)} km` : "🚗 Despesas"}
             </button>
           )}
+          {perfil && !perfil.soPonto && (
+            <button onClick={() => {
+              const modo = perfil.modoTela === "agronomo" ? "produtor" : "agronomo";
+              definirPerfil({ ...perfil, modoTela: modo });
+              if (naNuvem && perfil.uid && window.Nuvem && Nuvem.gravarUsuario) Nuvem.gravarUsuario(perfil.uid, { modoTela: modo }).catch(() => {});
+            }} title="Trocar o modo da tela: produtor rural (tudo) ou engenheiro agrônomo / consultor (só a parte técnica)"
+              style={{ background: perfil.modoTela === "agronomo" ? C.verde : "rgba(255,255,255,.12)", color: "#fff", border: `1px solid ${perfil.modoTela === "agronomo" ? C.verde : "rgba(255,255,255,.3)"}`, borderRadius: 8, padding: "6px 10px", fontSize: 12, fontWeight: 800, flex: "none", whiteSpace: "nowrap" }}>
+              {perfil.modoTela === "agronomo" ? "🧑‍🌾 Modo agrônomo" : "🚜 Modo produtor"}
+            </button>
+          )}
           {window.AGROCR_VERSAO && (
             <button onClick={() => atualizarAgora(setAtualizando)} disabled={!!atualizando} title={versaoNova ? `Versão nova publicada (${versaoNova}) — toque para atualizar` : "Buscar a versão mais nova do aplicativo"}
               style={{ background: versaoNova ? C.verde : "rgba(255,255,255,.12)", color: "#fff", border: `1px solid ${versaoNova ? C.verde : "rgba(255,255,255,.3)"}`, borderRadius: 8, padding: "6px 10px", fontSize: 12, fontWeight: versaoNova ? 900 : 700, flex: "none", whiteSpace: "nowrap" }}>
@@ -2044,7 +2059,7 @@ export default function App() {
             </div>
           );
         }
-        const veDinheiro = podeFazenda(perfil, "financeiro") && podeFazenda(perfil, "resumoGeral");
+        const veDinheiro = podeFazenda(perfil, "financeiro") && podeFazenda(perfil, "resumoGeral") && perfil.modoTela !== "agronomo";
         const veInsumos = minhas.length > 1 && podeFazenda(perfil, "insumosGrupo");
         if (insumosMinhas && naNuvem && veInsumos) {
           return (
@@ -5842,7 +5857,8 @@ function TelaFazenda({ fazenda, fazendas, grupos, papel, usuario, naNuvem, equip
   // função de quem entrou: o operador e o monitor ganham uma tela inicial curta
   const funcaoDe = (usuario && usuario.funcao) || "";
   const modoCampo = !consultor && funcaoDeCampo(funcaoDe);
-  const modoProdutor = !consultor && !modoCampo;
+  const modoAgronomo = !!(usuario && usuario.modoTela === "agronomo");
+  const modoProdutor = !consultor && !modoCampo && !modoAgronomo;
   const [verTudo, setVerTudo] = useState(() => { try { return localStorage.getItem("agrocr:verTudo:" + fazenda.id) === "1"; } catch (e) { return false; } });
   const mudarVerTudo = (v) => { setVerTudo(v); try { localStorage.setItem("agrocr:verTudo:" + fazenda.id, v ? "1" : "0"); } catch (e) {} };
   // voltou ao início (ou entrou por um aviso): esquece de onde tinha vindo
@@ -6217,6 +6233,16 @@ function TelaFazenda({ fazenda, fazendas, grupos, papel, usuario, naNuvem, equip
     ...(mostrar("guia") ? [["guia", "📖", "Guia de campo", "Daninhas, pragas, doenças e deficiências — com fotos e identificação"]] : []),
   ];
 
+  // modo engenheiro agrônomo: só a parte técnica, e as compras saem do Financeiro para o menu
+  if (modoAgronomo) {
+    for (let i = ICONES.length - 1; i >= 0; i--) if (!telaNoModo("agronomo", ICONES[i][0])) ICONES.splice(i, 1);
+    const atalhos = [
+      ...(veCustos ? [["planoins", "📝", "Planejamento de insumos", "O que falta comprar, por talhão e cultura"]] : []),
+      ...(veFinanceiro ? [["compras", "🛒", "Compras de insumos", `${prog.length} itens comprados`]] : []),
+      ...(veCustos ? [["planoop", "📋", "Planejamento operacional", "Operações da safra, próprio × terceirizado"]] : []),
+    ];
+    ICONES.splice(Math.max(0, ICONES.findIndex((x) => x[0] === "estoque")), 0, ...atalhos);
+  }
   // Quadros do Financeiro — mesmo desenho do menu principal
   const QUADROS_FIN = [
     ...(veCustos ? [
@@ -6296,7 +6322,7 @@ function TelaFazenda({ fazenda, fazendas, grupos, papel, usuario, naNuvem, equip
           consultor={consultor} naNuvem={naNuvem} veFinanceiro={veFinanceiro} compacto={secao === "inicio"} onAbrir={() => setSecao("passos")}
           irPara={(sec, mod, aba) => { setSecao(sec); setModulo(mod || null); setAbaFin(aba || null); }} />
       )}
-      {secao === "inicio" && (modoCampo || modoProdutor) && !verTudo && (() => {
+      {secao === "inicio" && (modoCampo || modoProdutor) && !modoAgronomo && !verTudo && (() => {
         // Tela curta do produtor e do operador: só o que se usa todo dia, em botões grandes.
         // O resto fica atrás de "Mais". O consultor vê o menu completo.
         const principais = modoCampo
@@ -6327,9 +6353,10 @@ function TelaFazenda({ fazenda, fazendas, grupos, papel, usuario, naNuvem, equip
           </div>
         );
       })()}
-      {secao === "inicio" && (consultor || verTudo) && (
+      {secao === "inicio" && (consultor || verTudo || modoAgronomo) && (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          {!consultor && (
+          {modoAgronomo && <div style={{ gridColumn: "1 / -1", fontSize: 12, color: C.verdeEscuro, fontWeight: 700, marginBottom: -4 }}>🧑‍🌾 Modo engenheiro agrônomo: só a parte técnica. Para ver tudo, toque em "Modo agrônomo" lá em cima.</div>}
+          {!consultor && !modoAgronomo && (
             <button onClick={() => mudarVerTudo(false)} style={{ gridColumn: "1 / -1", background: C.fundo, border: "none", borderRadius: 12, padding: "10px", fontWeight: 800, fontSize: 13.5, color: C.navy }}>
               ▴ Mostrar só o principal
             </button>
@@ -6339,7 +6366,7 @@ function TelaFazenda({ fazenda, fazendas, grupos, papel, usuario, naNuvem, equip
             // no meio, acompanhamento embaixo — cada bloco com um traço verde
             const GRUPOS = [
               ["Fazenda e lavoura", ["dados", "lavoura", "colheita"]],
-              ["Operações e insumos", ["apl", "estoque", "diesel", "ponto"]],
+              ["Operações e insumos", ["apl", "planoins", "compras", "planoop", "estoque", "diesel", "ponto"]],
               ["Técnico", ["visitas", "fungicidas", "mapa", "solo", "guia"]],
               ["Clima", ["chuva", "previsao"]],
               ["Dinheiro", ["cotacoes", "fin", "rh"]],
@@ -6361,7 +6388,7 @@ function TelaFazenda({ fazenda, fazendas, grupos, papel, usuario, naNuvem, equip
             ) : null;
             if (g >= 0) ultimo = g;
             return [divisor, (
-            <button key={id} onClick={() => setSecao(id)} style={{
+            <button key={id} onClick={() => { const aba = { compras: "prog", planoins: "planocompras", planoop: "plano" }[id]; if (aba) { setVoltarPara({ secao: "inicio", rotulo: "Início" }); setSecao("fin"); setAbaFin(aba); } else setSecao(id); }} style={{
               background: id === "panorama" ? C.verdeBg : id === "geral" ? "#EEF2F7" : "#fff", border: `1.5px solid ${id === "panorama" ? C.verde : id === "geral" ? C.navy : C.borda}`, borderRadius: 16, padding: "18px 14px", textAlign: "left",
               position: "relative", minHeight: 110,
               ...(largo ? { gridColumn: "1 / -1", display: "flex", alignItems: "center", gap: 16, minHeight: 96 } : {}),
