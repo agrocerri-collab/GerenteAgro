@@ -1004,7 +1004,7 @@ teste("fenologia da soja: 16 estádios VE–R8 com ilustração, figuras da esca
   const urls = C.urlsFixasDoGuia();
   return cods === "VE,VC,V1,V2,V3,V4,V5,V6,R1,R2,R3,R4,R5,R6,R7,R8" && e.estagios.every((x) => x[4] && fs.existsSync(path.join(raiz, "web", x[4])))
     && e.figuras.length === 2 && e.figuras.every((f) => fs.existsSync(path.join(raiz, "web", f.url))) && e.texto.contar && e.texto.partes
-    && urls.length === 30 + 8 + 16 + 3 + 20 + 30 + 10 + 15 + 2 && urls.every((u) => fs.existsSync(path.join(raiz, "web", u)));
+    && urls.length === 30 + 8 + 16 + 3 + 20 + 30 + 10 + 15 + 4 && urls.every((u) => fs.existsSync(path.join(raiz, "web", u)));
 });
 
 teste("soja: nodulação (3 faixas) e guia de acompanhamento (10 categorias) na fenologia, busca acha 'FBN' e 'nódulos'", () => {

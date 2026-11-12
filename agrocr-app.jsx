@@ -24486,6 +24486,7 @@ const GUIA_FOTOS_FIXAS = (() => {
     "p-sinfilo": [foto("sinfilo-adulto", "sínfilo", { largo: true }), foto("sinfilo-campo", "no solo, junto da raiz")],
     // cartão refeito pelo Daniel em 12/11 (a 1ª mariposa era foto do Bugwood e a 2ª tinha marca d'água de banco de imagem)
     "p-rosca": [foto("rosca-lagarta", "lagarta"), foto("rosca-mariposa", "mariposa (adulto)", { branco: true })],
+    "p-lagartamaca": [foto("maca-lagarta", "lagarta no capulho"), foto("maca-mariposa", "mariposa (adulto)")],
   };
   return junta(milho, soja, pragas, percevejos, besouros, lote3);
 })();
