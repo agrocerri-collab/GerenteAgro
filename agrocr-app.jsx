@@ -25875,6 +25875,23 @@ function SecaoGuia({ usuario, fazenda, naNuvem, consultor }) {
 // numa lista pronta, marca a pressão e a ação; o app monta a frase padrão
 // sozinho. O talhão vem do GPS (dentro do KML) e o final gera um resumo
 // geral automático. Tudo funciona offline.
+// Fenologia na visita (Daniel 12/11/2026): cada cultura com a sua escala — o técnico toca no estádio em que o talhão está
+const FENOLOGIA_VISITA = {
+  Soja: [["VE", "emergência"], ["VC", "cotilédones abertos"], ["V1", "1º nó (folhas unifolioladas)"], ["V2", "2º nó (1º trifólio aberto)"], ["V3", "3º nó"], ["V4", "4º nó"], ["V5", "5º nó"], ["V6", "6º nó"], ["V7+", "7 nós ou mais"],
+    ["R1", "início do florescimento"], ["R2", "florescimento pleno"], ["R3", "início da formação de vagens"], ["R4", "vagem formada"], ["R5.1", "grão perceptível (até 10%)"], ["R5.2", "granação 11 a 25%"], ["R5.3", "granação 26 a 50%"],
+    ["R5.4", "granação 51 a 75%"], ["R5.5", "granação 76 a 100%"], ["R6", "grão cheio, vagem verde"], ["R7", "início da maturação"], ["R8", "maturação plena"]],
+  Milho: [["VE", "emergência"], ["V1", "1 folha"], ["V2", "2 folhas"], ["V3", "3 folhas"], ["V4", "4 folhas"], ["V5", "5 folhas"], ["V6", "6 folhas"], ["V8", "8 folhas"], ["V10", "10 folhas"], ["V12", "12 folhas"], ["V14", "14 folhas"], ["V16+", "16 folhas ou mais"],
+    ["VT", "pendoamento"], ["R1", "embonecamento (cabelo)"], ["R2", "grão bolha d'água"], ["R3", "grão leitoso"], ["R4", "grão pastoso"], ["R5", "grão farináceo (dente)"], ["R6", "maturidade fisiológica"]],
+  Algodão: [["V0", "emergência"], ["V1", "1 folha verdadeira"], ["V2", "2 folhas"], ["V3", "3 folhas"], ["V4", "4 folhas"], ["V5", "5 folhas"], ["V6+", "6 folhas ou mais"],
+    ["B1", "1º botão floral"], ["B2", "botões até o 2º ramo"], ["B4", "botões até o 4º ramo"], ["B6", "botões até o 6º ramo"], ["B8", "botões até o 8º ramo"],
+    ["F1", "1ª flor"], ["F2", "flores até o 2º ramo"], ["F4", "flores até o 4º ramo"], ["F6", "flores até o 6º ramo"], ["F8", "flores até o 8º ramo"],
+    ["C1", "1º capulho"], ["C2", "capulhos até o 2º ramo"], ["C4", "capulhos até o 4º ramo"], ["C6", "capulhos até o 6º ramo"], ["C8", "capulhos até o 8º ramo"]],
+  Feijão: [["V0", "germinação"], ["V1", "emergência"], ["V2", "folhas primárias"], ["V3", "1ª folha trifoliolada"], ["V4", "3ª folha trifoliolada"], ["R5", "pré-floração"], ["R6", "floração"], ["R7", "formação das vagens"], ["R8", "enchimento das vagens"], ["R9", "maturação"]],
+};
+const CAT_FENOLOGIA = "📅 Fenologia";
+const GUIA_DA_FENOLOGIA = { Soja: "e-soja", Milho: "e-milho", Algodão: "e-algodao" };
+// "Milho safrinha", "soja" → a chave da escala; desconhecida → ""
+const culturaDaFenologia = (c) => Object.keys(FENOLOGIA_VISITA).find((k) => semAcento(k) === semAcento(String(c || "").split(/\s+/)[0])) || "";
 const OBS_CATALOGO = {
   "🐛 Praga": ["Percevejo-marrom", "Lagarta-da-soja", "Falsa-medideira", "Helicoverpa", "Mosca-branca", "Ácaro", "Tripes", "Coró / torrãozinho", "Cigarrinha-do-milho", "Lagarta-do-cartucho", "Bicudo-do-algodoeiro", "Outra praga"],
   "🦠 Doença": ["Ferrugem-asiática", "Mancha-alvo", "Antracnose", "Mofo-branco", "Oídio", "Cercosporiose", "Mancha-parda", "Ramulária (algodão)", "Fusariose / tombamento", "Outra doença"],
@@ -27140,18 +27157,43 @@ function ChatVisita({ fazenda, lavoura, kml, usuario, onFechar, onSalvar }) {
           </div>
         )}
         {!lista ? (
-          <button onClick={() => { setLista({ cat: null, item: null, outro: "", pressao: null, acao: null, mais: false }); setModo(null); }} disabled={!!gravando} style={{ width: "100%", marginTop: 8, padding: "11px 12px", background: "#fff", color: C.navy, border: `1.5px solid ${C.navy}`, borderRadius: 12, fontWeight: 900, fontSize: 14, textAlign: "left" }}>📋 Escolher da lista <span style={{ fontWeight: 600, fontSize: 12, color: C.cinza }}>— praga, doença, daninha, lavoura, operação…</span></button>
+          <button onClick={() => { setLista({ cat: null, item: null, outro: "", pressao: null, acao: null, mais: false }); setModo(null); }} disabled={!!gravando} style={{ width: "100%", marginTop: 8, padding: "11px 12px", background: "#fff", color: C.navy, border: `1.5px solid ${C.navy}`, borderRadius: 12, fontWeight: 900, fontSize: 14, textAlign: "left" }}>📋 Escolher da lista <span style={{ fontWeight: 600, fontSize: 12, color: C.cinza }}>— fenologia, praga, doença, daninha, lavoura…</span></button>
         ) : (() => {
           const nomeLista = lista.item ? (lista.item === "__outro" ? String(lista.outro || "").trim() : lista.item) : "";
-          const doGuia = nomeLista ? acharNoGuia(nomeLista) : null;
+          const doGuia = lista.cat === CAT_FENOLOGIA ? (lista.cultura ? GUIA_CAMPO.find((g) => g.id === GUIA_DA_FENOLOGIA[lista.cultura]) || null : null) : nomeLista ? acharNoGuia(nomeLista) : null;
           return (
             <div style={{ background: "#fff", border: `1.5px solid ${C.navy}`, borderRadius: 12, padding: 10, marginTop: 8 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 6 }}>
                 <b style={{ color: C.navy, fontSize: 13.5, minWidth: 0 }}>📋 {!lista.cat ? "O que você está vendo?" : !lista.item ? `${lista.cat} — qual?` : `${lista.cat} · ${lista.item === "__outro" ? "outro" : lista.item}`}</b>
-                <button onClick={() => setLista(lista.item ? { ...lista, item: null, outro: "" } : lista.cat ? { ...lista, cat: null, mais: false } : null)} style={{ flex: "none", background: "transparent", border: "none", color: C.cinza, fontSize: 12.5, fontWeight: 800 }}>{lista.cat ? "← voltar" : "✕ fechar"}</button>
+                <button onClick={() => setLista(lista.item ? { ...lista, item: null, outro: "" } : lista.cat ? { ...lista, cat: null, mais: false, cultura: "" } : null)} style={{ flex: "none", background: "transparent", border: "none", color: C.cinza, fontSize: 12.5, fontWeight: 800 }}>{lista.cat ? "← voltar" : "✕ fechar"}</button>
               </div>
-              {!lista.cat && <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>{Object.keys(OBS_CATALOGO).map((c) => <button key={c} onClick={() => setLista({ ...lista, cat: c })} style={{ ...{ padding: "9px 10px", borderRadius: 10, fontWeight: 800, fontSize: 13, border: "none", background: false ? C.navy : C.fundo, color: false ? "#fff" : C.navyEscuro }, flex: "1 1 30%" }}>{c}</button>)}</div>}
-              {lista.cat && !lista.item && (
+              {!lista.cat && <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>{[CAT_FENOLOGIA, ...Object.keys(OBS_CATALOGO)].map((c) => <button key={c} onClick={() => setLista({ ...lista, cat: c, ...(c === CAT_FENOLOGIA ? { cultura: culturaDaFenologia(((lavoura || []).find((l) => tAtual && l.talhaoId === tAtual.id) || {}).cultura || (tAtual && tAtual.cultura)) } : {}) })} style={{ ...{ padding: "9px 10px", borderRadius: 10, fontWeight: 800, fontSize: 13, border: "none", background: false ? C.navy : C.fundo, color: false ? "#fff" : C.navyEscuro }, flex: "1 1 30%" }}>{c}</button>)}</div>}
+              {lista.cat === CAT_FENOLOGIA && !lista.item && (
+                <div>
+                  {!lista.cultura ? (
+                    <>
+                      <div style={{ fontSize: 12, color: C.cinza, marginBottom: 6 }}>Qual a cultura deste talhão?</div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>{Object.keys(FENOLOGIA_VISITA).map((c) => <button key={c} onClick={() => setLista({ ...lista, cultura: c })} style={{ flex: "1 1 45%", padding: "10px", borderRadius: 10, fontWeight: 800, fontSize: 13.5, border: "none", background: C.fundo, color: C.navyEscuro }}>{c}</button>)}</div>
+                    </>
+                  ) : (
+                    <>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                        <span style={{ fontSize: 12, color: C.cinza }}>Em que estádio está {lista.cultura === "Soja" ? "a" : "o"} <b style={{ color: C.navy }}>{lista.cultura.toLowerCase()}</b>?</span>
+                        <button onClick={() => setLista({ ...lista, cultura: "" })} style={{ background: "transparent", border: "none", color: C.navy, fontSize: 12, fontWeight: 800, padding: 0 }}>trocar cultura</button>
+                      </div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                        {FENOLOGIA_VISITA[lista.cultura].map(([cod, nome]) => (
+                          <button key={cod} onClick={() => setLista({ ...lista, item: `${lista.cultura} ${cod} — ${nome}` })} title={nome} style={{ flex: "1 1 22%", minWidth: 64, padding: "8px 4px", borderRadius: 10, border: "none", background: /^R|^VT|^F|^C/.test(cod) ? "#FFF3E0" : C.verdeBg, color: C.navyEscuro, lineHeight: 1.1 }}>
+                            <div style={{ fontWeight: 900, fontSize: 15 }}>{cod}</div>
+                            <div style={{ fontSize: 10, color: C.cinza, marginTop: 2 }}>{nome}</div>
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+              {lista.cat && lista.cat !== CAT_FENOLOGIA && !lista.item && (
                 <div>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                     {[...OBS_CATALOGO[lista.cat], ...(lista.mais ? OBS_CATALOGO_MAIS[lista.cat] || [] : [])].filter((i) => !/^Outra/.test(i)).map((i) => <button key={i} onClick={() => setLista({ ...lista, item: i })} style={{ ...{ padding: "9px 10px", borderRadius: 10, fontWeight: 800, fontSize: 13, border: "none", background: false ? C.navy : C.fundo, color: false ? "#fff" : C.navyEscuro }, flex: "1 1 45%" }}>{i}</button>)}
