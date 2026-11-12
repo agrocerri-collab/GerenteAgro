@@ -8,7 +8,7 @@
 // O aviso vai para os aparelhos que ativaram o sininho no aplicativo
 // (os "enderecos" ficam em usuarios/{uid}.fcmTokens).
 // ============================================================
-const { onDocumentCreated } = require("firebase-functions/v2/firestore");
+const { onDocumentCreated, onDocumentUpdated } = require("firebase-functions/v2/firestore");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { setGlobalOptions } = require("firebase-functions/v2");
 const { defineSecret } = require("firebase-functions/params");
@@ -46,12 +46,15 @@ if (SO_AVISOS) exports.asaas = require("./asaas").registrar({ avisarDonos: (titu
 // GerenteAgro: um titular criou um acesso extra que NÃO entrou sozinho (não é o 1º incluso nem teste)
 // → avisa o dono da plataforma no celular para liberar em Conta → Licenças
 const DONOS_PLATAFORMA = ["administrativo@gerenteagro.com", "agrocerri@gmail.com"];
+// o cadastro do administrativo na nuvem não tem o campo e-mail: sem o uid, os avisos do dono nunca chegavam (12/11/2026)
+const DONOS_UIDS = ["AEChKtFa9rVa7VwTRAGw2KvumO53"];
+const ehDono = (uid, u) => DONOS_UIDS.includes(String(uid)) || DONOS_PLATAFORMA.includes(String((u && u.email) || "").toLowerCase());
 exports.avisoNovoAcesso = onDocumentCreated("usuarios/{uid}", async (evento) => {
   if (!SO_AVISOS) return;
   const u = evento.data ? evento.data.data() : null;
   if (!u || !u.email) return;
   const email0 = String(u.email).toLowerCase();
-  if (DONOS_PLATAFORMA.includes(email0)) return;
+  if (ehDono(evento.params.uid, u)) return;
   if (!u.conta || u.conta === evento.params.uid) {
     // CADASTRO NOVO (titular: conta == uid): avisa o dono da plataforma no celular
     await avisarDonos("Cadastro novo no GerenteAgro", `${u.nome || email0}${u.nome ? ` · ${email0}` : ""}${u.planoEscolhido ? ` · plano ${u.planoEscolhido}` : ""}${u.formaPagamento ? ` · ${u.formaPagamento}` : ""}${u.telefone || u.whats ? ` · ${u.telefone || u.whats}` : ""}`);
@@ -115,7 +118,7 @@ function filtrarDestinatarios(docs, contaDaFazenda) {
   return docs.filter((d) => {
     const u = d.data() || {};
     if (!SO_AVISOS) return true;
-    if (DONOS_PLATAFORMA.includes(String(u.email || "").toLowerCase())) return false;
+    if (ehDono(d.id, u)) return false;
     if (contaDaFazenda && u.papel === "consultoria" && u.conta && String(u.conta) !== String(contaDaFazenda)) return false;
     return true;
   });
@@ -126,9 +129,27 @@ async function contaDaFazenda(fazendaId) {
 }
 // aviso só para o dono da plataforma (celular do administrativo)
 async function avisarDonos(titulo, corpo) {
-  try { const donos = await db.collection("usuarios").where("email", "in", DONOS_PLATAFORMA).get(); await mandar(tokensDe(donos.docs), titulo, corpo); }
-  catch (e) { console.warn("avisarDonos:", e && e.message); }
+  try {
+    const porEmail = (await db.collection("usuarios").where("email", "in", DONOS_PLATAFORMA).get()).docs;
+    const porUid = (await Promise.all(DONOS_UIDS.map((uid) => db.collection("usuarios").doc(uid).get()))).filter((d) => d.exists);
+    const docs = [...new Map([...porEmail, ...porUid].map((d) => [d.id, d])).values()];
+    await mandar(tokensDe(docs), titulo, corpo);
+  } catch (e) { console.warn("avisarDonos:", e && e.message); }
 }
+// GerenteAgro: alguém entrou no app → avisa o dono da plataforma, UMA vez por pessoa por dia (o app grava
+// usuarios.ultimoAcesso a cada abertura; sem o limite seriam dezenas de avisos por pessoa)
+const diaLocal = (iso) => { try { return new Date(iso).toLocaleDateString("pt-BR", { timeZone: "America/Araguaina" }); } catch (e) { return ""; } };
+exports.avisoEntrada = onDocumentUpdated("usuarios/{uid}", async (evento) => {
+  if (!SO_AVISOS) return;
+  const antes = evento.data && evento.data.before ? evento.data.before.data() || {} : {};
+  const depois = evento.data && evento.data.after ? evento.data.after.data() || {} : {};
+  if (!depois.ultimoAcesso || depois.ultimoAcesso === antes.ultimoAcesso) return;
+  if (ehDono(evento.params.uid, depois)) return;
+  if (antes.ultimoAcesso && diaLocal(antes.ultimoAcesso) === diaLocal(depois.ultimoAcesso)) return;
+  const nome = depois.nome || depois.email || "alguém";
+  const quem = [depois.email && depois.nome ? depois.email : null, depois.soPonto ? "ponto" : depois.funcao || (depois.papel === "consultoria" ? "consultoria" : depois.papel === "fazenda" ? "fazenda" : null)].filter(Boolean).join(" · ");
+  await avisarDonos("Entrou no GerenteAgro", `${nome}${quem ? " · " + quem : ""}${antes.ultimoAcesso ? "" : " · 1º acesso"}`);
+});
 
 async function nomeDaFazenda(fazendaId) {
   try {
