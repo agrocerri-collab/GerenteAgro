@@ -1431,6 +1431,15 @@ teste("guia: 3º lote (metaleiro, idi-amin, bicheira, mosca-branca, tripes, sín
     && C.GUIA_CAMPO.some((g) => g.id === id)) && C.fotosFixasDe("p-moscabranca", "Algodão").length === 3;
 });
 
+teste("acessos: Panorama geral para todos da fazenda; Resumo geral por padrão só Produtor e Escritório", () => {
+  const p = (funcao, permissoes) => ({ funcao, permissoes });
+  return ["Produtor", "Gerente", "Engenheiro agrônomo", "Monitor de campo", "Escritório"].every((f) => C.podeFazenda(p(f), "panorama"))
+    && C.podeFazenda(p("Produtor"), "resumoGeral") && C.podeFazenda(p("Escritório"), "resumoGeral")
+    && !C.podeFazenda(p("Engenheiro agrônomo"), "resumoGeral") && !C.podeFazenda(p("Gerente"), "resumoGeral") && !C.podeFazenda(p("Monitor de campo"), "resumoGeral")
+    && C.podeFazenda(p("Gerente", { resumoGeral: true }), "resumoGeral") && !C.podeFazenda(p("Produtor", { resumoGeral: false }), "resumoGeral")
+    && C.ITENS_ACESSO.some((i) => i[0] === "resumoGeral" && i[3] === "fazenda");
+});
+
 teste("agenda do monitoramento: 1º até 5 DAE (estande); depois soja a cada 10 e algodão a cada 7", () => {
   const A = C.agendaMonitoramento;
   const a = A("2026-11-01", "", "Soja", "2026-11-04");            // DAE 3, nunca monitorado: janela do 1º aberta

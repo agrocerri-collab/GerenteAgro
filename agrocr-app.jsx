@@ -137,6 +137,8 @@ const ITENS_ACESSO = [
   ["recomendacoes", "✍️ Fazer recomendações de operação (pulverização, semeadura, adubação…)", "O que pode lançar", "fazenda"],
   ["pedidos", "🛒 Lançar pedidos e compras de insumos (dentro do Financeiro)", "O que pode lançar", "fazenda"],
   ["apagar", "🗑️ Apagar lançamentos errados (monitoramento, visita, diesel, colheita, execução…)", "O que pode lançar", "fazenda"],
+  // resumo em R$ da fazenda (custo por hectare, estoque, colheita, diesel): Daniel 12/11/2026 — "por enquanto só o produtor e o escritório"
+  ["resumoGeral", "💰 Resumo geral da fazenda (custo por hectare, estoque, colheita e diesel) — junto com o Financeiro", "Dinheiro", "fazenda"],
 ];
 // chaves de lançamento do lado da fazenda: sem marcação explícita, NÃO pode — menos "apagar",
 // que Produtor e Gerente têm por padrão (quem manda na fazenda corrige o que saiu errado)
@@ -149,7 +151,7 @@ const funcaoMonitor = (f) => /monitor/i.test(String(f || ""));
 // os demais da fazenda (no AgroCR) veem só o quadro das pragas
 const veRelatorioCompletoPragas = (f) => /monitor|agr[ôo]nomo/i.test(String(f || ""));
 // "apagar" e "insumosGrupo": Produtor e Gerente podem sem marcar; os outros só se a consultoria liberar
-const padraoAreaFazenda = (funcao, chave) => chave === "apagar" || chave === "insumosGrupo" ? /produtor|gerente/i.test(String(funcao || "")) : LANCAR_FAZENDA.includes(chave) ? false : !(["financeiro", "cotacoes", "programa"].includes(chave) && funcaoDeCampo(funcao));
+const padraoAreaFazenda = (funcao, chave) => chave === "resumoGeral" ? /produtor|escrit/i.test(String(funcao || "")) : chave === "apagar" || chave === "insumosGrupo" ? /produtor|gerente/i.test(String(funcao || "")) : LANCAR_FAZENDA.includes(chave) ? false : !(["financeiro", "cotacoes", "programa"].includes(chave) && funcaoDeCampo(funcao));
 // O que cada função pode, por padrão, nos acessos da EQUIPE (GerenteAgro): o titular escolhe a função e
 // ajusta se quiser. Chave ausente = pode (para as funções de confiança) — a lista diz o que NÃO pode.
 const CAMPO_VER = ["panorama", "dadosfazenda", "lavoura", "solo", "operacoes", "fungicidas", "estoque", "ndvi", "pluviometria", "previsao", "colheita", "visitas", "comunidade", "suporte", "guia", "ponto"];
@@ -2042,7 +2044,7 @@ export default function App() {
             </div>
           );
         }
-        const veDinheiro = podeFazenda(perfil, "financeiro");
+        const veDinheiro = podeFazenda(perfil, "financeiro") && podeFazenda(perfil, "resumoGeral");
         const veInsumos = minhas.length > 1 && podeFazenda(perfil, "insumosGrupo");
         if (insumosMinhas && naNuvem && veInsumos) {
           return (
@@ -5309,7 +5311,7 @@ function PermissoesAcesso({ tipo, funcao, valor, aoMudar, titulo }) {
         </div>
       ))}
       {tipo !== "equipe" && <div style={{ fontSize: 11.5, color: C.navyEscuro, marginTop: 6, background: C.amareloBg, borderRadius: 8, padding: "6px 10px" }}>"O que pode lançar": recomendar e lançar pedidos começam em <b>Não pode</b> para todo mundo da fazenda — libere só para quem de fato recomenda ou compra (o pedido precisa do Financeiro liberado). Apagar lançamentos errados vem liberado para Produtor e Gerente.</div>}
-      <div style={{ fontSize: 11, color: C.cinza, marginTop: 6 }}>O que ficar em "Não pode" some do menu da pessoa. {tipo === "equipe" ? "Administrador sempre pode tudo." : "Padrão: Produtor, Gerente, Engenheiro agrônomo e Escritório veem tudo; Monitor de campo e Operador de máquinas não veem Financeiro, Cotações nem o Programa."}</div>
+      <div style={{ fontSize: 11, color: C.cinza, marginTop: 6 }}>O que ficar em "Não pode" some do menu da pessoa. {tipo === "equipe" ? "Administrador sempre pode tudo." : "Padrão: Produtor, Gerente, Engenheiro agrônomo e Escritório veem tudo; Monitor de campo e Operador de máquinas não veem Financeiro, Cotações nem o Programa. O Panorama geral todos veem; o Resumo geral (R$), só Produtor e Escritório."}</div>
     </div>
   );
 }
@@ -5831,6 +5833,8 @@ function TelaFazenda({ fazenda, fazendas, grupos, papel, usuario, naNuvem, equip
   const vePrograma = mostrar("programa");
   const veFinanceiro = consultor ? mostrar("financeiro") : ehProdutor;
   const veCustos = consultor ? (mostrar("financeiro") && podeCustos) : ehProdutor;
+  // Resumo geral da fazenda: a consultoria pelo Financeiro; quem é da fazenda precisa também da chave própria
+  const veResumoGeral = consultor ? veFinanceiro : (veFinanceiro && podeFazenda(usuario, "resumoGeral"));
   const [secao, setSecao] = useState("inicio");
   // tela aberta de dentro de outra (Cotações pelo Financeiro, Documentos pelos Dados): o "voltar" leva para lá
   const [voltarPara, setVoltarPara] = useState(null);
@@ -6158,7 +6162,7 @@ function TelaFazenda({ fazenda, fazendas, grupos, papel, usuario, naNuvem, equip
   const ICONES = [
     // Panorama primeiro, ocupando a largura inteira (pedido do Daniel)
     ...(naNuvem && mostrar("panorama") ? [["panorama", "🌱", "Panorama geral da fazenda", "Lavoura, colheita, chuva, fungicida e pendências num olhar"]] : []),
-    ...(naNuvem && veFinanceiro ? [["geral", "💰", "Resumo geral da fazenda", "Custo por hectare, estoque, colheita e diesel num olhar"]] : []),
+    ...(naNuvem && veResumoGeral ? [["geral", "💰", "Resumo geral da fazenda", "Custo por hectare, estoque, colheita e diesel num olhar"]] : []),
     ...(mostrar("dadosfazenda") ? [["dados", "📋", "Dados da fazenda", `${(fazenda.talhoes || []).length} talhões · ${areaTotal.toFixed(0)} ha`]] : []),
     ...(mostrar("lavoura") ? [["lavoura", "🌿", "Dados da lavoura", (() => {
       const comDae = (lavoura || []).filter((l) => l.dataEmergencia).length;
@@ -6386,7 +6390,7 @@ function TelaFazenda({ fazenda, fazendas, grupos, papel, usuario, naNuvem, equip
       {secao === "panorama" && naNuvem && (
         <TelaGrupoPanorama grupo={{ id: fazenda.id, nome: fazenda.nome }} fazendas={[fazenda]} onFechar={() => setSecao("inicio")} />
       )}
-      {secao === "geral" && naNuvem && veFinanceiro && (
+      {secao === "geral" && naNuvem && veResumoGeral && (
         <TelaGrupoGeral grupo={{ id: fazenda.id, nome: fazenda.nome }} fazendas={[fazenda]} onFechar={() => setSecao("inicio")} />
       )}
       {secao === "lavoura" && (
