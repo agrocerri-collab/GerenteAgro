@@ -25720,7 +25720,46 @@ const GUIA_TIPO_INFO = {
   deficiencia: ["🧪", "Deficiências", "Falta de nutriente: folha velha ou nova, desenho do sintoma"],
   estadio: ["🌱", "Fenologia", "Estádios da cultura: o que acontece e o que olhar em cada fase"],
 };
-const GUIA_CULTURA_INFO = { Soja: "🫘", Milho: "🌽", Algodão: "☁️" };
+// Desenho próprio de cada cultura (o emoji do celular mostrava feijão na soja e nuvem no algodão — Daniel 12/11/2026)
+function IconeCultura({ cultura, tam = 34 }) {
+  const svg = (filhos) => <svg width={tam} height={tam} viewBox="0 0 48 48" style={{ display: "block" }} aria-hidden="true">{filhos}</svg>;
+  if (cultura === "Soja") return svg(<>
+    <path d="M30 18 C30 10 34 5 41 3 C42 10 38 16 30 18Z" fill="#5E9A35" />
+    <path d="M30 18 C36 15 42 16 46 21 C40 25 34 23 30 18Z" fill="#4C8429" />
+    <path d="M30 18 C26 13 25 7 28 2 C32 6 33 12 30 18Z" fill="#6DAA3D" />
+    <g transform="rotate(-38 24 24) translate(0 2)">
+      <path d="M4 24 L0.5 24" stroke="#6B4A26" strokeWidth="1.6" strokeLinecap="round" />
+      <path d="M4 24 C4 19.5 7 18.5 10 18.5 C13 18.5 15 20 16 20.6 C17 20 19 18.5 22 18.5 C25 18.5 27 20 28 20.6 C29 20 31 18.5 34 18.5 C38 18.5 41 21 42 23.5 C41 27 38 29.5 34 29.5 C31 29.5 29 28 28 27.4 C27 28 25 29.5 22 29.5 C19 29.5 17 28 16 27.4 C15 28 13 29.5 10 29.5 C7 29.5 4 28 4 24Z" fill="#9CC45A" stroke="#557F28" strokeWidth="1.2" />
+      <path d="M42 23.5 L45.5 22" stroke="#557F28" strokeWidth="1.2" strokeLinecap="round" />
+      <ellipse cx="10" cy="22.5" rx="4" ry="2" fill="#C2DE8E" opacity="0.9" /><ellipse cx="22" cy="22.5" rx="4" ry="2" fill="#C2DE8E" opacity="0.9" /><ellipse cx="34" cy="22.5" rx="4" ry="2" fill="#C2DE8E" opacity="0.9" />
+      <path d="M6 19.5l-1 -1.6 M11 18.3l0 -1.8 M19 18.5l0 -1.8 M25 18.6l0 -1.8 M31 18.5l0 -1.8 M37 19l0.6 -1.7 M41 21.5l1.4 -1 M6 28.7l-1 1.5 M12 29.6l0 1.8 M20 29.6l0 1.8 M25 29.4l0 1.8 M32 29.6l0 1.8 M38 28.8l0.8 1.6" stroke="#A0804F" strokeWidth="0.8" strokeLinecap="round" />
+    </g>
+  </>);
+  if (cultura === "Milho") return svg(<>
+    <defs><clipPath id="guia-espiga-milho"><ellipse cx="24" cy="21" rx="7.5" ry="15" /></clipPath></defs>
+    <path d="M24 6 C22 3 20 2 18 2 M24 6 C24 3 25 2 26 1 M24 6 C26 3 28 3 30 3" stroke="#9A6A2E" strokeWidth="1.2" fill="none" strokeLinecap="round" />
+    <ellipse cx="24" cy="21" rx="7.5" ry="15" fill="#F4C431" stroke="#C48E12" strokeWidth="1.2" />
+    <g clipPath="url(#guia-espiga-milho)" stroke="#D6A11C" strokeWidth="0.9">
+      <path d="M14 10h20M14 13.5h20M14 17h20M14 20.5h20M14 24h20M14 27.5h20M14 31h20" />
+      <path d="M20 4v34M24 4v34M28 4v34" />
+    </g>
+    <path d="M24 46 C15 42 11 32 14 18 C18 26 21 33 25 41Z" fill="#6AA43A" stroke="#4A7A22" strokeWidth="1" />
+    <path d="M24 46 C33 42 37 32 34 18 C30 26 27 33 23 41Z" fill="#7DB648" stroke="#4A7A22" strokeWidth="1" />
+  </>);
+  if (cultura === "Algodão") return svg(<>
+    <path d="M24 33 L24 46" stroke="#6B4A26" strokeWidth="2" strokeLinecap="round" />
+    <path d="M24 40 C28 38 32 39 34 42 C30 44 26 43 24 40Z" fill="#5E9A35" />
+    <path d="M24 22 L9 12 L19 21 L6 27 L19 26 L13 38 L23 29 L24 42 L26 29 L35 38 L29 26 L42 27 L29 21 L39 12 L27 20 L24 6Z" fill="#8A5A2B" stroke="#5E3B1A" strokeWidth="0.8" strokeLinejoin="round" />
+    <g fill="#FFFFFF" stroke="#BDBDBD" strokeWidth="0.9">
+      <path d="M24 23 C18 24 13 21 13 16.5 C13 12 17 10 20 11.5 C21 9 24 8.5 25 10.5 C26 15 26 19 24 23Z" />
+      <path d="M24 23 C30 24 35 21 35 16.5 C35 12 31 10 28 11.5 C27 9 24 8.5 23 10.5 C22 15 22 19 24 23Z" />
+      <path d="M24 23 C18 23 13 25.5 13 29.5 C13 33.5 17 35 20 33.5 C21.5 35.5 24 35 24.5 33 C25 29 25 26 24 23Z" />
+      <path d="M24 23 C30 23 35 25.5 35 29.5 C35 33.5 31 35 28 33.5 C26.5 35.5 24 35 23.5 33 C23 29 23 26 24 23Z" />
+    </g>
+  </>);
+  return <span style={{ fontSize: tam * 0.85, lineHeight: 1 }}>🌾</span>;
+}
+const GUIA_CULTURA_INFO = { Soja: "🫛", Milho: "🌽", Algodão: "🌱" };   // só para texto; na tela vai o desenho (IconeCultura)
 function SecaoGuia({ usuario, fazenda, naNuvem, consultor }) {
   const culturaDaFazenda = ((fazenda && fazenda.talhoes) || []).map((t) => t.cultura).find((c) => GUIA_CULTURAS.includes(c)) || "";
   const [tipo, setTipo] = useState("");        // "" = tela dos ícones
@@ -25802,7 +25841,7 @@ function SecaoGuia({ usuario, fazenda, naNuvem, consultor }) {
         <>
           <div style={{ fontSize: 13, color: C.cinza, marginBottom: 8 }}>{tipo === "estadio" ? "Qual cultura?" : "De qual cultura? (ou todas)"}</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-            {GUIA_CULTURAS.map((c) => tile(() => escolherCultura(c), GUIA_CULTURA_INFO[c] || "🌾", c, `${GUIA_CAMPO.filter((g) => g.tipo === tipo && (g.culturas || []).includes(c)).length} itens`, c === culturaDaFazenda ? C.verdeBg : undefined))}
+            {GUIA_CULTURAS.map((c) => tile(() => escolherCultura(c), <span style={{ display: "inline-flex", width: 58, height: 58, borderRadius: 16, background: "#E9F1E1", alignItems: "center", justifyContent: "center" }}><IconeCultura cultura={c} tam={50} /></span>, c, `${GUIA_CAMPO.filter((g) => g.tipo === tipo && (g.culturas || []).includes(c)).length} itens`, c === culturaDaFazenda ? C.verdeBg : undefined))}
             {tipo !== "estadio" && tile(() => escolherCultura(""), "🌐", "Todas as culturas", `${GUIA_CAMPO.filter((g) => g.tipo === tipo).length} itens`)}
           </div>
         </>
