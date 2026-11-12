@@ -16152,6 +16152,19 @@ function BlocoAdubacao({ sim, gravarSim, adubos, onSalvarAdubos, usuario }) {
   );
 }
 
+// Projeção de colheita e lucro da simulação (Daniel 12/11/2026): produtividade esperada × preço da saca − custo
+function lucroDaSimulacao({ custoHa, areaHa, precoSaca, produtividade }) {
+  const prod = num(produtividade), preco = num(precoSaca), custo = num(custoHa), area = num(areaHa);
+  if (!(prod > 0) || !(preco > 0)) return null;
+  const receitaHa = prod * preco, lucroHa = receitaHa - custo;
+  return {
+    receitaHa, lucroHa, receitaTotal: receitaHa * area, lucroTotal: lucroHa * area, custoTotal: custo * area,
+    equilibrioSc: custo / preco,                 // sacas por hectare que pagam o custo
+    lucroSc: lucroHa / preco,                    // lucro em sacas por hectare
+    colheitaTotalSc: prod * area,
+    margem: receitaHa > 0 ? lucroHa / receitaHa : 0,
+  };
+}
 function SecaoSimulacoes({ simulacoes, onSalvar, produtosCatalogo, usuario, adubos, onSalvarAdubos }) {
   const [aberta, setAberta] = useState(null);     // id da simulação aberta
   const [criando, setCriando] = useState(false);
@@ -16445,6 +16458,46 @@ function SecaoSimulacoes({ simulacoes, onSalvar, produtosCatalogo, usuario, adub
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.cinza, paddingTop: 2 }}>
             <span>Na área de referência ({fmtN(areaS)} ha)</span><b style={{ color: C.navyEscuro }}>{fmtMoeda(custoTotal)}{precoSc > 0 ? ` · ${fmtN(Math.round(custoTotal / precoSc))} sc no total` : ""}</b>
           </div>
+          {/* projeção de colheita e lucro: produtividade esperada × preço da saca − custo */}
+          {(() => {
+            const prodSc = num(sim.produtividadeSc);
+            const r = lucroDaSimulacao({ custoHa, areaHa: areaS, precoSaca: precoSc, produtividade: prodSc });
+            const corLucro = (v) => (v >= 0 ? C.verdeEscuro : C.vermelho);
+            const L = ({ nome, ha, total, sc, forte, cor }) => (
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, fontSize: forte ? 15 : 13, fontWeight: forte ? 900 : 600, padding: "2px 0", color: cor || C.navyEscuro }}>
+                <span>{nome}</span>
+                <span style={{ textAlign: "right" }}>{fmtMoeda(ha)}/ha{sc != null ? <span style={{ fontSize: 11.5, fontWeight: 700 }}> · {fmtN(Math.round(sc * 10) / 10)} sc/ha</span> : null}<span style={{ display: "block", fontSize: 11.5, fontWeight: 700, opacity: 0.85 }}>{fmtMoeda(total)} no total</span></span>
+              </div>
+            );
+            return (
+              <div style={{ borderTop: `1.5px dashed ${C.borda}`, marginTop: 8, paddingTop: 8 }}>
+                <div style={{ fontWeight: 900, color: C.navy, fontSize: 13, marginBottom: 4 }}>Projeção de colheita e lucro</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, marginBottom: 6, flexWrap: "wrap" }}>
+                  <span style={{ flex: "none" }}>Quanto espera colher (sc/ha):</span>
+                  <span className="nao-imprimir">
+                    <input type="number" inputMode="decimal" value={prodSc || ""} placeholder="ex.: 65"
+                      onChange={(e) => gravarSim({ ...sim, produtividadeSc: num(e.target.value) || null })}
+                      style={{ width: 90, padding: "5px 6px", fontSize: 13 }} />
+                  </span>
+                  {prodSc > 0 && <b className="so-imprimir" style={{ color: C.navyEscuro }}>{fmtN(prodSc)} sc/ha</b>}
+                </div>
+                {!r ? (
+                  <div className="nao-imprimir" style={{ fontSize: 12, color: C.cinza }}>{!(precoSc > 0) ? "Informe o preço da saca (acima) e a produtividade esperada para ver o lucro." : "Informe quantas sacas por hectare espera colher para ver o lucro."}</div>
+                ) : (<>
+                  <L nome={`Receita (${fmtN(prodSc)} sc × ${fmtMoeda(precoSc)})`} ha={r.receitaHa} total={r.receitaTotal} />
+                  <L nome="Custo total" ha={custoHa} total={r.custoTotal} sc={r.equilibrioSc} />
+                  <div style={{ borderTop: `1.5px solid ${C.borda}`, marginTop: 4, paddingTop: 4 }}>
+                    <L nome={r.lucroHa >= 0 ? "LUCRO" : "PREJUÍZO"} ha={r.lucroHa} total={r.lucroTotal} sc={r.lucroSc} forte cor={corLucro(r.lucroHa)} />
+                  </div>
+                  <div style={{ fontSize: 12, color: C.cinza, marginTop: 4, lineHeight: 1.4 }}>
+                    Ponto de equilíbrio: <b style={{ color: C.navyEscuro }}>{fmtN(Math.round(r.equilibrioSc * 10) / 10)} sc/ha</b> pagam o custo
+                    {" · "}margem <b style={{ color: corLucro(r.lucroHa) }}>{fmtN(Math.round(r.margem * 1000) / 10)}%</b>
+                    {areaS > 0 ? <>{" · "}colheita prevista <b style={{ color: C.navyEscuro }}>{fmtN(Math.round(r.colheitaTotalSc))} sc</b> em {fmtN(areaS)} ha</> : null}
+                  </div>
+                </>)}
+              </div>
+            );
+          })()}
         </div>
         )}
         </div>
