@@ -868,4 +868,4 @@ exports.transcrever = onRequest({ cors: true, timeoutSeconds: 120, memory: "512M
 });
 
 // No projeto gerenteagro ficam so as funcoes de aviso (ver SO_AVISOS acima)
-if (SO_AVISOS) for (const k of Object.keys(exports)) if (!["avisoRecomendacao", "avisoChuva", "avisoExecucao", "lembretesDiarios", "testeDeAviso", "asaas", "aoCriarFazenda", "avisoNovoAcesso"].includes(k)) delete exports[k];
+if (SO_AVISOS) for (const k of Object.keys(exports)) if (!["avisoRecomendacao", "avisoChuva", "avisoExecucao", "lembretesDiarios", "testeDeAviso", "asaas", "aoCriarFazenda", "avisoNovoAcesso", "avisoEntrada"].includes(k)) delete exports[k];
