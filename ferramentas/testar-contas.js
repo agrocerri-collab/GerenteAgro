@@ -1004,7 +1004,7 @@ teste("fenologia da soja: 16 estádios VE–R8 com ilustração, figuras da esca
   const urls = C.urlsFixasDoGuia();
   return cods === "VE,VC,V1,V2,V3,V4,V5,V6,R1,R2,R3,R4,R5,R6,R7,R8" && e.estagios.every((x) => x[4] && fs.existsSync(path.join(raiz, "web", x[4])))
     && e.figuras.length === 2 && e.figuras.every((f) => fs.existsSync(path.join(raiz, "web", f.url))) && e.texto.contar && e.texto.partes
-    && urls.length === 30 + 8 + 16 + 3 + 20 + 30 + 10 + 15 + 4 + 40 && urls.every((u) => fs.existsSync(path.join(raiz, "web", u)));
+    && urls.length === 30 + 8 + 16 + 3 + 20 + 30 + 10 + 15 + 4 + 40 + 17 && urls.every((u) => fs.existsSync(path.join(raiz, "web", u)));
 });
 
 teste("soja: nodulação (3 faixas) e guia de acompanhamento (10 categorias) na fenologia, busca acha 'FBN' e 'nódulos'", () => {
@@ -1464,6 +1464,12 @@ teste("simulação: projeção de colheita e lucro (receita, lucro/ha, total, eq
     && Math.abs(r.equilibrioSc - 41.6667) < 0.001 && Math.abs(r.lucroSc - 23.3333) < 0.001 && r.colheitaTotalSc === 6500 && Math.abs(r.margem - 0.358974) < 0.0001
     && p.lucroHa === -1000 && p.lucroTotal === -10000 && C.lucroDaSimulacao({ custoHa: 5000, areaHa: 100, precoSaca: 0, produtividade: 65 }) === null
     && C.lucroDaSimulacao({ custoHa: 5000, areaHa: 100, precoSaca: 120, produtividade: 0 }) === null;
+});
+
+teste("guia: 5º lote (algodão) — bicudo, curuquerê e pulgão com fases; broca-da-raiz e percevejo-manchador novos", () => {
+  const fs2 = require("fs"), path2 = require("path");
+  const n = { "p-bicudo": 4, "p-curuquere": 4, "p-pulgaoalgodao": 3, "p-brocaraiz": 3, "p-manchador": 3 };
+  return Object.entries(n).every(([id, k]) => C.fotosFixasDe(id, "Algodão").length === k && C.fotosFixasDe(id, "").every((f) => fs2.existsSync(path2.join(raiz, "web", f.url))) && C.GUIA_CAMPO.some((g) => g.id === id));
 });
 
 teste("agenda do monitoramento: 1º até 5 DAE (estande); depois soja a cada 10 e algodão a cada 7", () => {

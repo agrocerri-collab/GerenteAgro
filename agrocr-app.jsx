@@ -24568,7 +24568,16 @@ const GUIA_FOTOS_FIXAS = (() => {
     "p-tripes": [campo("caliothrips-campo", "Caliothrips · na folha"), campo("frankliniella-campo", "Frankliniella · na flor")],
     "p-cupim": [campo("cupim-1", "soldado"), campo("cupim-solo", "colônia no solo"), campo("cupim-planta", "na base da planta")],
   };
-  return junta(milho, soja, pragas, percevejos, besouros, lote3, lote4);
+  // 5º lote: pragas do algodão (12/11/2026), com as fases — fundo branco, sem cortar a foto
+  const b = (arq, rotulo) => foto(arq, rotulo, { branco: true });
+  const lote5 = {
+    "p-bicudo": [b("bicudo-ovo", "ovo"), b("bicudo-larva", "larva (dentro do botão)"), b("bicudo-pupa", "pupa"), b("bicudo-adulto", "adulto — rostro longo e curvo")],
+    "p-brocaraiz": [b("brocaraiz-adulto", "adulto"), b("brocaraiz-larva", "larva na galeria"), b("brocaraiz-pupa", "pupa na cavidade")],
+    "p-pulgaoalgodao": [b("pulgao-colonia", "colônia"), b("pulgao-aptero", "sem asas (ápteros)"), b("pulgao-alado", "com asas (alado)")],
+    "p-curuquere": [b("curuquere-ovo", "ovo"), b("curuquere-lagarta", "lagarta"), b("curuquere-pupa", "pupa presa por seda"), b("curuquere-mariposa", "mariposa")],
+    "p-manchador": [b("manchador-ninfa", "ninfa"), b("manchador-adulto", "adulto"), b("manchador-casal", "casal acasalando")],
+  };
+  return junta(milho, soja, pragas, percevejos, besouros, lote3, lote4, lote5);
 })();
 // todas as imagens que vêm com o app (fotos de referência, figuras e ilustrações de estádio) — para baixar de uma vez
 const urlsFixasDoGuia = () => [...Object.values(GUIA_FOTOS_FIXAS).flat().map((f) => f.url), ...GUIA_CAMPO.flatMap((g) => [...(g.figuras || []).map((f) => f.url), ...(g.estagios || []).map((e) => e[4]).filter(Boolean)])];
@@ -24818,10 +24827,10 @@ const GUIA_CAMPO = [
     quando: "Cosmioides de R1 a R6 (folha, haste e vagem); eridania de V4 a R5 (folha e vagem); albula de V3 a R1 (folha, desfolha parecida com a da eridania). Depois da dessecação, migram das daninhas para a lavoura.",
     manejo: "Controlar pequenas; diamidas, benzoilureias, indoxacarbe; Bt controla parcialmente." } },
   { id: "p-curuquere", tipo: "praga", nome: "Curuquerê-do-algodoeiro", cientifico: "Alabama argillacea", culturas: ["Algodão"], texto: {
-    reconhecer: "Lagarta verde com listras longitudinais e pontos pretos, 3 pares de falsas pernas, anda meio medindo; pulsa quando tocada; mariposa marrom-avermelhada.",
+    reconhecer: "Lagarta verde-amarelada com uma linha branca no meio das costas, listras claras e pontinhos pretos contornados de branco; anda meio 'medindo palmo' e pula quando tocada. Ovo verde-azulado, achatado e estriado, posto solto na face de baixo das folhas do ponteiro; pupa castanho-escura presa à folha por seda. Mariposa pardo-argilosa (cerca de 3 cm de asa a asa) com duas marquinhas redondas nas asas da frente.",
     confunde: "Com a falsa-medideira e a lagarta-da-soja.",
     dano: "Desfolha rápida e intensa do algodão; pode desfolhar a lavoura em dias.",
-    quando: "Do vegetativo ao início da frutificação; surtos após chuva.",
+    quando: "Do vegetativo ao início da frutificação; surtos após chuva e onde há tiguera de algodão.",
     manejo: "Nível 2 lagartas/planta ou 25% de desfolha; Bt controla bem; baculovírus; inseticidas de ingestão." } },
   { id: "p-rosada", tipo: "praga", nome: "Lagarta-rosada", cientifico: "Pectinophora gossypiella", culturas: ["Algodão"], texto: {
     reconhecer: "Lagarta pequena (até 1,3 cm) rosada com faixas, dentro da maçã; flor em 'roseta' (pétalas presas) indica ovo/lagarta; mariposa pequena marrom-acinzentada.",
@@ -24830,10 +24839,10 @@ const GUIA_CAMPO = [
     quando: "Do florescimento à abertura; armadilha de feromônio orienta.",
     manejo: "Destruição de soqueira; Bt (bom controle); monitorar flores roseta e maçãs; inseticida dirigido no pico de mariposas." } },
   { id: "p-bicudo", tipo: "praga", nome: "Bicudo-do-algodoeiro", cientifico: "Anthonomus grandis", culturas: ["Algodão"], texto: {
-    reconhecer: "Besouro cinza-amarronzado de 6 mm com bico longo e curvo; larva branca curvada dentro do botão; botão com furo de alimentação (tipo verruga) ou de oviposição (selado com cera); botão ovipositado amarela, abre as brácteas e cai.",
+    reconhecer: "Besouro marrom-ferrugíneo a acinzentado de 5 a 8 mm com rostro (bico) longo e curvo; larva branco-creme, sem pernas, curvada dentro do botão ou da maçã, com cabeça castanha; pupa creme. Botão com furo de alimentação (tipo verruga) ou de oviposição (selado com cera); botão ovipositado amarela, abre as brácteas e cai.",
     confunde: "Sem igual; o furo no botão é a assinatura.",
-    dano: "Botões e maçãs novas destruídos; perda direta de produção.",
-    quando: "Da emissão do primeiro botão (B1) até a última maçã; armadilha com feromônio na entressafra e nas bordas.",
+    dano: "Botões e maçãs novas destruídos; perda direta de produção. É a principal praga do algodoeiro.",
+    quando: "Da emissão do primeiro botão (B1) até a última maçã; armadilha com feromônio na entressafra e nas bordas. Ciclo de ovo a adulto de cerca de 20 dias (14 a 26), por isso várias gerações na safra (mais no calor); a fêmea põe de 100 a 300 ovos e o adulto vive 1 a 2 meses.",
     manejo: "Nível 5% de botões atacados; bordadura e controle dirigido; destruição de soqueira; tubos matabicudo na entressafra; piretroide, malationa, fipronil em rotação." } },
   { id: "p-moscabranca", tipo: "praga", nome: "Mosca-branca", cientifico: "Bemisia tabaci", culturas: ["Soja", "Algodão", "Milho"], texto: {
     reconhecer: "Adulto minúsculo (1–2 mm) branco, voa em nuvem quando a planta é sacudida; ninfas achatadas, ovais, amareladas, na face de baixo da folha; melada e fumagina (fuligem preta).",
@@ -24841,11 +24850,23 @@ const GUIA_CAMPO = [
     dano: "Suga seiva e enfraquece a planta; a melada que solta cria fumagina (fuligem preta que tampa a folha e suja a pluma no algodão) e transmite vírus (mosaico-dourado no feijão, necrose da haste na soja). Na soja predomina a raça B (biótipo MEAM1).",
     quando: "Calor e seca; contar ninfas na 3ª–5ª folha do ponteiro.",
     manejo: "Vazio sanitário, eliminar tiguera; inseticidas (piriproxifem, ciantraniliprole, espiromesifeno) em rotação; óleo; fungos entomopatogênicos (Beauveria, Cordyceps)." } },
+  { id: "p-brocaraiz", tipo: "praga", nome: "Broca-da-raiz", cientifico: "Eutinobothrus brasiliensis", culturas: ["Algodão"], texto: {
+    reconhecer: "Besourinho escuro de 3,5 a 5 mm com as costas estriadas (bem menor que o bicudo e sem o bico comprido). A larva é branca, sem pernas, até uns 7 mm, e vive em galeria na base do caule; a pupa, também branca, fica numa cavidade oval dentro da madeira.",
+    confunde: "Com o bicudo (rostro longo, ataca botão e maçã) e com morte de planta por doença de solo; rachar a base do caule e achar a galeria tira a dúvida.",
+    dano: "A larva abre galerias no colo e na base do caule: a planta murcha, amarela, fica fraca e pode quebrar ou morrer, muitas vezes começando pelas bordas da lavoura.",
+    quando: "Desde a lavoura jovem; pode ter várias gerações na safra e sobrevive em soqueiras, de onde passa para a lavoura nova.",
+    manejo: "Destruir bem as soqueiras; tratamento de sementes onde há histórico; olhar as plantas murchas da bordadura, rachando o colo." } },
+  { id: "p-manchador", tipo: "praga", nome: "Percevejo-manchador", cientifico: "Dysdercus spp.", culturas: ["Algodão"], texto: {
+    reconhecer: "Percevejo alongado de 10 a 15 mm, amarelo, laranja, vermelho ou castanho, com uma faixa clara atrás da cabeça e linhas claras por baixo do corpo; ninfas vermelhas, sem asas. Os adultos ficam muito tempo acasalando, presos pela ponta do abdômen.",
+    confunde: "Com o percevejo-rajado e outros percevejos do algodão; a cor avermelhada e o corpo comprido ajudam a separar.",
+    dano: "Ninfas e adultos sugam as sementes nas maçãs: a pluma fica manchada (de onde vem o nome) e as maçãs podem apodrecer ou não abrir direito.",
+    quando: "Das maçãs em formação até a abertura dos capulhos; os ovos ficam em fendas do solo e perto do colo das plantas, e a praga também se cria em plantas hospedeiras vizinhas.",
+    manejo: "Contar nas maçãs e capulhos; controlar quando aparece em grupos na fase de maçãs; eliminar hospedeiros e tigueras perto da lavoura." } },
   { id: "p-pulgaoalgodao", tipo: "praga", nome: "Pulgão-do-algodoeiro", cientifico: "Aphis gossypii", culturas: ["Algodão"], texto: {
-    reconhecer: "Colônias de pulgões verdes, amarelos ou pretos na face de baixo das folhas e ponteiros; folhas encarquilhadas e viradas para baixo; melada e fumagina.",
+    reconhecer: "Pulgões pequenos (pouco mais de 1 mm), do amarelo-claro ao verde-escuro, com dois 'canudinhos' escuros (sifúnculos) no fim do abdômen; colônias na face de baixo das folhas novas e nos ponteiros, com ninfas, adultos sem asas e alguns com asas. Folhas encarquilhadas e viradas para baixo; melada e fumagina.",
     confunde: "Com ninfas de mosca-branca (achatadas, não andam).",
     dano: "Transmite a doença azul (CLRDV) e o vermelhão; encarquilha; fumagina na pluma.",
-    quando: "Desde a emergência (vetor da doença azul) até a abertura (pluma melada).",
+    quando: "Desde a emergência (vetor da doença azul) até a abertura (pluma melada). Multiplica muito rápido: no calor as fêmeas parem filhotes sem acasalar, e os alados levam a infestação para outras plantas.",
     manejo: "Tratamento de semente; nível 10–20% de plantas com colônias (menor em cultivar suscetível à doença azul); neonicotinoides, sulfoxaflor, flonicamida; preservar joaninhas." } },
   { id: "p-pulgaomilho", tipo: "praga", nome: "Pulgão-do-milho", cientifico: "Rhopalosiphum maidis", culturas: ["Milho"], texto: {
     reconhecer: "Colônias azul-esverdeadas no cartucho e no pendão, com melada.",
