@@ -1857,7 +1857,7 @@ export default function App() {
               {trajetoAtivo ? `🛣 ${fmtN(Math.round(num(trajetoAtivo.km) * 10) / 10)} km` : "🚗 Despesas"}
             </button>
           )}
-          {perfil && !perfil.soPonto && (
+          {MARCA_VENDA && perfil && !perfil.soPonto && (
             <button onClick={() => {
               const modo = perfil.modoTela === "agronomo" ? "produtor" : "agronomo";
               definirPerfil({ ...perfil, modoTela: modo });
@@ -2059,7 +2059,7 @@ export default function App() {
             </div>
           );
         }
-        const veDinheiro = podeFazenda(perfil, "financeiro") && podeFazenda(perfil, "resumoGeral") && perfil.modoTela !== "agronomo";
+        const veDinheiro = podeFazenda(perfil, "financeiro") && podeFazenda(perfil, "resumoGeral") && !(MARCA_VENDA && perfil.modoTela === "agronomo");
         const veInsumos = minhas.length > 1 && podeFazenda(perfil, "insumosGrupo");
         if (insumosMinhas && naNuvem && veInsumos) {
           return (
@@ -5857,7 +5857,7 @@ function TelaFazenda({ fazenda, fazendas, grupos, papel, usuario, naNuvem, equip
   // função de quem entrou: o operador e o monitor ganham uma tela inicial curta
   const funcaoDe = (usuario && usuario.funcao) || "";
   const modoCampo = !consultor && funcaoDeCampo(funcaoDe);
-  const modoAgronomo = !!(usuario && usuario.modoTela === "agronomo");
+  const modoAgronomo = !!(MARCA_VENDA && usuario && usuario.modoTela === "agronomo");   // só no GerenteAgro (Daniel 12/11/2026)
   const modoProdutor = !consultor && !modoCampo && !modoAgronomo;
   const [verTudo, setVerTudo] = useState(() => { try { return localStorage.getItem("agrocr:verTudo:" + fazenda.id) === "1"; } catch (e) { return false; } });
   const mudarVerTudo = (v) => { setVerTudo(v); try { localStorage.setItem("agrocr:verTudo:" + fazenda.id, v ? "1" : "0"); } catch (e) {} };
