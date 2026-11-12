@@ -1104,7 +1104,7 @@ teste("panorama geral: culturas da safra e da safrinha separadas, cada uma com o
   } finally { sandbox.React.createElement = velho; }
   const tudo = textos.join(" | ");
   return tudo.includes("🌱 Safra: Milho 100 ha") && tudo.includes("🌱 Safra: Soja 50 ha") && tudo.includes("🌽 Safrinha: Milho 150 ha") && tudo.includes("🌱 Safra: Soja 30 ha")
-    && tudo.includes("Milho 100 ha · Soja 80 ha") && !tudo.includes("Milho 250");
+    && tudo.includes("100 ha | Milho  | 80 ha | Soja ") && tudo.includes("Safrinha | 150 ha | Milho ") && !tudo.includes("250 ha");
 });
 
 teste("rateio da compra pelo grupo: soja vai só para as fazendas que plantam soja, pela área de soja", () => {

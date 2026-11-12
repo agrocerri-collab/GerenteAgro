@@ -3605,17 +3605,23 @@ function TelaGrupoPanorama({ grupo, fazendas, onFechar }) {
       </div>
 
       {/* resumo do grupo (numa fazenda só repete o cartão de baixo: fica só no PDF) */}
-      <div className={fazendas.length === 1 ? "so-imprimir" : ""} style={{ display: fazendas.length === 1 ? "none" : "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 8, margin: "10px 0" }}>
-        <div style={cartao}>
+      <div className={fazendas.length === 1 ? "so-imprimir" : ""} style={{ display: fazendas.length === 1 ? "none" : "grid", gridTemplateColumns: "1fr 1fr", gap: 8, margin: "10px 0" }}>
+        {/* culturas na largura toda (Daniel 12/11/2026); fungicida e pendências lado a lado embaixo */}
+        <div style={{ ...cartao, gridColumn: "1 / -1" }}>
           <div style={{ fontSize: 11, color: C.cinza, fontWeight: 800 }}>🌱 CULTURAS (todas)</div>
-          <div style={{ fontSize: 13, fontWeight: 800, color: C.navy, marginTop: 2 }}>
-            <span style={{ color: C.verdeEscuro }}>Safra:</span> {Object.keys(culturasGeral).filter((c) => c !== "Sem cultura").map((c) => `${c} ${fmtN(culturasGeral[c])} ha`).join(" · ") || "cadastre as lavouras"}
-          </div>
-          {Object.keys(safrinhaGeral).length > 0 && (
-            <div style={{ fontSize: 13, fontWeight: 800, color: C.navy, marginTop: 2 }}>
-              <span style={{ color: "#7A5C00" }}>Safrinha:</span> {Object.keys(safrinhaGeral).map((c) => `${c} ${fmtN(safrinhaGeral[c])} ha`).join(" · ")}
-            </div>
-          )}
+          {[["Safra", culturasGeral, C.verdeEscuro, C.verdeBg], ["Safrinha", safrinhaGeral, "#7A5C00", "#FFF6DA"]].map(([rot, mapa, cor, fundo]) => {
+            const cs = Object.keys(mapa).filter((c) => c !== "Sem cultura");
+            if (!cs.length && rot === "Safrinha") return null;
+            const total = cs.reduce((t, c) => t + num(mapa[c]), 0);
+            return (
+              <div key={rot} style={{ marginTop: 6 }}>
+                <div style={{ fontSize: 12, fontWeight: 900, color: cor }}>{rot}{cs.length ? <span style={{ fontWeight: 700, color: C.cinza }}> · {fmtN(Math.round(total * 100) / 100)} ha</span> : null}</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 3 }}>
+                  {cs.length ? cs.map((c) => <span key={c} style={{ background: fundo, color: C.navy, borderRadius: 8, padding: "4px 9px", fontSize: 13, fontWeight: 800, whiteSpace: "nowrap" }}>{c + " "}<span style={{ color: cor }}>{`${fmtN(mapa[c])} ha`}</span></span>) : <span style={{ fontSize: 12.5, color: C.cinza }}>cadastre as lavouras</span>}
+                </div>
+              </div>
+            );
+          })}
         </div>
         <div style={{ ...cartao, background: atrasadas ? "#FFF0F0" : "#fff", borderColor: atrasadas ? "#E8B4B4" : C.borda }}>
           <div style={{ fontSize: 11, color: C.cinza, fontWeight: 800 }}>🚿 FUNGICIDA</div>
