@@ -69,6 +69,48 @@ const ehPulverizador = (m) => !!m && /^pulverizador$/i.test(String(m.tipo || "")
 const ehDistribuidor = (m) => !!m && /distribuidor|lan[çc]o/i.test(String(m.tipo || ""));
 const ehPulverizadorSulco = (m) => !!m && /sulco/i.test(String(m.tipo || ""));
 // lista de bicos digitada ("AD-IA 110.02, TT 110.03" ou uma por linha) → nomes limpos, sem repetir
+// ---- catálogo de bicos (Daniel 13/11/2026): o tamanho segue a norma ISO 10625 — cor e vazão nominal a 3 bar (L/min);
+// a vazão varia com a raiz da pressão: Q = Q3 × √(P / 3). O modelo diz o tipo de ponta, a faixa típica de pressão e a gota.
+const BICOS_ISO = { "01": ["laranja", 0.40], "015": ["verde", 0.60], "02": ["amarelo", 0.80], "025": ["lilás", 1.00], "03": ["azul", 1.20], "035": ["vinho", 1.40], "04": ["vermelho", 1.60], "05": ["marrom", 2.00], "06": ["cinza", 2.40], "08": ["branco", 3.20] };
+const COR_BICO = { laranja: "#F28C28", verde: "#3BA55C", amarelo: "#F2C500", "lilás": "#B07CC6", azul: "#2F6FD6", vinho: "#7B2D3B", vermelho: "#D93025", marrom: "#7A4A21", cinza: "#8A8F96", branco: "#FFFFFF" };
+// tipo de ponta: faixa de pressão e gota TÍPICAS do tipo — cada fabricante/modelo tem a sua tabela
+const TIPOS_BICO = {
+  leque: { nome: "leque padrão", pmin: 1, pmax: 4, gota: "fina a média" },
+  preorificio: { nome: "leque com pré-orifício", pmin: 1, pmax: 6, gota: "média a grossa" },
+  inducao: { nome: "indução de ar", pmin: 2, pmax: 8, gota: "grossa a extremamente grossa" },
+  cone: { nome: "cone vazio", pmin: 3, pmax: 10, gota: "fina a muito fina" },
+};
+// modelo (como aparece gravado no bico) → tipo. Os mais compridos primeiro (AIXR antes de AI, TTI antes de TT…)
+const MODELOS_BICO = [["AD-IA", "inducao"], ["ADIA", "inducao"], ["AIXR", "inducao"], ["AIUB", "inducao"], ["AIC", "inducao"], ["TTI", "inducao"], ["IDK", "inducao"], ["ID", "inducao"], ["GA", "inducao"], ["ULD", "inducao"], ["MUG", "inducao"], ["AI", "inducao"],
+  ["TXA", "cone"], ["TXR", "cone"], ["TX", "cone"], ["JA", "cone"], ["ATR", "cone"], ["CONE", "cone"],
+  ["TT", "preorificio"], ["DG", "preorificio"], ["AD", "preorificio"], ["XR", "leque"], ["XP", "leque"], ["LU", "leque"], ["ST", "leque"], ["SF", "leque"]];
+const MODELOS_SUGERIDOS = ["AD-IA", "AI", "AIXR", "TTI", "TT", "AD", "XR", "TXA"];
+// "AD-IA 110.02", "TT11003", "XR 110-015", "TXA 8002" → {modelo, angulo, tamanho, cor, q3, tipo…} ou null
+function infoBico(nome) {
+  const t = String(nome || "").toUpperCase().replace(/\s+/g, " ").trim();
+  const m = t.match(/(80|90|95|110|120)[\s.\-]?(015|025|035|01|02|03|04|05|06|08)(?!\d)/);
+  if (!m) return null;
+  const tamanho = m[2], [cor, q3] = BICOS_ISO[tamanho];
+  const antes = t.slice(0, m.index).replace(/[^A-Z\-]/g, "");
+  const mod = MODELOS_BICO.find(([k]) => antes.startsWith(k.replace("-", "")) || antes.startsWith(k));
+  const tipo = mod ? TIPOS_BICO[mod[1]] : null;
+  return { nome: String(nome).trim(), modelo: mod ? mod[0] : antes || "", angulo: Number(m[1]), tamanho, cor, q3, tipo };
+}
+const vazaoBicoNaPressao = (q3, bar) => q3 * Math.sqrt(bar / 3);
+const pressaoBicoPara = (q3, lMin) => 3 * Math.pow(lMin / q3, 2);
+// vazão de cada bico (L/min) para dar a vazão de calda (L/ha) na velocidade (km/h) e espaçamento (m) da barra
+const vazaoBicoPara = (lHa, kmh, espM) => (num(lHa) * num(kmh) * num(espM)) / 600;
+// pressão para o bico dar a calda pedida; e o tamanho (mesmo modelo) que fica mais no meio da faixa, se este não servir
+function conferirBico(bico, lHa, kmh, espM) {
+  const b = typeof bico === "string" ? infoBico(bico) : bico;
+  if (!b || !(num(lHa) > 0) || !(num(kmh) > 0) || !(num(espM) > 0)) return null;
+  const q = vazaoBicoPara(lHa, kmh, espM), p = pressaoBicoPara(b.q3, q);
+  const faixa = b.tipo || { pmin: 1.5, pmax: 6 };
+  const dentro = p >= faixa.pmin && p <= faixa.pmax;
+  const meio = (faixa.pmin + faixa.pmax) / 2;
+  const sugestao = dentro ? null : Object.entries(BICOS_ISO).map(([tam, [c, q3]]) => ({ tam, cor: c, p: pressaoBicoPara(q3, q) })).filter((x) => x.p >= faixa.pmin && x.p <= faixa.pmax).sort((x, y) => Math.abs(x.p - meio) - Math.abs(y.p - meio))[0] || null;
+  return { q, p, dentro, faixa, sugestao };
+}
 const listaBicos = (v) => [...new Set(String(v == null ? "" : v).split(/[\n,;]+/).map((x) => x.trim()).filter(Boolean))];
 const TIPOS_CUSTO = ["Operações com máquinas", "Mão de obra", "Combustível", "Frete", "Arrendamento", "Financiamento / prestação de máquina", "Renegociação de dívida / empréstimo", "Serviços / terceiros", "Irrigação — energia elétrica", "Irrigação — manutenção (pivô, bombas)", "Irrigação — água / outorga", "Sementes / mudas avulsas", "Administrativo", "Outros"];
 // Agrupa opções de produto por categoria: toda lista de produto do app usa
@@ -14062,7 +14104,7 @@ function GerirMaquinas({ maquinas, registrar, onSalvar, abertoInicial, grupoIrma
                     </span>
                   ) : (
                     <span style={{ display: "flex", gap: 8, flex: "none" }}>
-                      <button onClick={() => { setLidasIA(null); setTirando(null); setForm({ editandoId: m.id, valor: num(m.valor) > 0 ? String(m.valor) : "", financiado: !!m.financiado, banco: m.banco || "", parcelasRestantes: m.parcelasRestantes ? String(m.parcelasRestantes) : "", valorParcela: m.valorParcela ? String(m.valorParcela) : "", proximoVencimento: m.proximoVencimento || "", tipo: m.tipo || TIPOS_MAQUINA[0], nome: String(m.nome || ""), marca: String(m.marca || ""), ano: m.ano != null ? String(m.ano) : "", obs: String(m.obs || ""), terceirizada: !!m.terceirizada, capacidadeL: num(m.capacidadeL) > 0 ? String(m.capacidadeL) : "", barraM: num(m.barraM) > 0 ? String(m.barraM) : "", bicos: (m.bicos || []).join(", ") }); }}
+                      <button onClick={() => { setLidasIA(null); setTirando(null); setForm({ editandoId: m.id, valor: num(m.valor) > 0 ? String(m.valor) : "", financiado: !!m.financiado, banco: m.banco || "", parcelasRestantes: m.parcelasRestantes ? String(m.parcelasRestantes) : "", valorParcela: m.valorParcela ? String(m.valorParcela) : "", proximoVencimento: m.proximoVencimento || "", tipo: m.tipo || TIPOS_MAQUINA[0], nome: String(m.nome || ""), marca: String(m.marca || ""), ano: m.ano != null ? String(m.ano) : "", obs: String(m.obs || ""), terceirizada: !!m.terceirizada, capacidadeL: num(m.capacidadeL) > 0 ? String(m.capacidadeL) : "", barraM: num(m.barraM) > 0 ? String(m.barraM) : "", espacamentoBicos: num(m.espacamentoBicos) > 0 ? String(m.espacamentoBicos) : "", velocidadeKmh: num(m.velocidadeKmh) > 0 ? String(m.velocidadeKmh) : "", bicos: (m.bicos || []).join(", ") }); }}
                         style={{ background: "transparent", border: "none", color: C.navy, fontSize: 12, fontWeight: 700 }}>editar</button>
                       <button onClick={() => setTirando(m.id)} style={{ background: "transparent", border: "none", color: C.vermelho, fontSize: 12 }}>tirar</button>
                     </span>
@@ -14207,6 +14249,31 @@ function GerirMaquinas({ maquinas, registrar, onSalvar, abertoInicial, grupoIrma
                     <input type="number" inputMode="decimal" value={form.barraM || ""} onChange={(e) => setForm({ ...form, barraM: e.target.value })} placeholder="Ex.: 24" />
                     <label style={{ marginTop: 6 }}>Bicos que esta máquina tem (separe por vírgula)</label>
                     <input value={form.bicos || ""} onChange={(e) => setForm({ ...form, bicos: e.target.value })} placeholder="Ex.: AD-IA 110.02, TT 110.03, AXI 110.015" />
+                    {(() => {
+                      const novo = form.novoBico || { modelo: "AD-IA", angulo: "110", tam: "02" };
+                      const por = () => { const n = `${novo.modelo} ${novo.angulo}.${novo.tam}`; setForm({ ...form, bicos: listaBicos([form.bicos || "", n].join(", ")).join(", "), novoBico: novo }); };
+                      const sel = { marginTop: 0, padding: "6px 4px", fontSize: 13 };
+                      return (
+                        <div style={{ display: "flex", gap: 4, alignItems: "center", marginTop: 4, flexWrap: "wrap" }}>
+                          <span style={{ fontSize: 11.5, color: C.cinza, flex: "none" }}>ou escolha:</span>
+                          <select value={novo.modelo} onChange={(e) => setForm({ ...form, novoBico: { ...novo, modelo: e.target.value } })} style={{ ...sel, flex: "1 1 80px" }}>{MODELOS_SUGERIDOS.map((m) => <option key={m} value={m}>{m}</option>)}</select>
+                          <select value={novo.angulo} onChange={(e) => setForm({ ...form, novoBico: { ...novo, angulo: e.target.value } })} style={{ ...sel, flex: "0 0 64px" }}>{["110", "80"].map((a) => <option key={a} value={a}>{a}°</option>)}</select>
+                          <select value={novo.tam} onChange={(e) => setForm({ ...form, novoBico: { ...novo, tam: e.target.value } })} style={{ ...sel, flex: "1 1 110px" }}>{Object.entries(BICOS_ISO).map(([k, [cor]]) => <option key={k} value={k}>{k} · {cor}</option>)}</select>
+                          <button type="button" onClick={por} style={{ flex: "none", padding: "7px 10px", background: "#1E88E5", color: "#fff", border: "none", borderRadius: 8, fontWeight: 800, fontSize: 12.5 }}>＋ pôr</button>
+                        </div>
+                      );
+                    })()}
+                    {listaBicos(form.bicos).map((n) => { const b = infoBico(n); return (
+                      <div key={n} style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 5, background: "#fff", border: `1px solid ${C.borda}`, borderRadius: 8, padding: "5px 8px", fontSize: 12 }}>
+                        <span style={{ flex: "none", width: 14, height: 14, borderRadius: 7, background: b ? COR_BICO[b.cor] : C.fundo, border: "1px solid #999" }} />
+                        <span style={{ minWidth: 0 }}><b>{n}</b>{b ? <> · {b.cor} · {fmtN(b.q3)} L/min a 3 bar{b.tipo ? <> · {b.tipo.nome} · trabalha de {b.tipo.pmin} a {b.tipo.pmax} bar · gota {b.tipo.gota}</> : null}</> : <span style={{ color: C.cinza }}> · não reconheci o tamanho (ex.: 110.02)</span>}</span>
+                      </div>
+                    ); })}
+                    <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+                      <div style={{ flex: 1 }}><label style={{ marginTop: 0 }}>Espaçamento entre bicos (m)</label><input type="number" inputMode="decimal" value={form.espacamentoBicos || ""} onChange={(e) => setForm({ ...form, espacamentoBicos: e.target.value })} placeholder="0,5" /></div>
+                      <div style={{ flex: 1 }}><label style={{ marginTop: 0 }}>Velocidade de trabalho (km/h)</label><input type="number" inputMode="decimal" value={form.velocidadeKmh || ""} onChange={(e) => setForm({ ...form, velocidadeKmh: e.target.value })} placeholder="Ex.: 18" /></div>
+                    </div>
+                    <div style={{ fontSize: 11, color: C.cinza, marginTop: 2 }}>Vazão pela cor do bico (norma ISO); faixa de pressão e gota são as típicas do tipo de ponta — confira na tabela do fabricante.</div>
                     <div style={{ fontSize: 11, color: C.cinza, marginTop: 2 }}>Na recomendação, escolhendo este pulverizador, o tanque já vem preenchido e o bico é escolhido desta lista (opcional).</div>
                   </>)}
                   {ehPulverizadorSulco(form) && <div style={{ fontSize: 11, color: C.cinza, marginTop: 2 }}>Na semeadura, o bloco "Pulverização no sulco" deixa escolher este pulverizador e já preenche o tanque.</div>}
@@ -14255,6 +14322,8 @@ function GerirMaquinas({ maquinas, registrar, onSalvar, abertoInicial, grupoIrma
                     capacidadeKg: ehDistribuidor(form) && num(form.capacidadeKg) > 0 ? num(form.capacidadeKg) : null,
                     bicos: ehPulverizador(form) ? listaBicos(form.bicos) : [],
                     barraM: ehPulverizador(form) && num(form.barraM) > 0 ? num(form.barraM) : null,
+                    espacamentoBicos: ehPulverizador(form) && num(form.espacamentoBicos) > 0 ? num(form.espacamentoBicos) : null,
+                    velocidadeKmh: ehPulverizador(form) && num(form.velocidadeKmh) > 0 ? num(form.velocidadeKmh) : null,
                     valor: num(form.valor) > 0 ? num(form.valor) : null, financiado: !!form.financiado, banco: form.financiado ? txt(form.banco) : "",
                     parcelasRestantes: form.financiado && num(form.parcelasRestantes) > 0 ? Math.round(num(form.parcelasRestantes)) : null, valorParcela: form.financiado && num(form.valorParcela) > 0 ? num(form.valorParcela) : null, proximoVencimento: form.financiado ? (form.proximoVencimento || null) : null };
                   if (form.editandoId) {
@@ -32518,6 +32587,10 @@ function ModalRecomendacao({ talhoes, estoque, mod, inicial, usuario, lavoura, e
   const unidadeSemente = (nome) => { const l = linhaSemente(nome); return l && l.base === "kg" ? "kg" : "bag"; };
   const ehSementeReceita = (p) => !!p && !!p.nome && (p.uso === "semente" || p.unidade === "bag" || (() => { const l = linhaSemente(p.nome); return !!l && ehNomeDeSemente(l.produto, l.categoria); })());
   const ini = inicial || {};
+  // recomendação nova sem pulverizador: usa o único da fazenda, ou o da última recomendação com calda — o tanque vem junto
+  const pulvInicial = ini.id || ini.pulverizadorId || !pulverizadores.length ? null
+    : pulverizadores.length === 1 ? pulverizadores[0]
+    : (() => { const ult = [...(apls || [])].filter((a) => a && a.pulverizadorId).sort((a, b) => String(b.criadaEm || b.dataRecomendada || "").localeCompare(String(a.criadaEm || a.dataRecomendada || "")))[0]; return ult ? pulverizadores.find((m) => m.id === ult.pulverizadorId) || null : null; })();
   // Já executada: dose, produto e talhão ficam travados. Mudar isso depois de
   // aplicado reescreveria o estoque de uma aplicação que já aconteceu.
   const travado = Object.keys(ini.execucoes || {}).length > 0;
@@ -32553,9 +32626,9 @@ function ModalRecomendacao({ talhoes, estoque, mod, inicial, usuario, lavoura, e
   // hectares por tanque: tanque ÷ vazão — dá para digitar os hectares e o app devolve a vazão (número redondo)
   const [haTanqueTxt, setHaTanqueTxt] = useState(() => (num(ini.capacidadeTanque) > 0 && num(ini.vazao) > 0 ? String(Math.round((num(ini.capacidadeTanque) / num(ini.vazao)) * 100) / 100) : ""));
   const haDeVazao = (cap, vz) => (num(cap) > 0 && num(vz) > 0 ? String(Math.round((num(cap) / num(vz)) * 100) / 100) : "");
-  const [bico, setBico] = useState(ini.bico || "");
-  const [capacidadeTanque, setCapacidadeTanque] = useState(ini.capacidadeTanque || "");
-  const [pulverizadorId, setPulverizadorId] = useState(ini.pulverizadorId || "");
+  const [bico, setBico] = useState(ini.bico || (pulvInicial && (pulvInicial.bicos || []).length === 1 ? pulvInicial.bicos[0] : ""));
+  const [capacidadeTanque, setCapacidadeTanque] = useState(ini.capacidadeTanque || (pulvInicial && num(pulvInicial.capacidadeL) > 0 ? String(pulvInicial.capacidadeL) : ""));
+  const [pulverizadorId, setPulverizadorId] = useState(ini.pulverizadorId || (pulvInicial ? pulvInicial.id : ""));
   // adubação a lanço: capacidade de carga do distribuidor (kg) — vem da máquina escolhida ou digitada
   const [cargaKg, setCargaKg] = useState(ini.cargaKg || "");
   const [distribuidorId, setDistribuidorId] = useState(ini.distribuidorId || "");
@@ -33170,6 +33243,26 @@ function ModalRecomendacao({ talhoes, estoque, mod, inicial, usuario, lavoura, e
         </div>
       )}
 
+      {mod.usaCalda && num(vazao) > 0 && infoBico(bico) && (() => {
+        const b = infoBico(bico), esp = (pulvEscolhido && num(pulvEscolhido.espacamentoBicos)) || 0.5;
+        const vels = pulvEscolhido && num(pulvEscolhido.velocidadeKmh) > 0 ? [num(pulvEscolhido.velocidadeKmh)] : [12, 15, 18];
+        return (
+          <div style={{ background: "#F4F9FF", border: "1.5px solid #9CC3EE", borderRadius: 10, padding: "8px 10px", marginTop: 8, fontSize: 12.5, color: C.navyEscuro }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: 800 }}>
+              <span style={{ width: 14, height: 14, borderRadius: 7, background: COR_BICO[b.cor], border: "1px solid #999", flex: "none" }} />
+              {b.nome} · {b.cor}{b.tipo ? ` · ${b.tipo.nome}, gota ${b.tipo.gota}` : ""}
+            </div>
+            {vels.map((v) => { const c = conferirBico(b, vazao, v, esp); return c ? (
+              <div key={v} style={{ marginTop: 3 }}>
+                A <b>{fmtN(v)} km/h</b> ({fmtN(esp)} m entre bicos), para <b>{fmtN(num(vazao))} L/ha</b>: cada bico solta <b>{fmtN(Math.round(c.q * 100) / 100)} L/min</b> → pressão <b style={{ color: c.dentro ? C.verdeEscuro : C.vermelho }}>≈ {fmtN(Math.round(c.p * 10) / 10)} bar</b>
+                {c.dentro ? <span style={{ color: C.verdeEscuro }}> ✓ dentro da faixa ({c.faixa.pmin}–{c.faixa.pmax} bar)</span>
+                  : <span style={{ color: C.vermelho }}> ✗ fora da faixa ({c.faixa.pmin}–{c.faixa.pmax} bar){c.sugestao ? ` — o tamanho certo seria ${c.sugestao.tam} (${c.sugestao.cor}), a ≈ ${fmtN(Math.round(c.sugestao.p * 10) / 10)} bar` : ""}</span>}
+              </div>
+            ) : null; })}
+            {!(pulvEscolhido && num(pulvEscolhido.velocidadeKmh) > 0) && <div style={{ fontSize: 11, color: C.cinza, marginTop: 3 }}>Cadastre a velocidade de trabalho no pulverizador (Máquinas) para ver só a dele.</div>}
+          </div>
+        );
+      })()}
       {mod.usaCalda && talhoesSel.length > 1 && !travado && (
         <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontWeight: 400, color: C.navyEscuro, background: C.fundo, borderRadius: 10, padding: "8px 10px", marginTop: 8 }}>
           <input type="checkbox" checked={fecharPorTalhao} onChange={(e) => setFecharPorTalhao(e.target.checked)} style={{ width: 18, height: 18, margin: 0 }} />
