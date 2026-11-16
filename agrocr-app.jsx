@@ -26065,6 +26065,21 @@ const FENOLOGIA_VISITA = {
   Feijão: [["V0", "germinação"], ["V1", "emergência"], ["V2", "folhas primárias"], ["V3", "1ª folha trifoliolada"], ["V4", "3ª folha trifoliolada"], ["R5", "pré-floração"], ["R6", "floração"], ["R7", "formação das vagens"], ["R8", "enchimento das vagens"], ["R9", "maturação"]],
 };
 const CAT_FENOLOGIA = "📅 Fenologia";
+// linha do guia para o estádio marcado na visita: igual ("R1"), faixa ("V1–V3" pega V2), parte ("R5.3" → R5) ou "VE / V0"
+function estagioDoGuia(cultura, cod) {
+  const g = GUIA_CAMPO.find((x) => x.id === GUIA_DA_FENOLOGIA[cultura]);
+  if (!g || !g.estagios || !cod) return null;
+  const parte = (c) => { const m = String(c).trim().match(/^([A-Z]+)(\d+)?/i); return m ? { l: m[1].toUpperCase(), n: m[2] != null ? Number(m[2]) : null } : null; };
+  const alvo = String(cod).replace(/\+$/, "").trim().toUpperCase(), a = parte(alvo), base = alvo.split(".")[0];
+  for (const e of g.estagios) {
+    for (const op of String(e[0]).split("/").map((x) => x.trim().toUpperCase())) {
+      if (op === alvo || op === base) return e;
+      const faixa = op.split(/[–-]/).map((x) => x.trim());
+      if (faixa.length === 2 && a && a.n != null) { const i = parte(faixa[0]), f = parte(faixa[1]); if (i && f && i.l === a.l && f.l === a.l && a.n >= i.n && a.n <= f.n) return e; }
+    }
+  }
+  return null;
+}
 const GUIA_DA_FENOLOGIA = { Soja: "e-soja", Milho: "e-milho", Algodão: "e-algodao" };
 // "Milho safrinha", "soja" → a chave da escala; desconhecida → ""
 const culturaDaFenologia = (c) => Object.keys(FENOLOGIA_VISITA).find((k) => semAcento(k) === semAcento(String(c || "").split(/\s+/)[0])) || "";
@@ -27333,6 +27348,10 @@ function ChatVisita({ fazenda, lavoura, kml, usuario, onFechar, onSalvar }) {
           </div>
         )}
         {!lista ? (
+          <button onClick={() => { setLista({ cat: CAT_FENOLOGIA, item: null, outro: "", pressao: null, acao: null, mais: false, cultura: culturaDaFenologia(((lavoura || []).find((l) => tAtual && l.talhaoId === tAtual.id) || {}).cultura || (tAtual && tAtual.cultura)) }); setModo(null); }} disabled={!!gravando}
+            style={{ width: "100%", marginTop: 8, padding: "11px 12px", background: C.verdeBg, color: C.verdeEscuro, border: `1.5px solid ${C.verde}`, borderRadius: 12, fontWeight: 900, fontSize: 14, textAlign: "left" }}>📅 Fenologia — em que estádio está a lavoura <span style={{ fontWeight: 600, fontSize: 12, color: C.cinza }}>· com a figura do guia para conferir</span></button>
+        ) : null}
+        {!lista ? (
           <button onClick={() => { setLista({ cat: null, item: null, outro: "", pressao: null, acao: null, mais: false }); setModo(null); }} disabled={!!gravando} style={{ width: "100%", marginTop: 8, padding: "11px 12px", background: "#fff", color: C.navy, border: `1.5px solid ${C.navy}`, borderRadius: 12, fontWeight: 900, fontSize: 14, textAlign: "left" }}>📋 Escolher da lista <span style={{ fontWeight: 600, fontSize: 12, color: C.cinza }}>— fenologia, praga, doença, daninha, lavoura…</span></button>
         ) : (() => {
           const nomeLista = lista.item ? (lista.item === "__outro" ? String(lista.outro || "").trim() : lista.item) : "";
@@ -27341,7 +27360,7 @@ function ChatVisita({ fazenda, lavoura, kml, usuario, onFechar, onSalvar }) {
             <div style={{ background: "#fff", border: `1.5px solid ${C.navy}`, borderRadius: 12, padding: 10, marginTop: 8 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 6 }}>
                 <b style={{ color: C.navy, fontSize: 13.5, minWidth: 0 }}>📋 {!lista.cat ? "O que você está vendo?" : !lista.item ? `${lista.cat} — qual?` : `${lista.cat} · ${lista.item === "__outro" ? "outro" : lista.item}`}</b>
-                <button onClick={() => setLista(lista.item ? { ...lista, item: null, outro: "" } : lista.cat ? { ...lista, cat: null, mais: false, cultura: "" } : null)} style={{ flex: "none", background: "transparent", border: "none", color: C.cinza, fontSize: 12.5, fontWeight: 800 }}>{lista.cat ? "← voltar" : "✕ fechar"}</button>
+                <button onClick={() => setLista(lista.item ? { ...lista, item: null, outro: "", cod: null } : lista.cat ? { ...lista, cat: null, mais: false, cultura: "" } : null)} style={{ flex: "none", background: "transparent", border: "none", color: C.cinza, fontSize: 12.5, fontWeight: 800 }}>{lista.cat ? "← voltar" : "✕ fechar"}</button>
               </div>
               {!lista.cat && <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>{[CAT_FENOLOGIA, ...Object.keys(OBS_CATALOGO)].map((c) => <button key={c} onClick={() => setLista({ ...lista, cat: c, ...(c === CAT_FENOLOGIA ? { cultura: culturaDaFenologia(((lavoura || []).find((l) => tAtual && l.talhaoId === tAtual.id) || {}).cultura || (tAtual && tAtual.cultura)) } : {}) })} style={{ ...{ padding: "9px 10px", borderRadius: 10, fontWeight: 800, fontSize: 13, border: "none", background: false ? C.navy : C.fundo, color: false ? "#fff" : C.navyEscuro }, flex: "1 1 30%" }}>{c}</button>)}</div>}
               {lista.cat === CAT_FENOLOGIA && !lista.item && (
@@ -27359,7 +27378,7 @@ function ChatVisita({ fazenda, lavoura, kml, usuario, onFechar, onSalvar }) {
                       </div>
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                         {FENOLOGIA_VISITA[lista.cultura].map(([cod, nome]) => (
-                          <button key={cod} onClick={() => setLista({ ...lista, item: `${lista.cultura} ${cod} — ${nome}` })} title={nome} style={{ flex: "1 1 22%", minWidth: 64, padding: "8px 4px", borderRadius: 10, border: "none", background: /^R|^VT|^F|^C/.test(cod) ? "#FFF3E0" : C.verdeBg, color: C.navyEscuro, lineHeight: 1.1 }}>
+                          <button key={cod} onClick={() => setLista({ ...lista, item: `${lista.cultura} ${cod} — ${nome}`, cod })} title={nome} style={{ flex: "1 1 22%", minWidth: 64, padding: "8px 4px", borderRadius: 10, border: "none", background: /^R|^VT|^F|^C/.test(cod) ? "#FFF3E0" : C.verdeBg, color: C.navyEscuro, lineHeight: 1.1 }}>
                             <div style={{ fontWeight: 900, fontSize: 15 }}>{cod}</div>
                             <div style={{ fontSize: 10, color: C.cinza, marginTop: 2 }}>{nome}</div>
                           </button>
@@ -27378,6 +27397,20 @@ function ChatVisita({ fazenda, lavoura, kml, usuario, onFechar, onSalvar }) {
                   {(OBS_CATALOGO_MAIS[lista.cat] || []).length > 0 && <button onClick={() => setLista({ ...lista, mais: !lista.mais })} style={{ width: "100%", marginTop: 6, padding: "8px 10px", background: "#fff", color: C.navy, border: `1.5px solid ${C.borda}`, borderRadius: 10, fontWeight: 800, fontSize: 12.5 }}>{lista.mais ? "▴ menos opções" : `▾ mais opções (${OBS_CATALOGO_MAIS[lista.cat].length})`}</button>}
                 </div>
               )}
+              {lista.cat === CAT_FENOLOGIA && lista.item && lista.cod && (() => {
+                const e = estagioDoGuia(lista.cultura, lista.cod);
+                return (
+                  <div style={{ background: C.verdeBg, borderRadius: 10, padding: "8px 10px", marginBottom: 8 }}>
+                    <div style={{ fontWeight: 900, color: C.verdeEscuro, fontSize: 14 }}>{lista.cod} · {(FENOLOGIA_VISITA[lista.cultura].find((x) => x[0] === lista.cod) || [])[1]}</div>
+                    {e ? (<>
+                      {e[4] && <FotoGuia url={e[4]} onClick={() => setGuiaAberto(GUIA_CAMPO.find((x) => x.id === GUIA_DA_FENOLOGIA[lista.cultura]))} style={{ width: "100%", maxWidth: 260, maxHeight: 220, objectFit: "contain", background: "#fff", borderRadius: 8, display: "block", margin: "6px auto", cursor: "zoom-in" }} />}
+                      <div style={{ fontSize: 12.5, color: C.navyEscuro, marginTop: 4 }}>{e[0] !== lista.cod ? <b>{e[0]} · {e[1]}: </b> : null}{e[2]}</div>
+                      {e[3] && <div style={{ fontSize: 12.5, color: C.navyEscuro, marginTop: 4 }}>👁 <b>O que olhar:</b> {e[3]}</div>}
+                    </>) : <div style={{ fontSize: 12, color: C.cinza, marginTop: 4 }}>Sem ficha deste estádio no guia ainda.</div>}
+                    <div style={{ fontSize: 11.5, color: C.cinza, marginTop: 4 }}>Confira na planta: se não bater, toque em "← voltar" e escolha outro estádio.</div>
+                  </div>
+                );
+              })()}
               {lista.cat && lista.item && (
                 <div>
                   {lista.item === "__outro" && <input value={lista.outro} onChange={(e) => setLista({ ...lista, outro: e.target.value })} placeholder="Qual? Ex.: percevejo-castanho" style={{ marginTop: 0, marginBottom: 6 }} autoFocus />}
