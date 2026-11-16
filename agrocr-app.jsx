@@ -629,6 +629,38 @@ function sequenciaFungicida(apls, talhaoId) {
     .forEach((a, i) => { mapa[a.id] = i + 1; });
   return mapa;
 }
+// Dados da lavoura → quadro "Pulverizações" do talhão: só as EXECUTADAS, na ordem do dia em que foram feitas,
+// com o DAE daquele dia (da parte A/B quando a aplicação foi só numa parte) e a contagem de fungicida.
+function pulverizacoesDoTalhao(apls, talhaoId, lavouraDoTalhao) {
+  const dia = (v) => {
+    const t = String(v || "");
+    if (t.length <= 10) return t.slice(0, 10);
+    const d = new Date(t);   // gravado em UTC: à noite viraria o dia seguinte
+    return isNaN(d) ? t.slice(0, 10) : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  };
+  const l = lavouraDoTalhao || {};
+  const lista = (apls || [])
+    .filter((a) => moduloDe(a) === "pulverizacao" && (a.execucoes || {})[talhaoId])
+    .map((a) => {
+      const ex = a.execucoes[talhaoId];
+      const data = dia(ex.dataAplicacao || ex.data || a.dataRecomendada);
+      const parte = (a.partesAlvo || {})[talhaoId] || null;
+      const p = parte ? (l.partes || []).find((x) => x.nome === parte) : null;
+      const emerg = (p && p.dataEmergencia) || l.dataEmergencia || "";
+      const dae = data && emerg && /^\d{4}-\d{2}-\d{2}$/.test(String(emerg).slice(0, 10)) ? Math.round((new Date(data + "T12:00:00") - new Date(String(emerg).slice(0, 10) + "T12:00:00")) / 86400000) : null;
+      return {
+        id: a.id, data, dae, parte, fungicida: ehFungicida(a), tipo: a.tipo || "Pulverização", alvo: a.alvo || "",
+        area: num(ex.areaExecutada) > 0 ? num(ex.areaExecutada) : null, aberto: !!ex.aberto,
+        produtos: (a.produtos || []).filter((x) => x && x.nome).map((x) => ({ nome: x.nome, dose: x.dose, unidade: x.unidade || "" })),
+      };
+    })
+    .filter((x) => x.data)
+    .sort((x, y) => x.data.localeCompare(y.data));
+  let nf = 0;
+  for (const x of lista) if (x.fungicida) x.nFungicida = ++nf;
+  return lista;
+}
+
 // Contorno do talhão pelo KML, em metros: soma dos lados do anel externo de cada
 // polígono ligado ao talhão (pivô é um círculo denso de pontos — funciona igual).
 function perimetroDoTalhao(kml, talhaoId) {
@@ -21007,6 +21039,33 @@ function SecaoLavoura({ fazenda, lavoura, apls, prog, consultor, registrar, onSa
             {l && linhasDaLavoura([t], [l]).filter((x) => x.previsao).map((x, i) => (
               <div key={i} style={{ marginTop: 6, fontSize: 12.5, color: C.navyEscuro }}>🌾 {x.variedade ? `${x.variedade}: ` : ""}colheita prevista para <b>{fmtD(x.previsao.data)}</b> <span style={{ color: C.cinza }}>· ciclo {x.cicloDias} dias · {x.previsao.faltam > 0 ? `faltam ${x.previsao.faltam}` : x.previsao.faltam === 0 ? "é hoje" : `passou há ${-x.previsao.faltam}`}{x.previsao.faltam !== 0 ? " dias" : ""}</span></div>
             ))}
+            {(() => {
+              const pv = pulverizacoesDoTalhao(apls, t.id, l);
+              if (!pv.length && !l) return null;
+              return (
+                <div style={{ marginTop: 8, background: C.fundo, border: `1px solid ${C.borda}`, borderRadius: 10, padding: "8px 10px" }}>
+                  <div style={{ fontWeight: 900, color: C.navy, fontSize: 13.5, marginBottom: pv.length ? 4 : 0 }}>💧 Pulverizações{pv.length ? ` (${pv.length})` : ""}</div>
+                  {!pv.length && <div style={{ fontSize: 12.5, color: C.cinza }}>Nenhuma pulverização feita ainda nesta safra.</div>}
+                  {pv.map((x, i) => (
+                    <div key={x.id} style={{ display: "flex", gap: 8, padding: "5px 0", borderTop: i ? `1px solid ${C.borda}` : "none", fontSize: 12.5 }}>
+                      <div style={{ flex: "none", width: 52, textAlign: "center" }}>
+                        <div style={{ fontWeight: 900, color: C.navy }}>{fmtD(x.data).slice(0, 5)}</div>
+                        {x.dae != null && x.dae >= 0 && <div style={{ fontSize: 11, fontWeight: 800, color: C.verdeEscuro }}>{x.dae} DAE</div>}
+                      </div>
+                      <div style={{ minWidth: 0, color: C.navyEscuro }}>
+                        <div style={{ fontWeight: 800 }}>
+                          {x.nFungicida ? <><SeloFungicida n={x.nFungicida} />{x.alvo || ""}</> : <>{x.tipo}{x.alvo ? ` · ${x.alvo}` : ""}</>}
+                          {x.parte ? <span style={{ color: C.navy }}> · parte {x.parte}</span> : null}
+                          {x.area != null ? <span style={{ fontWeight: 600, color: C.cinza }}> · {fmtN(x.area)} ha</span> : null}
+                          {x.aberto ? <span style={{ fontWeight: 700, color: C.amarelo }}> · em andamento</span> : null}
+                        </div>
+                        {x.produtos.length > 0 && <div style={{ color: C.cinza }}>{x.produtos.map((p) => `${p.nome}${num(p.dose) > 0 ? ` ${fmtN(num(p.dose))} ${p.unidade}/ha` : ""}`).join(" + ")}</div>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
             {consultor && (
               <button onClick={() => setEditando(t)} style={{
                 marginTop: 10, background: C.verdeBg, color: C.verdeEscuro, border: "none",
