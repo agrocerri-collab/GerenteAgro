@@ -6208,7 +6208,13 @@ function TelaFazenda({ fazenda, fazendas, grupos, papel, usuario, naNuvem, equip
       for (const f of ext.fotos) { FOTOS_MEM.set(f.id, f.dados); try { idbSet("foto:" + f.id, f.dados); } catch (e) {} }
       const ficaram = new Set(novas.flatMap((v) => refsDeFotos(v)));
       const apagar = (visitas || []).flatMap((v) => refsDeFotos(v)).filter((id) => !ficaram.has(id));
-      if (ext.fotos.length || apagar.length) { try { await NuvemDados.gravarFotos(fazenda.id, safra, ext.fotos, apagar); } catch (e) { setErro(window.Nuvem && Nuvem.explicarErro ? Nuvem.explicarErro(e) : "Sem conexão — as fotos ficam no aparelho e sobem depois."); } }
+      // as fotos sobem SEM segurar a visita: antes o app esperava as fotos subirem para só então gravar a
+      // visita — o envio travou no celular do monitor (Califórnia, 16/11/2026) e 3 monitoramentos nunca
+      // foram gravados (só as fotos e o estande chegaram). Agora a visita grava primeiro, na hora.
+      if (ext.fotos.length || apagar.length) {
+        Promise.resolve().then(() => NuvemDados.gravarFotos(fazenda.id, safra, ext.fotos, apagar))
+          .catch((e) => setErro(window.Nuvem && Nuvem.explicarErro ? Nuvem.explicarErro(e) : "Sem conexão — as fotos ficam no aparelho e sobem depois."));
+      }
     }
     return gravar(kVis(fazenda.id, safra), novas, setVisitas, visitas);
   }
