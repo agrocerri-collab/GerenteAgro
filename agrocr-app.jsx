@@ -20879,6 +20879,7 @@ function ModalDivisaoTalhao({ talhao, poligono, partes, divisaoInicial, onFechar
 function SecaoLavoura({ fazenda, lavoura, apls, prog, consultor, registrar, onSalvar, kml, safra, custos }) {
   const [dividindo, setDividindo] = useState(null);   // talhão cuja divisão A/B está sendo marcada no mapa
   const [verMapa, setVerMapa] = useState(false);   // 🗺️ mapa de variedades (programado × plantado)
+  const [pulvAberta, setPulvAberta] = useState({});   // talhões com o quadro 💧 Pulverizações aberto (fechado por padrão: só abre ao tocar)
   const [editando, setEditando] = useState(null); // talhão sendo editado
   const talhoes = fazenda.talhoes || [];
   const doTalhao = (tid) => (lavoura || []).find((l) => l.talhaoId === tid);
@@ -21041,11 +21042,17 @@ function SecaoLavoura({ fazenda, lavoura, apls, prog, consultor, registrar, onSa
             ))}
             {(() => {
               const pv = pulverizacoesDoTalhao(apls, t.id, l);
-              if (!pv.length && !l) return null;
+              if (!pv.length) return null;
+              const aberto = !!pulvAberta[t.id];
+              const alternar = () => setPulvAberta({ ...pulvAberta, [t.id]: !aberto });
+              if (!aberto) return (
+                <button onClick={alternar} style={{ display: "block", marginTop: 8, background: C.fundo, color: C.navy, border: `1px solid ${C.borda}`, borderRadius: 10, padding: "9px 12px", fontWeight: 900, fontSize: 13.5, textAlign: "left" }}>
+                  💧 Pulverizações ({pv.length}) <span style={{ fontWeight: 600, color: C.cinza, fontSize: 12 }}>· última {fmtD(pv[pv.length - 1].data).slice(0, 5)} ▾</span>
+                </button>
+              );
               return (
                 <div style={{ marginTop: 8, background: C.fundo, border: `1px solid ${C.borda}`, borderRadius: 10, padding: "8px 10px" }}>
-                  <div style={{ fontWeight: 900, color: C.navy, fontSize: 13.5, marginBottom: pv.length ? 4 : 0 }}>💧 Pulverizações{pv.length ? ` (${pv.length})` : ""}</div>
-                  {!pv.length && <div style={{ fontSize: 12.5, color: C.cinza }}>Nenhuma pulverização feita ainda nesta safra.</div>}
+                  <button onClick={alternar} style={{ display: "block", width: "100%", background: "none", border: "none", padding: "2px 0 4px", color: C.navy, fontWeight: 900, fontSize: 13.5, textAlign: "left" }}>💧 Pulverizações ({pv.length}) <span style={{ fontWeight: 600, color: C.cinza, fontSize: 12 }}>· fechar ▴</span></button>
                   {pv.map((x, i) => (
                     <div key={x.id} style={{ display: "flex", gap: 8, padding: "5px 0", borderTop: i ? `1px solid ${C.borda}` : "none", fontSize: 12.5 }}>
                       <div style={{ flex: "none", width: 52, textAlign: "center" }}>
