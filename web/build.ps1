@@ -146,8 +146,11 @@ if ("serviceWorker" in navigator && window.isSecureContext) {
   // e a pagina recarrega UMA vez. Sem isto, o operador so veria a novidade
   // na segunda aberta - e "fechar" no Android nem sempre fecha de verdade.
   var jaRecarregou = false;
+  // MAS nunca no meio de um monitoramento ou visita aberta: recarregar ali apagava o servico
+  // da tela (California, 16/11/2026). Nesse caso a versao nova entra na proxima aberta.
   navigator.serviceWorker.addEventListener("controllerchange", function () {
     if (jaRecarregou) return;
+    if (window.__agrocrMonAberto || window.__agrocrVisitaAberta) return;
     jaRecarregou = true;
     window.location.reload();
   });

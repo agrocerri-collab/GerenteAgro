@@ -27685,6 +27685,17 @@ function quadroPragas(mon) {
 }
 const rotuloItem = (q) => (q.grupo && q.nome ? `${q.grupo} · ${q.nome}` : q.nome || q.grupo);
 
+// Monitoramento em andamento fica guardado NO APARELHO (IndexedDB) a cada ponto: se a página recarregar
+// (versão nova, Android fechando o navegador ao abrir a câmera, bateria) nada se perde — perda real na
+// Califórnia em 16/11/2026: um dia de levantamento do monitor sumiu porque tudo ficava só na memória da tela.
+const PREFIXO_RASC_MON = (fid) => "monitoramento:" + fid + ":";
+const rascunhoMonVale = (d) => !!(d && d.talhaoId && ((Array.isArray(d.pontos) && d.pontos.length > 0) || d.atual));
+function resumoRascunhoMon(d, talhoes) {
+  if (!rascunhoMonVale(d)) return null;
+  const t = (talhoes || []).find((x) => x.id === d.talhaoId);
+  const n = (d.pontos || []).length + (d.atual && !(d.pontos || []).some((p) => p.n === d.atual.n) ? 1 : 0);
+  return { talhao: t ? t.nome : "talhão", pontos: n, em: d.em || "", quem: d.quem || "" };
+}
 function MonitoramentoPragas({ fazenda, lavoura, kml, usuario, onFechar, onSalvar, onAtualizarLavoura, podeEditarLavoura, talhaoInicial, monitoramentos }) {
   const talhoes = fazenda.talhoes || [];
   const temKml = kml && kml.poligonos && kml.poligonos.length > 0;
@@ -27777,6 +27788,45 @@ function MonitoramentoPragas({ fazenda, lavoura, kml, usuario, onFechar, onSalva
   };
   const [itens, setItens] = useState([]);
   useEffect(() => { if (talhaoInicial) escolherTalhao(talhaoInicial); }, []);
+  // ---- rascunho no aparelho ----
+  const [chaveRasc, setChaveRasc] = useState(() => PREFIXO_RASC_MON(fazenda.id) + idNovo());
+  const [rascunhos, setRascunhos] = useState([]);   // monitoramentos não terminados guardados neste aparelho
+  const jaSalvou = useRef(false);
+  useEffect(() => {
+    // com o monitoramento aberto, versão nova do app NÃO recarrega a página (AgroCR.html confere esta marca)
+    window.__agrocrMonAberto = true;
+    let vivo = true;
+    (async () => {
+      const l = [];
+      for (const k of await idbKeys(PREFIXO_RASC_MON(fazenda.id))) {
+        const d = await idbGet(k);
+        if (rascunhoMonVale(d)) l.push({ ...d, _k: k }); else await idbDel(k);
+      }
+      if (vivo) setRascunhos(l.sort((a, b) => String(b.em || "").localeCompare(String(a.em || ""))));
+    })();
+    return () => { vivo = false; window.__agrocrMonAberto = false; };
+  }, []);
+  useEffect(() => {
+    if (jaSalvou.current || !talhaoId || (!pontos.length && !atual)) return;
+    const id = setTimeout(() => {
+      idbSet(chaveRasc, { talhaoId, metodo, pragas, outraPraga, pontos, atual, obs, fotosGeral, modoPontos, qtdPlan, planejados, culturaSel, emergenciaSel, parteSel, contarEstande, itens,
+        em: new Date().toISOString(), quem: (usuario && usuario.nomeUsuario) || "" });
+    }, 250);
+    return () => clearTimeout(id);
+  }, [chaveRasc, talhaoId, metodo, pragas, outraPraga, pontos, atual, obs, fotosGeral, modoPontos, qtdPlan, planejados, culturaSel, emergenciaSel, parteSel, contarEstande, itens]);
+  const retomar = (d) => {
+    setChaveRasc(d._k); setTalhaoId(d.talhaoId); setMetodo(d.metodo || "pano"); setItens(d.itens || []); setPragas(d.pragas || []); setOutraPraga(d.outraPraga || "");
+    setPontos(d.pontos || []); setAtual(d.atual || null); setObs(d.obs || ""); setFotosGeral(d.fotosGeral || []); setModoPontos(d.modoPontos || "livre"); setQtdPlan(d.qtdPlan || "10");
+    setPlanejados(d.planejados || []); setCulturaSel(d.culturaSel || ""); setEmergenciaSel(d.emergenciaSel || ""); setParteSel(d.parteSel || ""); setContarEstande(!!d.contarEstande);
+    setRascunhos((l) => l.filter((x) => x._k !== d._k));
+    const r = resumoRascunhoMon(d, talhoes);
+    setMsg(`✓ Continuando o monitoramento do ${r ? r.talhao : "talhão"}: ${r ? r.pontos : 0} ponto(s) recuperado(s).`);
+  };
+  const descartarRasc = (d) => {
+    const r = resumoRascunhoMon(d, talhoes);
+    if (!confirm(`Descartar o monitoramento não terminado do ${r ? r.talhao : "talhão"} (${r ? r.pontos : 0} pontos)? Não dá para desfazer.`)) return;
+    idbDel(d._k); setRascunhos((l) => l.filter((x) => x._k !== d._k));
+  };
   const escolherTalhao = (tid) => {
     const tt = talhoes.find((x) => x.id === tid); if (!tt) return;
     const l = (lavoura || []).find((x) => x.talhaoId === tid);
@@ -27844,6 +27894,7 @@ function MonitoramentoPragas({ fazenda, lavoura, kml, usuario, onFechar, onSalva
   const estandeMedio = estandes.length ? estandes.reduce((a, b) => a + b, 0) / estandes.length : 0;
   const salvar = () => {
     if (!t || !pontos.length) return;
+    jaSalvou.current = true; idbDel(chaveRasc);
     onSalvar({
       ehMonitoramento: true, data: hojeISO(), hora: new Date().toTimeString().slice(0, 5), quem: (usuario && usuario.nomeUsuario) || "",
       talhaoId: t.id, talhaoNome: t.nome, parteNome: parteSel || null, areaHa: parteObj ? parteObj.areaHa : t.areaHa, cultura, variedade: (lv && lv.variedade) || "", dae, emergencia: emergencia || null, metodo, pragas, itens, pontos, obs: obs.trim(), fotos: fotosGeral,
@@ -27864,6 +27915,19 @@ function MonitoramentoPragas({ fazenda, lavoura, kml, usuario, onFechar, onSalva
   const chip = (on) => ({ padding: "7px 10px", borderRadius: 14, fontWeight: 800, fontSize: 12.5, background: on ? C.navy : "#fff", color: on ? "#fff" : C.navyEscuro, border: `1.5px solid ${on ? C.navy : C.borda}` });
   return (
     <Modal titulo="🐛 Monitoramento de pragas" onFechar={onFechar}>
+      {rascunhos.length > 0 && (
+        <div style={{ background: "#FFF6DD", border: `1.5px solid ${C.amarelo}`, borderRadius: 12, padding: "10px 12px", marginBottom: 10 }}>
+          <div style={{ fontWeight: 900, color: C.navy, fontSize: 14 }}>📝 Monitoramento não terminado, guardado neste aparelho</div>
+          {rascunhos.map((d) => { const r = resumoRascunhoMon(d, talhoes); return (
+            <div key={d._k} style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginTop: 8 }}>
+              <span style={{ flex: 1, minWidth: 150, fontSize: 13 }}><b>{r.talhao}</b> · {r.pontos} ponto{r.pontos === 1 ? "" : "s"}{r.em ? ` · ${fmtDH(r.em)}` : ""}{r.quem ? ` · ${r.quem}` : ""}</span>
+              <button onClick={() => retomar(d)} style={{ padding: "9px 14px", borderRadius: 10, border: "none", background: C.verde, color: "#fff", fontWeight: 900, fontSize: 14 }}>▶ Continuar</button>
+              <button onClick={() => descartarRasc(d)} style={{ padding: "9px 10px", borderRadius: 10, border: `1.5px solid ${C.borda}`, background: "#fff", color: C.vermelho, fontWeight: 800, fontSize: 12 }}>Descartar</button>
+            </div>
+          ); })}
+        </div>
+      )}
+      {talhaoId && (pontos.length > 0 || atual) && <div style={{ fontSize: 11.5, color: C.verdeEscuro, fontWeight: 700, marginBottom: 6 }}>💾 Cada ponto fica guardado no aparelho até você tocar em Salvar — se a tela fechar, é só abrir o monitoramento de novo e tocar em Continuar.</div>}
       {/* 1. talhão */}
       <div style={{ fontWeight: 800, color: C.navy, fontSize: 13 }}>1. Talhão {t ? <span style={{ color: C.verdeEscuro }}>· {t.nome} · {cultura}{lv && lv.variedade ? ` ${lv.variedade}` : ""}{dae != null ? ` · ${dae} DAE` : ""}</span> : <span style={{ color: C.cinza, fontWeight: 600 }}>— toque no mapa ou escolha na lista</span>}</div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6, margin: "6px 0" }}>
@@ -28423,6 +28487,25 @@ function Armadilhas({ fazenda, kml, visitas, usuario, consultor, podeApagar, onS
   );
 }
 
+function AvisoRascunhosMon({ fazenda, aoAbrir, atualizar }) {
+  const [lista, setLista] = useState([]);
+  useEffect(() => {
+    let vivo = true;
+    (async () => {
+      const l = [];
+      for (const k of await idbKeys(PREFIXO_RASC_MON(fazenda.id))) { const r = resumoRascunhoMon(await idbGet(k), fazenda.talhoes); if (r) l.push(r); }
+      if (vivo) setLista(l);
+    })();
+    return () => { vivo = false; };
+  }, [fazenda.id, atualizar]);
+  if (!lista.length) return null;
+  return (
+    <button onClick={aoAbrir} style={{ width: "100%", textAlign: "left", background: "#FFF6DD", border: `1.5px solid ${C.amarelo}`, borderRadius: 12, padding: "10px 12px", marginBottom: 10, color: C.navy }}>
+      <div style={{ fontWeight: 900, fontSize: 14 }}>📝 {lista.length === 1 ? "1 monitoramento não terminado" : `${lista.length} monitoramentos não terminados`} neste aparelho</div>
+      <div style={{ fontSize: 12.5, marginTop: 2 }}>{lista.map((r) => `${r.talhao} · ${r.pontos} ponto${r.pontos === 1 ? "" : "s"}`).join(" — ")} · toque para continuar e salvar</div>
+    </button>
+  );
+}
 function SecaoVisitas({ podeApagar, fazenda, lavoura, kml, visitas, consultor, usuario, onSalvar, onAtualizarLavoura, podeEditarLavoura, maquinas, onAtualizarFazenda, apls, soResumoPragas }) {
   const [evolucao, setEvolucao] = useState(false);   // 📈 evolução das pragas por talhão
   // níveis de controle por cultura e praga (guardados na fazenda)
@@ -28565,6 +28648,7 @@ function SecaoVisitas({ podeApagar, fazenda, lavoura, kml, visitas, consultor, u
 
       {aba === "pragas" && (
         <>
+          {consultor && <AvisoRascunhosMon fazenda={fazenda} aoAbrir={() => setMonitorando(true)} atualizar={monitorando} />}
           {consultor && (
             <button onClick={() => setMonitorando(true)} style={{ width: "100%", padding: 14, background: C.verde, color: "#fff", border: "none", borderRadius: 12, fontSize: 16, fontWeight: 800, marginBottom: 10 }}>
               🐛 Novo monitoramento — escolher o talhão e marcar os pontos
