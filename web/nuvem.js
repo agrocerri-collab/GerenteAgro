@@ -82,6 +82,70 @@ window.Nuvem = (function () {
       await lote.commit();
     }
   }
+  // ---------- envio com prazo e PLANO B (16/11/2026, Califórnia) ----------
+  // No celular do monitor 5 lançamentos ficaram "subindo…" o dia inteiro: o envio do Firebase no aparelho
+  // travou (o 1º nunca terminava e segurava os outros). Agora: se o envio normal não termina em 40 s, ou
+  // dá erro que não é recusa, e há internet, o lançamento vai direto pela API da nuvem (REST), com o
+  // mesmo login e as mesmas regras de acesso. Só para gravação simples (set/apagar), nunca "merge".
+  const ESPERA_ENVIO = 40000;
+  const comPrazo = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => { const e = new Error("o envio não terminou em " + Math.round(ms / 1000) + " s"); e.code = "prazo"; rej(e); }, ms))]);
+  const simples = (v) => {
+    if (v === null || ["string", "number", "boolean"].includes(typeof v)) return true;
+    if (Array.isArray(v)) return v.every(simples);
+    if (typeof v !== "object") return false;
+    const pr = Object.getPrototypeOf(v);   // objeto comum (não Date, Timestamp, FieldValue…)
+    return (pr === null || Object.getPrototypeOf(pr) === null) && Object.keys(v).every((k) => simples(v[k]));
+  };
+  const podeRest = (ops) => ops.every((op) => !op.merge && (op.dados === null || op.dados === undefined || simples(op.dados)));
+  function valorRest(v) {
+    if (v === null || v === undefined) return { nullValue: null };
+    if (typeof v === "boolean") return { booleanValue: v };
+    if (typeof v === "number") return !isFinite(v) ? { nullValue: null } : Number.isInteger(v) ? { integerValue: String(v) } : { doubleValue: v };
+    if (typeof v === "string") return { stringValue: v };
+    if (Array.isArray(v)) return { arrayValue: { values: v.map(valorRest) } };
+    return { mapValue: { fields: camposRest(v) } };
+  }
+  function camposRest(o) { const f = {}; for (const k of Object.keys(o)) f[k] = valorRest(o[k]); return f; }
+  const STATUS_REST = { PERMISSION_DENIED: "permission-denied", INVALID_ARGUMENT: "invalid-argument", UNAUTHENTICATED: "unauthenticated", RESOURCE_EXHAUSTED: "resource-exhausted", FAILED_PRECONDITION: "failed-precondition", OUT_OF_RANGE: "out-of-range", NOT_FOUND: "not-found" };
+  async function commitRest(ops) {
+    const u = firebase.auth && firebase.auth().currentUser;
+    if (!u) { const e = new Error("sem login"); e.code = "unauthenticated"; throw e; }
+    const H = { Authorization: "Bearer " + (await u.getIdToken()), "Content-Type": "application/json" };
+    try { if (self.AGROCR_APPCHECK && firebase.appCheck) { const t = await firebase.appCheck().getToken(false); if (t && t.token) H["X-Firebase-AppCheck"] = t.token; } } catch (e) {}
+    const banco = "projects/" + window.AGROCR_FIREBASE.projectId + "/databases/(default)";
+    for (let i = 0; i < ops.length; i += TAMANHO_LOTE) {
+      const writes = ops.slice(i, i + TAMANHO_LOTE).map((op) => (op.dados === null || op.dados === undefined
+        ? { delete: banco + "/documents/" + op.caminho }
+        : { update: { name: banco + "/documents/" + op.caminho, fields: camposRest(op.dados) } }));
+      const r = await fetch("https://firestore.googleapis.com/v1/" + banco + "/documents:commit", { method: "POST", headers: H, body: JSON.stringify({ writes }) });
+      if (!r.ok) {
+        let j = null; try { j = await r.json(); } catch (e) {}
+        const msg = (j && j.error && j.error.message) || ("HTTP " + r.status);
+        const e = new Error(msg);
+        // App Check / atestado do aparelho não é recusa do dado: tenta de novo depois
+        e.code = /app ?check|attestation/i.test(msg) ? "unavailable" : (STATUS_REST[j && j.error && j.error.status] || "unavailable");
+        throw e;
+      }
+    }
+  }
+  // aoVivo: lançamento que a pessoa acabou de fazer — sem sinal, continua esperando o envio normal (como antes).
+  // soRest: item da fila que já travou no envio normal — não empilha outra cópia no Firebase do aparelho.
+  async function enviarOps(ops, aoVivo, soRest) {
+    if (soRest && navigator.onLine !== false && podeRest(ops)) { await commitRest(ops); return; }
+    const p = commitOps(ops);
+    try { await comPrazo(p, ESPERA_ENVIO); }
+    catch (e) {
+      const c = codigoDe(e);
+      if (ERRO_PERMANENTE.includes(c) || c === "unauthenticated") throw e;
+      if (navigator.onLine !== false && podeRest(ops)) {
+        try { await commitRest(ops); p.catch(() => {}); return; }
+        catch (e2) { if (ERRO_PERMANENTE.includes(codigoDe(e2))) { p.catch(() => {}); throw e2; } }
+      }
+      if (aoVivo && c === "prazo") { await p; return; }
+      p.catch(() => {});
+      throw e;
+    }
+  }
   // ---------- escuta que não morre ----------
   // Uma escuta (onSnapshot) que dá erro PARA para sempre: a lista fica vazia na tela até a pessoa
   // fechar o app, e ninguém fica sabendo — era o "sumiu tudo" com os dados intactos no servidor.
@@ -155,12 +219,12 @@ window.Nuvem = (function () {
     const item = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), rotulo: rotulo || "", ops, em: new Date().toISOString(), tentativas: 0, erro: null, uid: uidAtual(), resumo: resumirOps(ops) };
     guardarFila([...lerFila(), item]);
     try {
-      await commitOps(ops);
+      await enviarOps(ops, true);
       guardarFila(lerFila().filter((x) => x.id !== item.id));
     } catch (e) {
       const c = codigoDe(e);
       if (c === "permission-denied" && await jaEstaNaNuvem(ops)) { guardarFila(lerFila().filter((x) => x.id !== item.id)); return; }
-      guardarFila(lerFila().map((x) => (x.id === item.id ? { ...x, tentativas: 1, erro: c || "erro", motivo: explicarErro(e), permanente: ERRO_PERMANENTE.includes(c) } : x)));
+      guardarFila(lerFila().map((x) => (x.id === item.id ? { ...x, tentativas: 1, erro: c || "erro", motivo: explicarErro(e), mensagem: String((e && e.message) || "").slice(0, 200), travou: c === "prazo" || x.travou || false, permanente: ERRO_PERMANENTE.includes(c) } : x)));
       throw e;
     }
   }
@@ -178,13 +242,13 @@ window.Nuvem = (function () {
         try {
           // recusado por tamanho: encolhe as fotos antes de tentar de novo
           if (item.erro === "invalid-argument") { try { item.ops = await caberOps(item.ops); guardarFila(lerFila().map((x) => (x.id === item.id ? { ...x, ops: item.ops } : x))); } catch (e) {} }
-          await commitOps(item.ops);
+          await enviarOps(item.ops, false, !!item.travou);
           guardarFila(lerFila().filter((x) => x.id !== item.id));
         } catch (e) {
           const c = codigoDe(e);
           if (c === "permission-denied" && await jaEstaNaNuvem(item.ops)) { guardarFila(lerFila().filter((x) => x.id !== item.id)); continue; }
-          guardarFila(lerFila().map((x) => (x.id === item.id ? { ...x, tentativas: (x.tentativas || 0) + 1, erro: c || "erro", motivo: explicarErro(e), permanente: ERRO_PERMANENTE.includes(c) } : x)));
-          if (!ERRO_PERMANENTE.includes(c)) break;   // sem sinal: para por aqui, tenta de novo depois
+          guardarFila(lerFila().map((x) => (x.id === item.id ? { ...x, tentativas: (x.tentativas || 0) + 1, erro: c || "erro", motivo: explicarErro(e), mensagem: String((e && e.message) || "").slice(0, 200), travou: c === "prazo" || x.travou || false, ultimaTentativa: new Date().toISOString(), permanente: ERRO_PERMANENTE.includes(c) } : x)));
+          if (!ERRO_PERMANENTE.includes(c) && navigator.onLine === false) break;   // sem sinal: para por aqui, tenta de novo depois
         }
       }
     } finally { reprocessando = false; }
@@ -1021,7 +1085,7 @@ window.Nuvem = (function () {
     avisosDisponiveis, ativarAvisos, ouvirAvisosEmPrimeiroPlano, estadoAvisos, pedirTesteAviso,
     criarUsuario, criarConvite, criarContaPropria, observarUsuarios, observarEquipeConsultoria, gravarUsuario, apagarUsuario, observarTodosUsuarios, observarUsuariosDaConta,
     observarFazendas, observarFazendasDaLista, listarTodasFazendas, gravarFazendas, observarConfig, gravarConfig, aoMudarPendencia,
-    executarOps, aoMudarFila, reprocessarFila, tentarFilaDeNovo, descartarDaFila, explicarErro, memoriaOffline, escutar, aoFalharLeitura, avisarLeitura,
+    executarOps, podeRest, valorRest, enviarOps, aoMudarFila, reprocessarFila, tentarFilaDeNovo, descartarDaFila, explicarErro, memoriaOffline, escutar, aoFalharLeitura, avisarLeitura,
     observarLicenca, observarLicencas, gravarLicenca, apagarLicenca, garantirMeuTeste, concederInclusoSeCouber, observarFrota, gravarFrota, apagarFrota, concederInclusoSeCouber, carimboData, observarMeuUsuario,
     observarPagamento, gravarPagamento, observarSuporte, gravarSuporte, lerNota, transcreverAudio, paraWav16k, caberNaNuvem, chamarSefaz, observarPessoasFazendas, enviarBackupEmail, observarComunidade, enviarComunidade, apagarComunidade, chamarNfe,
     observarFinanceiroDono, gravarFinanceiroDono, apagarFinanceiroDono,

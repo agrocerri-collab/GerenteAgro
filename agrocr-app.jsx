@@ -1577,6 +1577,7 @@ export default function App() {
   const [erro, setErro] = useState(null);
   const [salvando, setSalvando] = useState(false);
 
+  const [verFila, setVerFila] = useState(false);     // toque em "↑ N guardados": o que está no aparelho, o erro e a cópia
   const [verSenha, setVerSenha] = useState(false);   // janela "Minha conta" (toque no nome, no topo)
   // versão nova publicada enquanto a aba está aberta (computador fica dias sem recarregar): acende o 🔄
   const [versaoNova, setVersaoNova] = useState("");
@@ -1908,7 +1909,7 @@ export default function App() {
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", justifyContent: "flex-end", flex: 1, minWidth: 0 }}>
           {/* O operador precisa saber, de relance, se o que ele lançou já subiu */}
-          <span style={{ color: "#fff", fontSize: 12, opacity: 0.9, minWidth: 0 }}>
+          <span onClick={() => { if (naNuvem && filaMinha.length) setVerFila(true); }} style={{ color: "#fff", fontSize: 12, opacity: 0.9, minWidth: 0, cursor: naNuvem && filaMinha.length ? "pointer" : "default", textDecoration: naNuvem && filaMinha.length ? "underline" : "none" }}>
             {!naNuvem ? (salvando ? "Salvando…" : "✓ Salvo no aparelho")
               : filaMinha.some((x) => x.permanente) ? `⚠ ${filaMinha.filter((x) => x.permanente).length} lançamento${filaMinha.filter((x) => x.permanente).length > 1 ? "s" : ""} recusado${filaMinha.filter((x) => x.permanente).length > 1 ? "s" : ""} — guardado${filaMinha.filter((x) => x.permanente).length > 1 ? "s" : ""} no aparelho`
               : filaMinha.length > 0 ? `↑ ${filaMinha.length} guardado${filaMinha.length > 1 ? "s" : ""} no aparelho, subindo…`
@@ -1955,6 +1956,7 @@ export default function App() {
         </div>
       </header>
 
+      {verFila && <ModalFila itens={filaMinha} descrever={descreverItemFila} quem={(perfil && perfil.nomeUsuario) || ""} onFechar={() => setVerFila(false)} />}
       {verSenha && perfil && <ModalTrocarSenha perfil={perfil} onFechar={() => setVerSenha(false)} naNuvem={naNuvem}
         onNome={(n) => { const novo = { ...perfil, nomeUsuario: n }; setPerfil(novo); try { window.storage.set("agrocr:perfil", JSON.stringify(novo), false); } catch (e) {} }} />}
       {verDespesas && perfil && perfil.tipo === "consultoria" && !MARCA_VENDA && (
@@ -31470,6 +31472,49 @@ function EscolherComBusca({ valor, rotuloValor, onEscolher, grupos, vazio, disab
         </div>
       )}
     </>
+  );
+}
+// O que está guardado no aparelho esperando subir: cada lançamento com hora, tentativas e o erro de verdade;
+// "Tentar enviar agora" e "Mandar cópia para a consultoria" (arquivo pelo WhatsApp) — se o aparelho não
+// conseguir subir, a consultoria sobe a cópia. Nada é apagado daqui.
+function ModalFila({ itens, descrever, quem, onFechar }) {
+  const [msg, setMsg] = useState("");
+  const kb = (x) => { try { return Math.max(1, Math.round(JSON.stringify(x.ops || []).length / 1024)); } catch (e) { return 0; } };
+  const tentar = () => { if (!itens.length || !window.Nuvem) return; setMsg("Enviando… pode levar até 1 minuto."); Nuvem.tentarFilaDeNovo(itens[0].id).then(() => setMsg("Tentativa feita — o que subiu já saiu da lista.")).catch(() => setMsg("Ainda não subiu — mande a cópia para a consultoria.")); };
+  const mandarCopia = async () => {
+    const base = `lancamentos-guardados-${String(quem || "aparelho").replace(/[^a-z0-9]+/gi, "-")}-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-")}`;
+    const texto = JSON.stringify({ versao: window.AGROCR_VERSAO || "", quem, em: new Date().toISOString(), itens });
+    for (const [ext, tipo] of [["json", "application/json"], ["txt", "text/plain"]]) {
+      try {
+        const arq = new File([texto], base + "." + ext, { type: tipo });
+        if (navigator.canShare && navigator.canShare({ files: [arq] })) { await navigator.share({ files: [arq], title: "Lançamentos guardados no aparelho" }); setMsg("✓ Cópia enviada. Os lançamentos continuam guardados aqui até subirem."); return; }
+      } catch (e) { if (e && e.name === "AbortError") return; }
+    }
+    try {
+      const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([texto], { type: "application/json" })); a.download = base + ".json";
+      document.body.appendChild(a); a.click(); a.remove();
+      setMsg("✓ Arquivo salvo em Downloads — mande pelo WhatsApp para a consultoria.");
+    } catch (e) { setMsg("Não consegui gerar o arquivo neste aparelho — tire foto desta tela e avise a consultoria."); }
+  };
+  return (
+    <Modal titulo="↑ Guardados neste aparelho" onFechar={onFechar}>
+      <div style={{ fontSize: 13, color: C.navyEscuro, marginBottom: 8 }}>Estes lançamentos estão <b>salvos no celular</b> e ainda não chegaram na nuvem. Não apague os dados do navegador nem desinstale o app até sumirem desta lista.</div>
+      {!itens.length && <div style={{ fontSize: 13, color: C.verdeEscuro, fontWeight: 800 }}>✓ Nada esperando — tudo subiu.</div>}
+      {itens.map((x) => (
+        <div key={x.id} style={{ background: C.fundo, borderRadius: 10, padding: "8px 10px", marginBottom: 6, fontSize: 12.5 }}>
+          <div style={{ fontWeight: 900, color: C.navy }}>{descrever(x)}</div>
+          <div style={{ color: C.cinza }}>feito em {fmtDH(x.em)} · {kb(x)} KB · {x.tentativas || 0} tentativa{(x.tentativas || 0) === 1 ? "" : "s"}{x.ultimaTentativa ? ` · última ${fmtDH(x.ultimaTentativa)}` : ""}</div>
+          {(x.erro || x.mensagem) && <div style={{ color: x.permanente ? C.vermelho : "#6B4E00", marginTop: 2 }}>{x.erro ? `[${x.erro}] ` : ""}{x.mensagem || x.motivo || ""}</div>}
+        </div>
+      ))}
+      {msg && <div style={{ fontSize: 13, fontWeight: 800, color: C.navy, margin: "6px 0" }}>{msg}</div>}
+      {itens.length > 0 && (
+        <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
+          <button onClick={tentar} style={{ padding: 13, borderRadius: 12, border: "none", background: C.navy, color: "#fff", fontWeight: 900, fontSize: 15 }}>⬆ Tentar enviar agora</button>
+          <button onClick={mandarCopia} style={{ padding: 13, borderRadius: 12, border: `2px solid ${C.verde}`, background: C.verdeBg, color: C.verdeEscuro, fontWeight: 900, fontSize: 15 }}>📤 Mandar cópia para a consultoria</button>
+        </div>
+      )}
+    </Modal>
   );
 }
 function Modal({ titulo, children, onFechar }) {
