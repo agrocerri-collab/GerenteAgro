@@ -33737,7 +33737,33 @@ function corChuva(v, min, max) {
 }
 
 // ---- mapa de chuva: pluviômetros com posição + interpolação sobre os talhões ----
+// Etiquetas que não se encavalam: vai pondo da mais importante para a menos (prio maior primeiro); a que
+// encostar numa já posta tenta os outros lugares de `alt` ([{x,y}]); se nenhum serve, fica de fora (o valor
+// continua na lista embaixo do mapa). Caixa centrada em x,y.
+function rotulosSemSobrepor(itens, folga = 0) {
+  const postos = [];
+  const bate = (a, b) => Math.abs(a.x - b.x) * 2 < a.w + b.w + folga && Math.abs(a.y - b.y) * 2 < a.h + b.h + folga;
+  for (const it of itens.map((x, i) => ({ ...x, _i: i })).sort((a, b) => (b.prio || 0) - (a.prio || 0) || a._i - b._i)) {
+    if (it.fixo) { postos.push(it); continue; }
+    const lugar = [{ x: it.x, y: it.y }, ...(it.alt || [])].find((l) => !postos.some((p) => bate(p, { ...it, ...l })));
+    if (lugar) postos.push({ ...it, ...lugar });
+  }
+  return postos.sort((a, b) => a._i - b._i).map(({ _i, alt, ...x }) => x);
+}
 function MapaChuva({ kml, medidores, talhoes }) {
+  const [verNomes, setVerNomes] = useState(true);
+  const [ampliado, setAmpliado] = useState(false);
+  // largura do mapa NA TELA: a letra fica do mesmo tamanho em pixels em qualquer fazenda (grande ou pequena)
+  const refSvg = useRef(null);
+  const [largTela, setLargTela] = useState(360);
+  useEffect(() => {
+    const el = refSvg.current; if (!el || !el.getBoundingClientRect) return;
+    const medir = () => { const w = el.getBoundingClientRect().width; if (w > 50) setLargTela((v) => (Math.abs(v - w) > 4 ? w : v)); };
+    medir();
+    window.addEventListener("resize", medir);
+    let ro = null; try { ro = new ResizeObserver(medir); ro.observe(el); } catch (e) {}
+    return () => { window.removeEventListener("resize", medir); if (ro) ro.disconnect(); };
+  }, [ampliado]);
   // projeção local em metros (mesma matemática das áreas do KML)
   const lats = medidores.map((m) => m.lat);
   const { kx, ky } = escalasLocais(lats.reduce((s, v) => s + v, 0) / lats.length);
@@ -33770,41 +33796,89 @@ function MapaChuva({ kml, medidores, talhoes }) {
     }).join(" ") + " Z").join(" ")
   ).join(" ") : null;
 
-  const fonte = Math.max(W, H) / 42;
+  const fonte = (W / largTela) * 20;   // 20 px na tela: números com 12 px e nomes com 10 px, em qualquer fazenda
 
   // valor interpolado no centro de cada talhão do mapa
-  const porTalhao = temKml ? kml.poligonos.filter((pg) => pg.talhaoId).map((pg) => {
+  const porTalhao = temKml ? kml.poligonos.filter((pg) => pg.talhaoId && pg.aneis && pg.aneis[0] && pg.aneis[0].length >= 3)
+    .filter((pg, _, todos) => !todos.some((o) => o !== pg && o.talhaoId === pg.talhaoId && (areaPoligonoHa(o.aneis) > areaPoligonoHa(pg.aneis) || (areaPoligonoHa(o.aneis) === areaPoligonoHa(pg.aneis) && todos.indexOf(o) < todos.indexOf(pg)))))
+    .map((pg) => {
     const c = pg.aneis[0].reduce((s, p) => { const [x, y] = projAj(p); return [s[0] + x, s[1] + y]; }, [0, 0]);
     const n = pg.aneis[0].length;
     const t = (talhoes || []).find((x) => x.id === pg.talhaoId);
     return { nome: t ? t.nome : pg.nome, mm: interpolarChuva(c[0] / n, c[1] / n, pontosAj) };
   }) : [];
 
+  // etiquetas: mm do pluviômetro (sempre) e UM nome por talhão (no maior pedaço, num ponto de dentro), sem encavalar
+  const fsMm = fonte * 0.6, fsNome = fonte * 0.5, largTexto = (t, f) => String(t).length * f * 0.6;
+  const etiquetasMm = pontosAj.map((p) => {
+    const txt = fmtN(p.mm), w = largTexto(txt, fsMm) + fsMm * 0.8, h = fsMm * 1.35;
+    return { tipo: "mm", txt, x: p.x, y: p.y - fonte * 0.22 - h / 2 - fonte * 0.08, w, h, prio: 2, fixo: true, ponto: p };
+  });
+  // dois pluviômetros perto: o número que encavalaria vai para baixo da bolinha
+  const encosta = (a, b) => Math.abs(a.x - b.x) * 2 < a.w + b.w && Math.abs(a.y - b.y) * 2 < a.h + b.h;
+  for (let i = 1; i < etiquetasMm.length; i++) {
+    const e = etiquetasMm[i];
+    if (etiquetasMm.slice(0, i).some((o) => encosta(o, e))) e.y = e.ponto.y + fonte * 0.3 + e.h / 2;
+  }
+  const bolinhas = pontosAj.map((p) => ({ tipo: "pt", x: p.x, y: p.y, w: fonte * 0.5, h: fonte * 0.5, prio: 3, fixo: true }));
+  const nomes = [];
+  if (temKml && verNomes) {
+    const maior = {};
+    for (const pg of kml.poligonos) {
+      if (!pg.talhaoId || !pg.aneis || !pg.aneis[0] || pg.aneis[0].length < 3) continue;
+      const a = areaPoligonoHa(pg.aneis);
+      if (!maior[pg.talhaoId] || a > maior[pg.talhaoId].a) maior[pg.talhaoId] = { pg, a };
+    }
+    for (const tid of Object.keys(maior)) {
+      const { pg } = maior[tid];
+      const tt = (talhoes || []).find((x) => x.id === tid);
+      const nome = tt ? tt.nome : pg.nome;
+      const pr = pontoDoRotulo(pg.aneis[0]); if (!pr || !nome) continue;
+      const [x, y] = projAj(pr);
+      const w = largTexto(nome, fsNome), h = fsNome * 1.1;
+      // outros lugares dentro do talhão (o meio costuma ter o pluviômetro): abaixo, acima, aos lados, mais longe
+      const anelTela = pg.aneis[0].map(projAj);
+      const alt = [[0, 1.6], [0, -1.6], [1, 0], [-1, 0], [0, 2.8], [0, -2.8], [1, 1.6], [-1, 1.6], [1, -1.6], [-1, -1.6]]
+        .map(([a, b]) => ({ x: x + a * (w * 0.75 + fonte * 0.3), y: y + b * h }))
+        .filter((l) => pontoNoAnel(l.x - w / 2, l.y, anelTela) && pontoNoAnel(l.x + w / 2, l.y, anelTela));
+      nomes.push({ tipo: "nome", txt: nome, x, y, w, h, prio: 1, alt });
+    }
+  }
+  const postos = rotulosSemSobrepor([...bolinhas, ...etiquetasMm, ...nomes], fonte * 0.1);
+  const nomesPostos = postos.filter((e) => e.tipo === "nome");
+  const nomesFora = nomes.length - nomesPostos.length;
+
+  const botao = (ativo) => ({ padding: "5px 11px", borderRadius: 10, fontWeight: 800, fontSize: 12, background: ativo ? C.navy : "#fff", color: ativo ? "#fff" : C.navy, border: `1.5px solid ${C.navy}` });
   return (
     <div>
-      <svg viewBox={`0 0 ${W.toFixed(0)} ${H.toFixed(0)}`}
-        style={{ width: "100%", background: "#F7F6F0", borderRadius: 12, border: `1.5px solid ${C.borda}`, display: "block" }}>
+      <div className="nao-imprimir" style={{ display: "flex", gap: 6, marginBottom: 6, flexWrap: "wrap" }}>
+        {temKml && <button onClick={() => setVerNomes(!verNomes)} style={botao(verNomes)}>🏷️ Nomes dos talhões</button>}
+        <button onClick={() => setAmpliado(!ampliado)} style={botao(ampliado)}>{ampliado ? "↩ Voltar ao tamanho normal" : "🔍 Ampliar o mapa"}</button>
+      </div>
+      <div style={ampliado ? { overflow: "auto", borderRadius: 12, border: `1.5px solid ${C.borda}`, maxHeight: "75vh" } : {}}>
+      <svg ref={refSvg} viewBox={`0 0 ${W.toFixed(0)} ${H.toFixed(0)}`}
+        style={{ width: ampliado ? "250%" : "100%", maxWidth: "none", background: "#F7F6F0", borderRadius: ampliado ? 0 : 12, border: ampliado ? "none" : `1.5px solid ${C.borda}`, display: "block" }}>
         {dTalhoes && <defs><clipPath id="recorteChuva"><path d={dTalhoes} fillRule="evenodd" /></clipPath></defs>}
         <g clipPath={dTalhoes ? "url(#recorteChuva)" : undefined}>
           {mancha && <image href={mancha} x={0} y={0} width={W} height={H} preserveAspectRatio="none" />}
         </g>
-        {dTalhoes && <path d={dTalhoes} fillRule="evenodd" fill="none" stroke="#fff" strokeWidth={fonte / 8} />}
-        {/* número do talhão, pequeno, no centro de cada um */}
-        {temKml && kml.poligonos.filter((pg) => pg.talhaoId).map((pg, i) => {
-          const c = pg.aneis[0].reduce((s, p) => { const [x, y] = projAj(p); return [s[0] + x, s[1] + y]; }, [0, 0]); const n = pg.aneis[0].length;
-          const tt = (talhoes || []).find((x) => x.id === pg.talhaoId);
-          return <text key={"t" + i} x={c[0] / n} y={c[1] / n} textAnchor="middle" fontSize={fonte * 0.6} fontWeight="800" fill="#fff" stroke="rgba(0,0,0,.5)" strokeWidth={fonte / 16} paintOrder="stroke" style={{ pointerEvents: "none" }}>{tt ? tt.nome : pg.nome}</text>;
-        })}
-        {/* pluviômetro: só o número de mm, pequeno */}
-        {pontosAj.map((p, i) => (
-          <g key={i}>
-            <circle cx={p.x} cy={p.y} r={fonte * 0.28} fill="#17335F" stroke="#fff" strokeWidth={fonte / 12} />
-            <text x={p.x} y={p.y - fonte * 0.5} textAnchor="middle" fontSize={fonte * 0.7} fontWeight="800"
-              fill="#fff" stroke="rgba(0,0,0,.55)" strokeWidth={fonte / 12} paintOrder="stroke">{fmtN(p.mm)}</text>
+        {dTalhoes && <path d={dTalhoes} fillRule="evenodd" fill="none" stroke="#fff" strokeWidth={fonte / 10} />}
+        {(temKml ? kml.poligonos : []).map((pg, i) => <DivisaoNoMapa key={"dv" + i} talhaoId={pg.talhaoId} anel={pg.aneis[0]} proj={projAj} fonte={fonte * 0.45} />)}
+        {/* nome do talhão: pequeno, escuro com contorno branco, só onde não encavala */}
+        {nomesPostos.map((e, i) => (
+          <text key={"n" + i} x={e.x} y={e.y + e.h * 0.35} textAnchor="middle" fontSize={fsNome} fontWeight="800" fill="#17335F" stroke="rgba(255,255,255,.85)" strokeWidth={fsNome * 0.22} paintOrder="stroke" strokeLinejoin="round" style={{ pointerEvents: "none" }}>{e.txt}</text>
+        ))}
+        {/* pluviômetro: bolinha e o mm numa etiqueta branca logo acima */}
+        {etiquetasMm.map((e, i) => (
+          <g key={"p" + i} style={{ pointerEvents: "none" }}>
+            <circle cx={e.ponto.x} cy={e.ponto.y} r={fonte * 0.2} fill="#17335F" stroke="#fff" strokeWidth={fonte / 16} />
+            <rect x={e.x - e.w / 2} y={e.y - e.h / 2} width={e.w} height={e.h} rx={e.h / 2} fill="#fff" stroke="#17335F" strokeWidth={fonte / 30} opacity="0.95" />
+            <text x={e.x} y={e.y + fsMm * 0.36} textAnchor="middle" fontSize={fsMm} fontWeight="900" fill="#17335F">{e.txt}</text>
           </g>
         ))}
-        {(temKml ? kml.poligonos : []).map((pg, i) => <DivisaoNoMapa key={"dv" + i} talhaoId={pg.talhaoId} anel={pg.aneis[0]} proj={projAj} fonte={fonte} />)}
       </svg>
+      </div>
+      {nomesFora > 0 && <div className="nao-imprimir" style={{ fontSize: 11, color: C.cinza, marginTop: 4 }}>{nomesFora} nome{nomesFora > 1 ? "s" : ""} de talhão não coube{nomesFora > 1 ? "ram" : ""} sem encavalar — toque em 🔍 Ampliar, ou veja a lista embaixo.</div>}
       <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8, fontSize: 11, color: C.cinza }}>
         <span>{fmtN(minMm)} mm</span>
         <div style={{ flex: 1, height: 12, borderRadius: 6, background: GRADIENTE_CHUVA }} />
@@ -33815,7 +33889,7 @@ function MapaChuva({ kml, medidores, talhoes }) {
         <div style={{ marginTop: 10, background: C.fundo, borderRadius: 10, padding: "8px 12px" }}>
           {porTalhao.map((t, i) => (
             <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, padding: "3px 0" }}>
-              <span>{t.nome}</span><b style={{ color: C.navy }}>≈ {fmtN(t.mm)} mm</b>
+              <span>{t.nome}</span><b style={{ color: C.navy }}>≈ {fmtN(Math.round(t.mm))} mm</b>
             </div>
           ))}
           <div style={{ fontSize: 11, color: C.cinza, marginTop: 4 }}>Valor estimado no centro de cada talhão, a partir dos pluviômetros.</div>
