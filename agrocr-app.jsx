@@ -290,6 +290,17 @@ const kLog = (f, s) => `agrocr:log:${f}:${s}`;
 const kLavoura = (f, s) => `agrocr:lavoura:${f}:${s}`;
 // permanentes da fazenda
 const kKml = (f) => `agrocr:kml:${f}`;
+// Mapa (KML) a gravar × o que está no SERVIDOR: contorno que está lá e o aparelho NUNCA viu (aparelho
+// desatualizado ou sem o mapa carregado) continua — o aparelho não pode apagar o que não conhecia.
+// Contorno que o aparelho conhecia e tirou, sai (foi escolha da pessoa).
+function chaveContorno(pg) { const p = pg && pg.aneis && pg.aneis[0] && pg.aneis[0][0]; return `${(pg && (pg.talhaoId || pg.nome)) || ""}|${p ? Number(p[0]).toFixed(5) + "," + Number(p[1]).toFixed(5) : ""}|${pg && pg.aneis && pg.aneis[0] ? pg.aneis[0].length : 0}`; }
+function juntarKmlComServidor(conhecido, novo, servidor) {
+  if (!novo || !servidor || !Array.isArray(servidor.poligonos)) return { kml: novo, recuperados: 0 };
+  const viu = new Set(((conhecido && conhecido.poligonos) || []).map(chaveContorno));
+  const tem = new Set(((novo && novo.poligonos) || []).map(chaveContorno));
+  const faltam = servidor.poligonos.filter((pg) => !viu.has(chaveContorno(pg)) && !tem.has(chaveContorno(pg)));
+  return { kml: faltam.length ? { ...servidor, ...novo, poligonos: [...(novo.poligonos || []), ...faltam] } : novo, recuperados: faltam.length };
+}
 const kProgramas = (f) => `agrocr:programas:${f}`;   // programas de insumos (compra e operacional), todos num documento só
 const kFotoMapa = (f) => `agrocr:fotomapa:${f}`;
 const kDoc = (f) => `agrocr:doc:${f}`;
@@ -6200,6 +6211,23 @@ function TelaFazenda({ fazenda, fazendas, grupos, papel, usuario, naNuvem, equip
   useEffect(() => { FOTOS_FAZENDA.id = fazenda.id; }, [fazenda.id]);
   // Visitas/monitoramentos: na nuvem cada foto vira registro próprio (coleção fotos) e no registro fica "foto:ID".
   // A foto fica também no aparelho (IndexedDB) para o relatório abrir na hora, mesmo sem sinal.
+  // Gravar o mapa da fazenda (KML) com duas travas (Arara Azul, 18/11/2026):
+  // 1) se a gravação tira mais de 1 contorno de uma vez, pergunta — e o padrão (Cancelar) é NÃO gravar;
+  // 2) com internet, confere o mapa no servidor: o que está lá e este aparelho não conhecia, fica.
+  async function salvarKml(v) {
+    const antes = ((kml && kml.poligonos) || []).length, depois = ((v && v.poligonos) || []).length;
+    if (antes >= 3 && depois < antes - 1 && !confirm(`ATENÇÃO: o mapa da fazenda tem ${antes} contornos e vai ficar com ${depois}.\n\n${antes - depois} talhões vão SAIR do mapa (NDVI, chuva, monitoramento).\n\nOK = sim, tirar do mapa\nCancelar = não gravar`)) return;
+    let final = v;
+    if (naNuvem && navigator.onLine && window.NuvemDados && NuvemDados.lerDocServidor) {
+      const srv = await NuvemDados.lerDocServidor(fazenda.id, "kml", 8000);
+      if (srv && srv.existe && srv.valor) {
+        const r = juntarKmlComServidor(kml, v, srv.valor);
+        final = r.kml;
+        if (r.recuperados) setErro(`O mapa deste aparelho estava desatualizado: ${r.recuperados} contorno${r.recuperados > 1 ? "s" : ""} que já estava${r.recuperados > 1 ? "m" : ""} na nuvem continua${r.recuperados > 1 ? "m" : ""} no mapa (nada foi apagado).`);
+      }
+    }
+    return gravar(kKml(fazenda.id), final, setKml, kml);
+  }
   async function gravarVisitas(lista) {
     let novas = lista;
     if (naNuvem) {
@@ -6514,13 +6542,13 @@ function TelaFazenda({ fazenda, fazendas, grupos, papel, usuario, naNuvem, equip
       )}
       {secao === "solo" && (
         <SecaoSolo podeApagar={podeApagar} fazenda={fazenda} kml={kml} solo={solo} usuario={usuario} consultor={consultor} naNuvem={naNuvem}
-          onSalvarKml={(v) => gravar(kKml(fazenda.id), v, setKml)} onAtualizarFazenda={consultor || podeCad ? onAtualizarFazenda : null}
+          onSalvarKml={salvarKml} onAtualizarFazenda={consultor || podeCad ? onAtualizarFazenda : null}
           registrar={registrar} onSalvar={(v) => gravar(kSolo(fazenda.id), v, setSolo, solo)} />
       )}
       {secao === "mapa" && (
         <SecaoMapa fazenda={fazenda} kml={kml} apls={apls} consultor={consultor} registrar={registrar} chuvas={chuvas}
           fotosMapa={fotosMapa} onSalvarFotos={(v) => gravar(kFotoMapa(fazenda.id), v, setFotosMapa, fotosMapa)}
-          onAtualizarFazenda={onAtualizarFazenda} onSalvar={(v) => gravar(kKml(fazenda.id), v, setKml)} />
+          onAtualizarFazenda={onAtualizarFazenda} onSalvar={salvarKml} />
       )}
       {secao === "fin" && veFinanceiro && !abaFin && veCustos && (
         <PainelFinanceiroHoje notas={notas} custos={custos} cotacoes={cotacoes} irAba={(aba) => setAbaFin(aba)}
@@ -19049,8 +19077,9 @@ function MapeamentoTalhoes({ fazenda, kml, podeGravar, registrar, onSalvarKml, o
   // ---- gravar no mapa da fazenda / baixar KML ----
   const gravarNaFazenda = () => {
     if (!desenhados.length) return;
-    const jaTem = temKml;
-    const juntar = jaTem ? confirm(`Esta fazenda já tem mapa com ${kml.poligonos.length} polígonos.\n\nOK = ACRESCENTAR os ${desenhados.length} talhões desenhados\nCancelar = SUBSTITUIR o mapa inteiro pelos desenhados`) : false;
+    // SEMPRE acrescenta (Arara Azul, 18/11/2026: o "Cancelar = SUBSTITUIR o mapa inteiro" apagou 35 contornos —
+    // quem toca em Cancelar acha que está desistindo). Para tirar um contorno, use "Tirar do mapa" em cada um.
+    const juntar = temKml;
     const novosTalhoes = [];
     const poligonos = desenhados.map((d) => {
       let t = talhoes.find((x) => String(x.nome || "").trim().toLowerCase() === d.nome.trim().toLowerCase());

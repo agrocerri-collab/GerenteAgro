@@ -1479,6 +1479,17 @@ window.NuvemDados = (function () {
       falhou
     ));
   }
+  // a versão do SERVIDOR de um documento (sem cache do aparelho); sem sinal ou demorando, devolve null
+  async function lerDocServidor(fazendaId, nome, ms) {
+    try {
+      const p = col(fazendaId, "arquivos").doc(nome).get({ source: "server" });
+      const d = await Promise.race([p, new Promise((ok) => setTimeout(() => ok(null), ms || 8000))]);
+      if (!d) return null;
+      if (!d.exists) return { existe: false, valor: undefined };
+      const dados = d.data();
+      return { existe: true, valor: dados.formato === "json" ? JSON.parse(dados.valor) : dados.valor };
+    } catch (e) { return null; }
+  }
   async function gravarDoc(fazendaId, nome, valor) {
     await Nuvem.executarOps([{ caminho: `fazendas/${fazendaId}/arquivos/${nome}`, dados: { valor: JSON.stringify(valor === undefined ? null : valor), formato: "json" } }], nome);
   }
@@ -1550,5 +1561,5 @@ window.NuvemDados = (function () {
     await db().collection("fazendas").doc(fazendaId).delete();
   }
 
-  return { observarColecao, gravarColecao, criarFazendaModelo, observarRecomendacoes, gravarRecomendacoes, observarDoc, gravarDoc, mesclarDocJson, apagarFazendaInteira, baixarTudo, gravarFotos, lerFoto, gravarAnexoRH, lerAnexoRH, apagarAnexoRH };
+  return { observarColecao, gravarColecao, criarFazendaModelo, observarRecomendacoes, gravarRecomendacoes, observarDoc, gravarDoc, lerDocServidor, mesclarDocJson, apagarFazendaInteira, baixarTudo, gravarFotos, lerFoto, gravarAnexoRH, lerAnexoRH, apagarAnexoRH };
 })();
