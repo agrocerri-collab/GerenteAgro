@@ -26070,10 +26070,17 @@ function SecaoGuia({ usuario, fazenda, naNuvem, consultor }) {
       {cabecalho}
       <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
         <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="🔎 Buscar pelo nome: buva, percevejo, ferrugem, boro, R3…" style={{ flex: 1, marginTop: 0 }} />
-        <button onClick={() => setIdentificando(true)} title="a IA compara a foto com o guia" style={{ flex: "none", padding: "9px 12px", background: C.verde, color: "#fff", border: "none", borderRadius: 10, fontWeight: 800, fontSize: 13 }}>🔍 Pela foto</button>
+        {(tipo || buscando) && <button onClick={() => setIdentificando(true)} title="tire a foto e o app diz o que é" style={{ flex: "none", padding: "9px 12px", background: C.verde, color: "#fff", border: "none", borderRadius: 10, fontWeight: 800, fontSize: 13 }}>📸 Identifique</button>}
       </div>
       {!buscando && !tipo && (
         <>
+          <button onClick={() => setIdentificando(true)} style={{ width: "100%", display: "flex", alignItems: "center", gap: 14, textAlign: "left", background: C.verde, color: "#fff", border: "none", borderRadius: 16, padding: "16px 16px", marginBottom: 10 }}>
+            <span style={{ fontSize: 40, lineHeight: 1, flex: "none" }}>📸</span>
+            <span style={{ minWidth: 0 }}>
+              <span className="titulo" style={{ display: "block", fontWeight: 900, fontSize: 19, lineHeight: 1.1 }}>Identifique</span>
+              <span style={{ display: "block", fontSize: 13, opacity: 0.95, marginTop: 3 }}>Tire a foto da praga, doença, planta daninha ou folha — o app diz o que é e abre a ficha para conferir</span>
+            </span>
+          </button>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
             {["estadio", "daninha", "praga", "doenca", "deficiencia", "inimigo", "aplicacao"].map((id) => tile(() => abrirTipo(id), GUIA_TIPO_INFO[id][0], GUIA_TIPO_INFO[id][1], GUIA_TIPO_INFO[id][2]))}
           </div>
@@ -29444,7 +29451,11 @@ function OrdemDeCampo({ fazenda, apl, talhoes, capacidade, onTrocarTanque, onVol
   const ehCarga = !!(MODULOS[moduloDe(apl)] || {}).usaCarga;
   const [carga, setCarga] = useState(apl.cargaKg || "");
 
-  const tsel = talhoesDaRecomendacao(apl, talhoes);
+  // só os talhões que FALTAM fazer entram na ordem (e na conta de tanques); os já feitos, só se pedir
+  const todosT = talhoesDaRecomendacao(apl, talhoes);
+  const faltamT = todosT.filter((t) => !(apl.execucoes || {})[t.id]);
+  const [incluirFeitos, setIncluirFeitos] = useState(false);
+  const tsel = incluirFeitos || !faltamT.length ? todosT : faltamT;
   const area = tsel.reduce((s, t) => s + num(t.areaHa), 0);
   const c = contasDoTanque(apl.produtos, apl.vazao, tanque, area);
   const fases = fasesDaCalda(apl.produtos, apl.vazao, tanque, area);
@@ -29521,6 +29532,13 @@ function OrdemDeCampo({ fazenda, apl, talhoes, capacidade, onTrocarTanque, onVol
         <button onClick={enviar} title="Manda só o texto (sem PDF)" style={{ flex: 0.8, padding: "9px 10px", background: "#fff", color: C.verdeEscuro, border: `1.5px solid ${C.verde}`, borderRadius: 10, fontWeight: 800, fontSize: 12.5 }}>💬 Texto</button>
       </div>
 
+      {faltamT.length > 0 && faltamT.length < todosT.length && (
+        <button className="nao-imprimir" onClick={() => setIncluirFeitos(!incluirFeitos)} style={{ width: "100%", textAlign: "left", marginBottom: 12, padding: "9px 12px", borderRadius: 10, fontWeight: 800, fontSize: 13,
+          background: incluirFeitos ? "#fff" : C.amarelo, color: incluirFeitos ? C.navy : "#fff", border: `1.5px solid ${incluirFeitos ? C.borda : C.amarelo}` }}>
+          {incluirFeitos ? `Mostrando todos os ${todosT.length} talhões (${todosT.length - faltamT.length} já feito${todosT.length - faltamT.length > 1 ? "s" : ""}) · toque para ver só o que falta`
+            : `✓ Só o que falta fazer: ${faltamT.length} de ${todosT.length} talhões · toque para incluir os já feitos`}
+        </button>
+      )}
       {ehCarga && (
         <div className="nao-imprimir" style={{ background: "#fff", border: `1.5px solid ${C.borda}`, borderRadius: 12, padding: "10px 14px", marginBottom: 12 }}>
           <label style={{ margin: "0 0 4px" }}>Distribuidor que vai entrar — capacidade de carga (kg)</label>
@@ -29761,7 +29779,8 @@ function LogisticaDescarga({ fazenda, apls, estoque, onVoltar }) {
 }
 
 function RelatorioOperacional({ fazenda, apls, mod, capacidade, onVoltar, kml }) {
-  const [soPendentes, setSoPendentes] = useState(false);
+  // o campo precisa ver primeiro o que FALTA fazer (pedido do Daniel, 17/11/2026): começa só com os pendentes
+  const [soPendentes, setSoPendentes] = useState(true);
   // null = todos. Serve para mandar ao operador só a folha do pivô dele.
   const [selT, setSelT] = useState(null);
   const talhoes = fazenda.talhoes || [];
@@ -29776,7 +29795,7 @@ function RelatorioOperacional({ fazenda, apls, mod, capacidade, onVoltar, kml })
   const paraTalhao = (t) => apls
     .filter((a) => (a.talhaoIds || []).includes(t.id))
     .filter((a) => !soPendentes || !(a.execucoes || {})[t.id])
-    .slice().sort((x, y) => (x.dataRecomendada || "").localeCompare(y.dataRecomendada || ""));
+    .slice().sort((x, y) => (!!(x.execucoes || {})[t.id] - !!(y.execucoes || {})[t.id]) || (x.dataRecomendada || "").localeCompare(y.dataRecomendada || ""));
 
   const comAlgo = talhoes.filter((t) => marcado(t) && paraTalhao(t).length > 0);
 
@@ -29827,7 +29846,7 @@ function RelatorioOperacional({ fazenda, apls, mod, capacidade, onVoltar, kml })
           background: soPendentes ? C.amarelo : "#fff", color: soPendentes ? "#fff" : C.navy,
           border: `1.5px solid ${soPendentes ? C.amarelo : C.borda}`, borderRadius: 10, padding: "8px 14px", fontWeight: 800, fontSize: 13,
         }}>
-          {soPendentes ? "Mostrando só o que falta fazer" : "Mostrando tudo"}
+          {soPendentes ? "✓ Só o que falta fazer · toque para incluir o que já foi feito" : "Mostrando tudo (o que falta vem primeiro) · toque para ver só o que falta"}
         </button>
       </div>
 
