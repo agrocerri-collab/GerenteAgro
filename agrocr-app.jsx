@@ -27537,8 +27537,24 @@ function ChatVisita({ fazenda, lavoura, kml, usuario, onFechar, onSalvar }) {
 // (% de pontos com a praga). Fica na lista de visitas (funciona offline) e
 // vira um quadro por talhão. A metodologia detalhada (níveis de controle)
 // entra depois, quando o Daniel passar.
+// Relatório do monitoramento (Daniel, 17/11/2026): só aparece praga/doença ENCONTRADA (em pelo menos um ponto);
+// cada praga é um bloco com o nome em destaque e, embaixo, as linhas dela (pequena/grande, adulto…).
+// Linha solta (sem grupo) vira bloco de uma linha só, com o mesmo destaque.
+function gruposQuadroRelatorio(quadro) {
+  const achou = (q) => num(q.com) > 0 || num(q.media) > 0 || num(q.max) > 0;
+  const grupos = [];
+  for (const q of quadro || []) {
+    if (!achou(q)) continue;
+    const nome = q.grupo || q.nome || "";
+    const ult = grupos[grupos.length - 1];
+    if (q.grupo && ult && ult.nome === nome && ult.agrupado) ult.linhas.push(q);
+    else grupos.push({ nome, agrupado: !!q.grupo, linhas: [q] });
+  }
+  const avaliadas = new Set((quadro || []).map((q) => q.grupo || q.nome)).size;
+  return { grupos, avaliadas, semNada: avaliadas - new Set(grupos.map((g) => g.nome)).size };
+}
 const PRAGAS_PADRAO = {
-  Soja: ["Lagarta-da-soja", "Falsa-medideira", "Helicoverpa", "Percevejo-marrom (adulto)", "Percevejo-marrom (ninfa)", "Percevejo-verde-pequeno", "Vaquinha", "Mosca-branca", "Ácaro", "Tripes"],
+  Soja: ["Lagarta-da-soja", "Falsa-medideira", "Helicoverpa", "Spodoptera albula", "Spodoptera cosmioides", "Spodoptera eridania", "Percevejo-marrom (adulto)", "Percevejo-marrom (ninfa)", "Percevejo-verde-pequeno", "Vaquinha", "Mosca-branca", "Ácaro", "Tripes"],
   Milho: ["Lagarta-do-cartucho", "Cigarrinha-do-milho", "Percevejo-barriga-verde", "Pulgão", "Lagarta-elasmo", "Helicoverpa"],
   Algodão: ["Bicudo", "Lagarta-rosada", "Helicoverpa", "Curuquerê", "Mosca-branca", "Pulgão", "Ácaro-rajado", "Percevejo", "Tripes"],
   Feijão: ["Mosca-branca", "Vaquinha", "Cigarrinha-verde", "Lagarta-das-vagens", "Ácaro"],
@@ -28283,12 +28299,21 @@ function RelatorioMonitoramento({ fazenda, mon, kml, onVoltar, soResumo }) {
         <div style={{ fontWeight: 900, color: C.navy, fontSize: 14, margin: "12px 0 4px" }}>Quadro das pragas</div>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <thead><tr><th style={{ textAlign: "left", padding: "4px 6px", borderBottom: `2px solid ${C.navy}` }}>Praga</th><th style={{ textAlign: "right", padding: "4px 6px", borderBottom: `2px solid ${C.navy}` }}>{mon.metodo === "pano" ? "Média / m" : "% dos pontos"}</th><th style={{ textAlign: "right", padding: "4px 6px", borderBottom: `2px solid ${C.navy}` }}>{mon.metodo === "pano" ? "Máximo" : "Pontos com"}</th></tr></thead>
-          <tbody>{quadro.flatMap((q, i) => [
-            ...(q.grupo && (i === 0 || quadro[i - 1].grupo !== q.grupo) ? [<tr key={"g" + q.grupo}><td colSpan={3} style={{ padding: "6px 6px 2px", fontWeight: 900, color: C.navy, fontSize: 12, textTransform: "uppercase", borderBottom: `1px solid ${C.borda}` }}>{q.grupo}</td></tr>] : []),
-            <tr key={q.chave} style={{ background: q.com > 0 ? "#FFF6F0" : "transparent" }}><td style={{ padding: "4px 6px", paddingLeft: q.grupo ? 16 : 6, borderBottom: `1px solid ${C.fundo}` }}>{q.nome || q.grupo}{q.detalhe ? <span style={{ color: C.cinza, fontSize: 11.5 }}> — {q.detalhe}</span> : null}</td>
-              <td style={{ textAlign: "right", padding: "4px 6px", borderBottom: `1px solid ${C.fundo}`, fontWeight: q.com > 0 ? 800 : 400 }}>{mon.metodo === "pano" && q.tipo !== "toggle" ? fmtN(q.media) : `${fmtN(q.pct)}%`}</td>
-              <td style={{ textAlign: "right", padding: "4px 6px", borderBottom: `1px solid ${C.fundo}`, color: C.cinza }}>{mon.metodo === "pano" ? fmtN(q.max) : `${q.com}/${(mon.pontos || []).length}`}</td></tr>,
-          ])}</tbody>
+          <tbody>{(() => { const gq = gruposQuadroRelatorio(quadro); const valor = (q) => (mon.metodo === "pano" && q.tipo !== "toggle" ? fmtN(q.media) : `${fmtN(q.pct)}%`); const maximo = (q) => (mon.metodo === "pano" && q.tipo !== "toggle" ? fmtN(q.max) : `${q.com}/${(mon.pontos || []).length}`);
+            if (!gq.grupos.length) return <tr><td colSpan={3} style={{ padding: "10px 6px", color: C.verdeEscuro, fontWeight: 800 }}>✓ Nenhuma praga ou doença encontrada nos {(mon.pontos || []).length} pontos.</td></tr>;
+            return [...gq.grupos.flatMap((g) => {
+              const topo = { borderTop: `2px solid ${C.borda}` };
+              const nomeEstilo = { padding: "7px 6px 3px", fontWeight: 900, color: C.navy, fontSize: 13.5 };
+              if (!g.agrupado || (g.linhas.length === 1 && !g.linhas[0].nome)) {
+                const q = g.linhas[0];
+                return [<tr key={"s" + q.chave} style={{ ...topo, background: "#FFF6F0" }}><td style={{ ...nomeEstilo, paddingBottom: 7 }}>{g.nome}{q.detalhe ? <span style={{ color: C.cinza, fontWeight: 400, fontSize: 11 }}> {q.detalhe}</span> : null}</td>
+                  <td style={{ textAlign: "right", padding: "7px 6px", fontWeight: 900 }}>{valor(q)}</td><td style={{ textAlign: "right", padding: "7px 6px", color: C.cinza }}>{maximo(q)}</td></tr>];
+              }
+              return [<tr key={"g" + g.nome} style={topo}><td colSpan={3} style={nomeEstilo}>{g.nome}</td></tr>,
+                ...g.linhas.map((q) => <tr key={q.chave} style={{ background: "#FFF6F0" }}><td style={{ padding: "3px 6px 3px 18px", borderBottom: `1px solid ${C.fundo}` }}>{q.nome}{q.detalhe ? <span style={{ color: C.cinza, fontSize: 11 }}> {q.detalhe}</span> : null}</td>
+                  <td style={{ textAlign: "right", padding: "3px 6px", borderBottom: `1px solid ${C.fundo}`, fontWeight: 800 }}>{valor(q)}</td><td style={{ textAlign: "right", padding: "3px 6px", borderBottom: `1px solid ${C.fundo}`, color: C.cinza }}>{maximo(q)}</td></tr>)];
+            }), gq.semNada > 0 ? <tr key="semnada"><td colSpan={3} style={{ padding: "6px 6px", fontSize: 11.5, color: C.cinza, borderTop: `2px solid ${C.borda}` }}>Avaliadas e não encontradas: {gq.semNada} {gq.semNada === 1 ? "praga/doença" : "pragas/doenças"} (não aparecem no quadro).</td></tr> : null];
+          })()}</tbody>
         </table>
         {!soResumo && <div style={{ fontWeight: 900, color: C.navy, fontSize: 14, margin: "12px 0 4px" }}>Ponto a ponto</div>}
         {!soResumo && (mon.pontos || []).map((p) => {
