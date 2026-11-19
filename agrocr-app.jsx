@@ -3607,7 +3607,120 @@ function escalonamentoColheita(linhas, opcoes) {
   for (const g of lista) { g.ha = Math.round(g.ha * 100) / 100; g.itens.sort((a, b) => a.previsao.data.localeCompare(b.previsao.data) || String(a.talhao).localeCompare(String(b.talhao), "pt-BR", { numeric: true })); }
   return { grupos: lista, semPrevisao, colhidos, totalHa: Math.round(lista.reduce((s2, g) => s2 + g.ha, 0) * 100) / 100, talhoes: lista.reduce((s2, g) => s2 + g.itens.length, 0) };
 }
-function EscalonamentoColheita({ titulo, linhas, fazendas, fazendaInicial, onFechar }) {
+// ---------- Simulação da safrinha (Daniel, 18/11/2026) ----------
+// Janelas de plantio por cultura (feijão mungo de tal a tal, milho de tal a tal, pastagem…): cada talhão cai
+// na janela em que a COLHEITA PREVISTA (+ dias até plantar) cai. Fora de todas as janelas, mantém o que já está
+// programado. A pessoa pode trocar talhão a talhão; ao aplicar, grava a safrinha no cadastro dos talhões.
+const CULTURAS_SAFRINHA_SUGERIDAS = ["Milho", "Feijão mungo preto", "Feijão", "Sorgo", "Milheto", "Gergelim", "Algodão", "Pastagem", "Braquiária", "Crotalária", "Girassol"];
+const SEM_SAFRINHA = "__nenhuma";
+function simularSafrinha(linhas, janelas, opcoes) {
+  const { intervalo = 0, escolhas = {} } = opcoes || {};
+  const js = (janelas || []).filter((j) => j && String(j.cultura || "").trim() && j.de && j.ate && j.de <= j.ate);
+  const porT = {};
+  for (const l of linhas || []) {
+    if (l.semLavoura || !l.talhaoId) continue;
+    const k = (l.fazendaId || "") + "|" + l.talhaoId;
+    if (!porT[k]) porT[k] = { chave: k, fazendaId: l.fazendaId || "", fazenda: l.fazenda || "", talhaoId: l.talhaoId, talhao: l.talhao, areaHa: 0, colheita: null, atual: l.safrinha || "" };
+    const t = porT[k];
+    t.areaHa += num(l.areaHa);
+    // talhão em partes (A/B): vale a parte colhida por ÚLTIMO — o talhão inteiro só libera depois dela
+    if (l.previsao && l.previsao.data && (!t.colheita || l.previsao.data > t.colheita)) t.colheita = l.previsao.data;
+  }
+  const talhoes = Object.values(porT).map((t) => {
+    const plantio = t.colheita ? somarDias(t.colheita, Math.round(num(intervalo))) : null;
+    const j = plantio ? js.find((x) => plantio >= x.de && plantio <= x.ate) : null;
+    const auto = j ? String(j.cultura).trim() : "";
+    const manual = Object.prototype.hasOwnProperty.call(escolhas, t.chave) ? escolhas[t.chave] : undefined;
+    const final = manual !== undefined ? (manual === SEM_SAFRINHA ? "" : manual) : auto || t.atual;
+    return { ...t, areaHa: Math.round(t.areaHa * 100) / 100, plantio, auto, manual, final, fonte: manual !== undefined ? "manual" : auto ? "janela" : "mantem", muda: final !== t.atual };
+  }).sort((a, b) => (a.plantio || "9999").localeCompare(b.plantio || "9999") || String(a.talhao).localeCompare(String(b.talhao), "pt-BR", { numeric: true }));
+  const porCultura = {};
+  for (const t of talhoes) if (t.final) { porCultura[t.final] = porCultura[t.final] || { ha: 0, n: 0 }; porCultura[t.final].ha = Math.round((porCultura[t.final].ha + t.areaHa) * 100) / 100; porCultura[t.final].n++; }
+  const fora = talhoes.filter((t) => t.fonte === "mantem");
+  return { talhoes, porCultura, fora, mudam: talhoes.filter((t) => t.muda) };
+}
+// { fazendaId: { talhaoId: cultura } } → grava a safrinha programada no cadastro dos talhões daquela fazenda
+function mudancasDaSafrinha(sim) { const m = {}; for (const t of (sim && sim.mudam) || []) { (m[t.fazendaId] = m[t.fazendaId] || {})[t.talhaoId] = t.final; } return m; }
+function aplicarSafrinhaNaFazenda(fazenda, mapa) {
+  if (!fazenda || !mapa) return fazenda;
+  return { ...fazenda, talhoes: (fazenda.talhoes || []).map((t) => (Object.prototype.hasOwnProperty.call(mapa, t.id) ? { ...t, culturaSafrinha: mapa[t.id] || "" } : t)) };
+}
+function SimulacaoSafrinha({ linhas, chave, onAplicar }) {
+  const kLocal = "agrocr:simsafrinha:" + (chave || "");
+  const [janelas, setJanelas] = useState(() => { try { const j = JSON.parse(localStorage.getItem(kLocal) || "null"); if (j && Array.isArray(j.janelas)) return j.janelas; } catch (e) {} return [{ cultura: "", de: "", ate: "" }]; });
+  const [intervalo, setIntervalo] = useState(() => { try { const j = JSON.parse(localStorage.getItem(kLocal) || "null"); return j && j.intervalo != null ? String(j.intervalo) : "0"; } catch (e) { return "0"; } });
+  const [escolhas, setEscolhas] = useState({});
+  const [msg, setMsg] = useState("");
+  useEffect(() => { try { localStorage.setItem(kLocal, JSON.stringify({ janelas, intervalo })); } catch (e) {} }, [janelas, intervalo]);
+  const sim = simularSafrinha(linhas, janelas, { intervalo, escolhas });
+  const culturasJanela = [...new Set(janelas.map((j) => String(j.cultura || "").trim()).filter(Boolean))];
+  const opcoes = [...new Set([...culturasJanela, ...sim.talhoes.map((t) => t.atual).filter(Boolean), ...CULTURAS_SAFRINHA_SUGERIDAS])];
+  const mudar = (i, campo, v) => setJanelas(janelas.map((j, k) => (k === i ? { ...j, [campo]: v } : j)));
+  const aplicar = () => {
+    if (!sim.mudam.length) { setMsg("Nada para mudar: o cadastro já está igual à simulação."); return; }
+    const nFaz = new Set(sim.mudam.map((t) => t.fazendaId)).size;
+    if (!confirm(`Gravar a safrinha programada em ${sim.mudam.length} talhão(ões)${nFaz > 1 ? ` de ${nFaz} fazendas` : ""}?\n\n${sim.mudam.slice(0, 12).map((t) => `${t.talhao}: ${t.atual || "sem safrinha"} → ${t.final || "sem safrinha"}`).join("\n")}${sim.mudam.length > 12 ? "\n…" : ""}\n\nMuda em Dados da fazenda e no Panorama.`)) return;
+    onAplicar(mudancasDaSafrinha(sim));
+    setEscolhas({});
+    setMsg(`✓ Safrinha gravada em ${sim.mudam.length} talhão(ões). O Panorama e Dados da fazenda já mostram.`);
+  };
+  const chip = { padding: "6px 10px", borderRadius: 10, fontWeight: 800, fontSize: 12.5, border: `1.5px solid ${C.borda}`, background: "#fff", color: C.navy };
+  return (
+    <div style={{ background: "#FFFDF4", border: "1.5px solid #E4C860", borderRadius: 12, padding: "10px 12px", marginBottom: 12 }}>
+      <div style={{ fontWeight: 900, color: "#5C4500", fontSize: 15 }}>🌽 Simulação da safrinha</div>
+      <div className="nao-imprimir" style={{ fontSize: 12, color: C.cinza, margin: "2px 0 8px" }}>Diga a janela de plantio de cada cultura. Cada talhão entra na janela em que a colheita prevista cai — e você pode trocar talhão a talhão.</div>
+      <div className="nao-imprimir">
+        <datalist id="culturas-safrinha">{CULTURAS_SAFRINHA_SUGERIDAS.map((c) => <option key={c} value={c} />)}</datalist>
+        {janelas.map((j, i) => (
+          <div key={i} style={{ display: "flex", gap: 6, alignItems: "flex-end", flexWrap: "wrap", marginBottom: 6, background: "#fff", borderRadius: 10, padding: "6px 8px", border: `1px solid ${C.borda}` }}>
+            <div style={{ flex: "1 1 100%" }}><label style={{ marginTop: 0, fontSize: 11, display: "block" }}>Cultura</label><input list="culturas-safrinha" value={j.cultura} onChange={(e) => mudar(i, "cultura", e.target.value)} placeholder="Ex.: Feijão mungo preto" style={{ marginTop: 2 }} /></div>
+            <div style={{ flex: "1 1 120px" }}><label style={{ marginTop: 0, fontSize: 11 }}>Plantar de</label><input type="date" value={j.de} onChange={(e) => mudar(i, "de", e.target.value)} style={{ marginTop: 2 }} /></div>
+            <div style={{ flex: "1 1 120px" }}><label style={{ marginTop: 0, fontSize: 11 }}>até</label><input type="date" value={j.ate} onChange={(e) => mudar(i, "ate", e.target.value)} style={{ marginTop: 2 }} /></div>
+            <button onClick={() => setJanelas(janelas.length > 1 ? janelas.filter((_, k) => k !== i) : [{ cultura: "", de: "", ate: "" }])} title="tirar" style={{ ...chip, color: C.vermelho }}>✕</button>
+          </div>
+        ))}
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <button onClick={() => setJanelas([...janelas, { cultura: "", de: janelas.length ? janelas[janelas.length - 1].ate : "", ate: "" }])} style={chip}>+ outra cultura</button>
+          <span style={{ fontSize: 12.5, color: C.navyEscuro }}>plantar</span>
+          <input type="number" inputMode="numeric" value={intervalo} onChange={(e) => setIntervalo(e.target.value)} style={{ width: 64, marginTop: 0 }} />
+          <span style={{ fontSize: 12.5, color: C.navyEscuro }}>dia(s) depois da colheita</span>
+        </div>
+      </div>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", margin: "10px 0 6px" }}>
+        {Object.entries(sim.porCultura).sort((a, b) => b[1].ha - a[1].ha).map(([c, v]) => (
+          <span key={c} style={{ background: "#FFF1C2", color: "#5C4500", borderRadius: 10, padding: "6px 10px", fontWeight: 900, fontSize: 14 }}>{c} <span style={{ fontWeight: 700, fontSize: 12 }}>{fmtN(v.ha)} ha · {v.n} talhão(ões)</span></span>
+        ))}
+        {!Object.keys(sim.porCultura).length && <span style={{ fontSize: 12.5, color: C.cinza }}>Coloque uma cultura com a janela de plantio para ver a divisão.</span>}
+      </div>
+      {sim.fora.length > 0 && culturasJanela.length > 0 && <div style={{ fontSize: 12, color: "#7A5C00", marginBottom: 6 }}>Fora das janelas ({fmtN(Math.round(sim.fora.reduce((s2, t) => s2 + t.areaHa, 0) * 100) / 100)} ha): {sim.fora.map((t) => t.talhao).join(", ")} — mantêm o que já está programado; troque abaixo se quiser.</div>}
+      <div>
+        {sim.talhoes.map((t) => (
+          <div key={t.chave} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, padding: "5px 2px", borderBottom: `1px solid ${C.fundo}`, fontSize: 12.5 }}>
+            <div style={{ minWidth: 0 }}>
+              <b style={{ color: C.navy }}>{t.talhao}</b>{t.fazenda && new Set(sim.talhoes.map((x) => x.fazendaId)).size > 1 ? <span style={{ color: C.cinza }}> · {t.fazenda}</span> : null} <span style={{ color: C.cinza }}>· {fmtN(t.areaHa)} ha</span>
+              <div style={{ fontSize: 11.5, color: C.cinza }}>{t.colheita ? <>colhe {fmtD(t.colheita).slice(0, 5)} · planta {fmtD(t.plantio).slice(0, 5)}</> : "sem previsão de colheita"}{t.muda ? <span style={{ color: "#B06000", fontWeight: 800 }}> · hoje: {t.atual || "sem safrinha"}</span> : null}</div>
+            </div>
+            <select className="nao-imprimir" value={t.manual !== undefined ? t.manual : ""} onChange={(e) => { const v = e.target.value; const n = { ...escolhas }; if (v === "") delete n[t.chave]; else n[t.chave] = v; setEscolhas(n); }}
+              style={{ flex: "none", maxWidth: 170, marginTop: 0, fontWeight: 800, color: t.fonte === "manual" ? "#B06000" : C.navy }}>
+              <option value="">{t.auto ? `${t.auto} (janela)` : t.atual ? `${t.atual} (mantém)` : "— sem safrinha"}</option>
+              {opcoes.filter((c) => c !== (t.auto || t.atual)).map((c) => <option key={c} value={c}>{c}</option>)}
+              <option value={SEM_SAFRINHA}>Sem safrinha (tirar)</option>
+            </select>
+            <b className="so-imprimir" style={{ display: "none", color: "#5C4500" }}>{t.final || "—"}</b>
+          </div>
+        ))}
+      </div>
+      {msg && <div style={{ marginTop: 8, fontWeight: 800, color: C.verdeEscuro, fontSize: 13 }}>{msg}</div>}
+      {onAplicar ? (
+        <button className="nao-imprimir" onClick={aplicar} style={{ width: "100%", marginTop: 10, padding: 13, borderRadius: 12, border: "none", background: sim.mudam.length ? C.verde : C.borda, color: "#fff", fontWeight: 900, fontSize: 15 }}>
+          ✓ Gravar a safrinha nos talhões{sim.mudam.length ? ` (${sim.mudam.length} mudam)` : ""}
+        </button>
+      ) : <div className="nao-imprimir" style={{ marginTop: 8, fontSize: 12, color: C.cinza }}>Só simulação: para gravar a safrinha no cadastro dos talhões, peça à consultoria.</div>}
+    </div>
+  );
+}
+function EscalonamentoColheita({ titulo, linhas, fazendas, fazendaInicial, onFechar, onAplicarSafrinha, chave }) {
+  const [simular, setSimular] = useState(false);
   const [agrupar, setAgrupar] = useState("mes");
   const [de, setDe] = useState("");
   const [ate, setAte] = useState("");
@@ -3652,6 +3765,7 @@ function EscalonamentoColheita({ titulo, linhas, fazendas, fazendaInicial, onFec
             {fazendas.map((f) => <button key={f.id} onClick={() => setFazendaId(f.id)} style={chip(fazendaId === f.id)}>{f.nome}</button>)}
           </div>
         )}
+        <button onClick={() => setSimular(!simular)} style={{ justifySelf: "start", padding: "9px 12px", borderRadius: 12, fontWeight: 900, fontSize: 13.5, background: simular ? "#5C4500" : "#FFF7E0", color: simular ? "#fff" : "#5C4500", border: "1.5px solid #E4C860" }}>🌽 {simular ? "Fechar a simulação da safrinha" : "Simular a safrinha (janelas de plantio por cultura)"}</button>
         {r.colhidos > 0 || incluirColhidos ? <button onClick={() => setIncluirColhidos(!incluirColhidos)} style={{ ...chip(incluirColhidos), justifySelf: "start" }}>{incluirColhidos ? "✓ incluindo talhões já colhidos" : `incluir ${r.colhidos} talhão(ões) já colhido(s)`}</button> : null}
       </div>
 
@@ -3661,6 +3775,8 @@ function EscalonamentoColheita({ titulo, linhas, fazendas, fazendaInicial, onFec
           <div style={{ textAlign: "right", fontSize: 12, color: C.cinza }}>ESCALONAMENTO DA COLHEITA<br /><b>{titulo}</b> · {fmtD(hojeISO())}</div>
         </div>
         <div style={{ fontSize: 12.5, color: C.cinza }}>{filtroTexto}</div>
+        {simular && <SimulacaoSafrinha chave={chave || titulo} onAplicar={onAplicarSafrinha || null}
+          linhas={(linhas || []).filter((l) => !l.semLavoura && (!fazendaId || l.fazendaId === fazendaId) && (!cultura || l.cultura === cultura))} />}
         <div style={{ fontSize: 20, fontWeight: 900, color: C.navy, margin: "4px 0 10px" }}>{fmtN(r.totalHa)} ha para colher <span style={{ fontSize: 13, fontWeight: 700, color: C.cinza }}>· {r.talhoes} talhão(ões) com previsão</span></div>
         {!r.grupos.length && <div style={{ color: C.cinza, padding: "16px 0" }}>Nenhum talhão com previsão de colheita {de || ate ? "nesse período" : "ainda"}. A previsão sai da emergência + ciclo da variedade, em Dados da lavoura.</div>}
         {r.grupos.map((g) => (
@@ -3699,7 +3815,7 @@ function EscalonamentoColheita({ titulo, linhas, fazendas, fazendaInicial, onFec
     </div>
   );
 }
-function TelaGrupoPanorama({ grupo, fazendas, onFechar }) {
+function TelaGrupoPanorama({ grupo, fazendas, onFechar, onAplicarSafrinha }) {
   const [escalona, setEscalona] = useState(null);   // null · { fazendaId } — tela do escalonamento da colheita
   const [dados, setDados] = useState({});   // {fazendaId: {chuvas, apls, lavoura}}
   const [talhoesAbertos, setTalhoesAbertos] = useState({});   // fazendaId → qual detalhe está aberto no cartão: "lavoura" | "chuva" | "fung" (nada = cartão curto)
@@ -3807,7 +3923,7 @@ function TelaGrupoPanorama({ grupo, fazendas, onFechar }) {
 
   const cartao = { background: "#fff", border: `1.5px solid ${C.borda}`, borderRadius: 12, padding: "10px 12px" };
   if (escalona) return <EscalonamentoColheita titulo={grupo.nome} fazendas={fazendas.map((f) => ({ id: f.id, nome: f.nome }))} fazendaInicial={escalona.fazendaId || ""}
-    linhas={porFazenda.flatMap((x) => x.linhasEscalona)} onFechar={() => setEscalona(null)} />;
+    linhas={porFazenda.flatMap((x) => x.linhasEscalona)} onFechar={() => setEscalona(null)} chave={grupo.id} onAplicarSafrinha={onAplicarSafrinha} />;
   const corFung = (st) => (st === "atrasada" ? C.vermelho : st === "alerta" ? "#7A5C00" : C.verdeEscuro);
   const rotFung = (x) => x.diasFung == null ? "sem fungicida aplicado nesta safra"
     : x.statusFung === "atrasada" ? `🔴 ATRASADA — última há ${x.diasFung} dias (máx. ${MAX_FUNG})`
@@ -4630,7 +4746,8 @@ function HomeConsultoria({ fazendas, grupos, naNuvem, usuario, onAbrir, onAbrirS
       <div style={{ maxWidth: 720, margin: "0 auto", padding: 16 }}>
         <TelaGrupoPanorama grupo={verPanorama}
           fazendas={verPanorama.id === "__todas" ? fazendas : fazendas.filter((f) => fazendaNoGrupo(f, verPanorama))}
-          onFechar={() => setVerPanorama(null)} />
+          onFechar={() => setVerPanorama(null)}
+          onAplicarSafrinha={onSalvarFazendas ? (m) => onSalvarFazendas(fazendas.map((f) => (m[f.id] ? aplicarSafrinhaNaFazenda(f, m[f.id]) : f))) : null} />
       </div>
     );
   }
@@ -6676,7 +6793,8 @@ function TelaFazenda({ fazenda, fazendas, grupos, papel, usuario, naNuvem, equip
           return { kml: kb(kml), fotos: kb(fotosMapa), docs: kb(documentos), resto: kb({ prog, apls, chuvas, ajustes, visitas, historico, lavoura }) };
         })()} />}
       {secao === "panorama" && naNuvem && (
-        <TelaGrupoPanorama grupo={{ id: fazenda.id, nome: fazenda.nome }} fazendas={[fazenda]} onFechar={() => setSecao("inicio")} />
+        <TelaGrupoPanorama grupo={{ id: fazenda.id, nome: fazenda.nome }} fazendas={[fazenda]} onFechar={() => setSecao("inicio")}
+          onAplicarSafrinha={podeCad && onAtualizarFazenda ? (m) => onAtualizarFazenda(aplicarSafrinhaNaFazenda(fazenda, m[fazenda.id] || {})) : null} />
       )}
       {secao === "geral" && naNuvem && veResumoGeral && (
         <TelaGrupoGeral grupo={{ id: fazenda.id, nome: fazenda.nome }} fazendas={[fazenda]} onFechar={() => setSecao("inicio")} />
