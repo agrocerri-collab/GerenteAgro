@@ -164,6 +164,14 @@ service cloud.firestore {
           meuPerfil().get('funcao', '') in ['Produtor', 'Gerente']) == true &&
         fazendaId in meuPerfil().get('fazendas', []) && fazendaDaMinhaConta(fazendaId);
     }
+    // Pessoa DA FAZENDA que edita Dados da fazenda (nome, talhões…): chave "editarDados";
+    // sem marca, só o Produtor (Daniel 19/11/2026)
+    function fazendaPodeEditarDados(fazendaId) {
+      return temPerfil() && meuPerfil().get('papel', '') == 'fazenda' &&
+        meuPerfil().get('permissoes', {}).get('editarDados',
+          meuPerfil().get('funcao', '') == 'Produtor') == true &&
+        fazendaId in meuPerfil().get('fazendas', []) && fazendaDaMinhaConta(fazendaId);
+    }
     // Pessoa DA FAZENDA com 🧾 Insumos do grupo: passa compra de uma fazenda do grupo para outra.
     // Sem marca, Produtor e Gerente podem (mesma regra do app)
     function fazendaPodeInsumosGrupo(fazendaId) {
@@ -340,7 +348,10 @@ service cloud.firestore {
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['produtividade', 'precoSacaCusto', 'fiscal'])) ||
          // quem é da fazenda cadastra e posiciona os pluviômetros dela (só esse campo)
          (acessoFazendaLiberado(fazendaId) &&
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pluviometros'])));
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pluviometros'])) ||
+         // ✏️ Editar Dados da fazenda: nome, produtor, município e talhões (nunca conta, grupo, código, dono)
+         (fazendaPodeEditarDados(fazendaId) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nome', 'produtor', 'municipio', 'talhoes', 'pluviometros', 'produtividade', 'precoSacaCusto', 'fiscal'])));
       // excluir uma fazenda apaga tudo dela — só o administrador (da conta)
       allow delete: if ehAdmin() && minhaContaNoDoc();
 

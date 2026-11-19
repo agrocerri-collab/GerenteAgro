@@ -1592,6 +1592,13 @@ teste("simulação da safrinha: talhão cai na janela da colheita (+dias), fora 
     && faz.talhoes[0].culturaSafrinha === "Feijão mungo preto" && faz.talhoes[1].culturaSafrinha === "" && faz.talhoes[2].culturaSafrinha === "Milho";
 });
 
+teste("editar Dados da fazenda: Produtor pode sem marcar; gerente/outros só marcando; marcação tira", () => {
+  const p = (funcao, permissoes) => ({ funcao, permissoes });
+  return C.podeFazenda(p("Produtor"), "editarDados") === true && C.podeFazenda(p("Gerente"), "editarDados") === false
+    && C.podeFazenda(p("Monitor de campo"), "editarDados") === false && C.podeFazenda(p("Gerente", { editarDados: true }), "editarDados") === true
+    && C.podeFazenda(p("Produtor", { editarDados: false }), "editarDados") === false && C.ITENS_ACESSO.some((i) => i[0] === "editarDados" && i[3] === "fazenda");
+});
+
 teste("agenda do monitoramento: 1º até 5 DAE (estande); depois soja a cada 10 e algodão a cada 7", () => {
   const A = C.agendaMonitoramento;
   const a = A("2026-11-01", "", "Soja", "2026-11-04");            // DAE 3, nunca monitorado: janela do 1º aberta

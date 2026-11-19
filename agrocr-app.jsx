@@ -179,12 +179,14 @@ const ITENS_ACESSO = [
   ["recomendacoes", "✍️ Fazer recomendações de operação (pulverização, semeadura, adubação…)", "O que pode lançar", "fazenda"],
   ["pedidos", "🛒 Lançar pedidos e compras de insumos (dentro do Financeiro)", "O que pode lançar", "fazenda"],
   ["apagar", "🗑️ Apagar lançamentos errados (monitoramento, visita, diesel, colheita, execução…)", "O que pode lançar", "fazenda"],
+  // Daniel 19/11/2026: o produtor edita Dados da fazenda (nome, talhões, áreas, culturas, safrinha); outros só se marcar
+  ["editarDados", "✏️ Editar Dados da fazenda (nome, talhões, áreas, culturas e safrinha)", "O que pode lançar", "fazenda"],
   // resumo em R$ da fazenda (custo por hectare, estoque, colheita, diesel): Daniel 12/11/2026 — "por enquanto só o produtor e o escritório"
   ["resumoGeral", "💰 Resumo geral da fazenda (custo por hectare, estoque, colheita e diesel) — junto com o Financeiro", "Dinheiro", "fazenda"],
 ];
 // chaves de lançamento do lado da fazenda: sem marcação explícita, NÃO pode — menos "apagar",
 // que Produtor e Gerente têm por padrão (quem manda na fazenda corrige o que saiu errado)
-const LANCAR_FAZENDA = ["recomendacoes", "pedidos", "apagar"];
+const LANCAR_FAZENDA = ["recomendacoes", "pedidos", "apagar", "editarDados"];
 const AREAS_FAZENDA = ITENS_ACESSO.filter((i) => !i[3]).map(([k, r]) => [k, r]);
 // funções de campo (operador, monitor): tela curta, sem Financeiro/Cotações/Programa por padrão
 const funcaoDeCampo = (f) => /operador|monitor/i.test(String(f || ""));
@@ -197,7 +199,7 @@ const TELAS_MODO_AGRONOMO = ["panorama", "dados", "lavoura", "apl", "planoins", 
 const telaNoModo = (modo, id) => modo !== "agronomo" || TELAS_MODO_AGRONOMO.includes(id);
 const veRelatorioCompletoPragas = (f) => /monitor|agr[ôo]nomo/i.test(String(f || ""));
 // "apagar" e "insumosGrupo": Produtor e Gerente podem sem marcar; os outros só se a consultoria liberar
-const padraoAreaFazenda = (funcao, chave) => chave === "resumoGeral" ? /produtor|escrit/i.test(String(funcao || "")) : chave === "apagar" || chave === "insumosGrupo" ? /produtor|gerente/i.test(String(funcao || "")) : LANCAR_FAZENDA.includes(chave) ? false : !(["financeiro", "cotacoes", "programa"].includes(chave) && funcaoDeCampo(funcao));
+const padraoAreaFazenda = (funcao, chave) => chave === "editarDados" ? /produtor/i.test(String(funcao || "")) : chave === "resumoGeral" ? /produtor|escrit/i.test(String(funcao || "")) : chave === "apagar" || chave === "insumosGrupo" ? /produtor|gerente/i.test(String(funcao || "")) : LANCAR_FAZENDA.includes(chave) ? false : !(["financeiro", "cotacoes", "programa"].includes(chave) && funcaoDeCampo(funcao));
 // O que cada função pode, por padrão, nos acessos da EQUIPE (GerenteAgro): o titular escolhe a função e
 // ajusta se quiser. Chave ausente = pode (para as funções de confiança) — a lista diz o que NÃO pode.
 const CAMPO_VER = ["panorama", "dadosfazenda", "lavoura", "solo", "operacoes", "fungicidas", "estoque", "ndvi", "pluviometria", "previsao", "colheita", "visitas", "comunidade", "suporte", "guia", "ponto"];
@@ -6188,6 +6190,8 @@ function TelaFazenda({ fazenda, fazendas, grupos, papel, usuario, naNuvem, equip
   const podeCad = consultor && podePermissao(usuario, "cadastrar");
   const podePedidos = consultor ? podeCad : podeFazenda(usuario, "pedidos");
   const podeAcess = consultor && podePermissao(usuario, "acessos");
+  // Dados da fazenda: consultoria com "cadastrar"; da fazenda, quem tem "editarDados" (Produtor por padrão)
+  const podeEditarDados = consultor ? podeCad : podeFazenda(usuario, "editarDados");
   const podeCustos = consultor && podePermissao(usuario, "custos");
   // apagar/corrigir lançamento errado: equipe com "excluir"; da fazenda, quem tem "apagar" (Produtor e Gerente por padrão)
   const podeApagar = consultor ? podePermissao(usuario, "excluir") : podeFazenda(usuario, "apagar");
@@ -6786,7 +6790,7 @@ function TelaFazenda({ fazenda, fazendas, grupos, papel, usuario, naNuvem, equip
         </div>
       )}
 
-      {secao === "dados" && <SecaoDados documentos={documentos} onAbrirDocumentos={mostrar("documentos") ? () => { setVoltarPara({ secao: "dados", rotulo: "Dados da fazenda" }); setSecao("doc"); } : null} fazenda={fazenda} fazendas={fazendas} grupos={grupos} consultor={podeCad} podeAcessos={podeAcess} naNuvem={naNuvem} registrar={registrar} onCriarGrupo={onCriarGrupo} onAtualizar={onAtualizarFazenda} onExcluir={onExcluirFazenda}
+      {secao === "dados" && <SecaoDados documentos={documentos} onAbrirDocumentos={mostrar("documentos") ? () => { setVoltarPara({ secao: "dados", rotulo: "Dados da fazenda" }); setSecao("doc"); } : null} fazenda={fazenda} fazendas={fazendas} grupos={grupos} consultor={podeCad} podeEditar={podeEditarDados} podeAcessos={podeAcess} naNuvem={naNuvem} registrar={registrar} onCriarGrupo={onCriarGrupo} onAtualizar={onAtualizarFazenda} onExcluir={onExcluirFazenda}
         maquinas={maquinas} onSalvarMaquinas={(v) => gravar(kMaq(fazenda.id), v, setMaquinas, maquinas)}
         usoDados={(() => {
           const kb = (v) => Math.round(JSON.stringify(v === undefined || v === null ? "" : v).length / 1024);
@@ -6794,7 +6798,7 @@ function TelaFazenda({ fazenda, fazendas, grupos, papel, usuario, naNuvem, equip
         })()} />}
       {secao === "panorama" && naNuvem && (
         <TelaGrupoPanorama grupo={{ id: fazenda.id, nome: fazenda.nome }} fazendas={[fazenda]} onFechar={() => setSecao("inicio")}
-          onAplicarSafrinha={podeCad && onAtualizarFazenda ? (m) => onAtualizarFazenda(aplicarSafrinhaNaFazenda(fazenda, m[fazenda.id] || {})) : null} />
+          onAplicarSafrinha={podeEditarDados && onAtualizarFazenda ? (m) => onAtualizarFazenda(aplicarSafrinhaNaFazenda(fazenda, m[fazenda.id] || {})) : null} />
       )}
       {secao === "geral" && naNuvem && veResumoGeral && (
         <TelaGrupoGeral grupo={{ id: fazenda.id, nome: fazenda.nome }} fazendas={[fazenda]} onFechar={() => setSecao("inicio")} />
@@ -7992,7 +7996,7 @@ function SecaoSuporte({ usuario, naNuvem }) {
 }
 
 // =========================== DADOS ===========================
-function SecaoDados({ fazenda, fazendas, grupos, consultor, podeAcessos, naNuvem, registrar, onCriarGrupo, onAtualizar, onExcluir, maquinas, onSalvarMaquinas, usoDados, onAbrirDocumentos, documentos }) {
+function SecaoDados({ fazenda, fazendas, grupos, consultor, podeEditar, podeAcessos, naNuvem, registrar, onCriarGrupo, onAtualizar, onExcluir, maquinas, onSalvarMaquinas, usoDados, onAbrirDocumentos, documentos }) {
   // outras fazendas que usam o mesmo código: é assim que um grupo entra de uma vez
   const irmas = (fazendas || []).filter((f) => f.id !== fazenda.id && (f.codigo || "") && f.codigo === fazenda.codigo);
   const [modalTalhao, setModalTalhao] = useState(false);   // true = novo, objeto = editando
@@ -8021,7 +8025,7 @@ function SecaoDados({ fazenda, fazendas, grupos, consultor, podeAcessos, naNuvem
         <Linha rotulo="Talhões" valor={String(talhoes.length)} />
       </Cartao>
 
-      {consultor && (
+      {(consultor || podeEditar) && (
         <button onClick={() => setModalFazenda(true)} style={{ width: "100%", marginTop: 10, padding: 11, background: "#fff", color: C.navy, border: `1.5px solid ${C.navy}`, borderRadius: 10, fontWeight: 800, fontSize: 14 }}>
           ✏️ Editar dados da fazenda
         </button>
@@ -8104,7 +8108,7 @@ function SecaoDados({ fazenda, fazendas, grupos, consultor, podeAcessos, naNuvem
               : <span>{t.cultura}{t.culturaSafrinha ? <span style={{ color: C.verdeEscuro }}> + {t.culturaSafrinha} (safrinha)</span> : null}</span>}
             <div style={{ fontSize: 13, color: C.cinza }}>{t.areaHa} ha{t.variedade ? ` · ${t.variedade}` : ""}</div>
           </div>
-          {consultor && (
+          {(consultor || podeEditar) && (
             <div style={{ display: "flex", gap: 6, flex: "none" }}>
               <button onClick={() => setModalTalhao(t)}
                 style={{ background: "#fff", border: `1px solid ${C.navy}`, borderRadius: 8, color: C.navy, padding: "6px 10px", fontSize: 13, fontWeight: 700 }}>Editar</button>
@@ -8114,10 +8118,10 @@ function SecaoDados({ fazenda, fazendas, grupos, consultor, podeAcessos, naNuvem
           )}
         </div>
       ))}
-      {consultor && (
+      {(consultor || podeEditar) && (
         <button onClick={() => setModalTalhao(true)} style={{ width: "100%", padding: 13, background: C.verdeBg, color: C.verdeEscuro, border: "none", borderRadius: 10, fontWeight: 800, fontSize: 15 }}>+ Adicionar talhão</button>
       )}
-      {consultor && (
+      {(consultor || podeEditar) && (
         <button onClick={() => setModalTalhoesIA(true)} style={{ width: "100%", marginTop: 8, padding: 12, background: "#fff", color: C.navy, border: `2px solid ${C.verde}`, borderRadius: 10, fontWeight: 800, fontSize: 14 }}>
           🤖 Ler lista de talhões com IA <span style={{ color: C.cinza, fontWeight: 600, fontSize: 12 }}>· foto ou PDF da planilha</span>
         </button>
@@ -8182,8 +8186,14 @@ function SecaoDados({ fazenda, fazendas, grupos, consultor, podeAcessos, naNuvem
       )}
 
       {modalFazenda && (
-        <ModalFazenda inicial={fazenda} grupos={grupos} onFechar={() => setModalFazenda(false)}
+        <ModalFazenda inicial={fazenda} grupos={grupos} basico={!consultor} onFechar={() => setModalFazenda(false)}
           onSalvar={(entrada) => {
+            // quem é da fazenda muda só nome, produtor e município (grupo e código são da consultoria)
+            if (!consultor) {
+              onAtualizar({ ...fazenda, nome: entrada.nome, produtor: entrada.produtor, municipio: entrada.municipio });
+              registrar && registrar("Dados da fazenda editados", `${entrada.nome} · ${entrada.produtor}`);
+              setModalFazenda(false); return;
+            }
             const { novoGrupo, ...dados } = entrada;
             const grupoId = novoGrupo && onCriarGrupo ? onCriarGrupo(novoGrupo) : dados.grupoId;
             onAtualizar({ ...fazenda, ...dados, grupoId });
@@ -31890,7 +31900,7 @@ function Linha({ rotulo, valor }) {
   );
 }
 
-function ModalFazenda({ inicial, grupos, onFechar, onSalvar }) {
+function ModalFazenda({ inicial, grupos, onFechar, onSalvar, basico }) {
   const i = inicial || {};
   const [nome, setNome] = useState(i.nome || "");
   const [produtor, setProdutor] = useState(i.produtor || "");
@@ -31909,7 +31919,7 @@ function ModalFazenda({ inicial, grupos, onFechar, onSalvar }) {
       <input value={municipio} onChange={(e) => setMunicipio(e.target.value)} placeholder="Ex.: Peixe/TO" />
       {/* Na versão de venda ninguém entra por código — o campo some (o código
           continua existindo por baixo, inofensivo). */}
-      {!MARCA_VENDA && (
+      {!MARCA_VENDA && !basico && (
         <div>
           <label>Código de acesso da fazenda</label>
           <div style={{ display: "flex", gap: 6 }}>
@@ -31921,6 +31931,7 @@ function ModalFazenda({ inicial, grupos, onFechar, onSalvar }) {
         </div>
       )}
 
+      {!basico && <>
       <label>Grupo / produtor (opcional)</label>
       <select value={grupoId} onChange={(e) => setGrupoId(e.target.value)}>
         <option value="">Nenhum — fazenda avulsa</option>
@@ -31954,9 +31965,10 @@ function ModalFazenda({ inicial, grupos, onFechar, onSalvar }) {
             : "Fazenda de um produtor que tem outras? Ponha no grupo — aí um código só abre todas elas."}
         </div>
       )}
+      </>}
 
       <BotaoSalvar
-        disabled={!nome || !codigo || (grupoId === "__novo__" && (!nomeGrupoNovo.trim() || !codGrupoNovo))}
+        disabled={!nome || (!basico && !codigo) || (grupoId === "__novo__" && (!nomeGrupoNovo.trim() || !codGrupoNovo))}
         onClick={() => onSalvar({
           nome, produtor, municipio, codigo: codigo.toUpperCase(),
           grupoId: grupoId === "__novo__" ? null : (grupoId || null),
