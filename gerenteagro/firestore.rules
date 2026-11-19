@@ -415,7 +415,9 @@ service cloud.firestore {
         allow delete: if consultorNaFazenda(fazendaId) && ehAdmin();
       }
       match /arquivos/{doc}     { allow read: if temAcessoAFazenda(fazendaId) || (doc == 'kml' && pontoLiberado(fazendaId));
-                                  allow write: if consultorNaFazenda(fazendaId); }
+                                  // simulação de custo da fazenda (Financeiro → 🧪): quem tem o Financeiro dela também grava
+                                  allow write: if consultorNaFazenda(fazendaId) ||
+                                    (doc in ['simulacoes', 'adubosSim'] && produtorLiberado(fazendaId)); }
 
       // O que a fazenda lança no campo: execução, chuva e ajuste de estoque.
       // São acréscimos — ninguém apaga o que já foi registrado.

@@ -282,6 +282,10 @@ const kSolo = (f) => `agrocr:solo:${f}`;   // análises de solo e pontos de cole
 const kComb = (f) => `agrocr:comb:${f}`;     // diesel: entradas e abastecimentos (contínuo, sem safra)
 const kManut = (f) => `agrocr:manut:${f}`;
 const kCotPecas = (f) => `agrocr:cotpec:${f}`;
+// Simulação de custo DA FAZENDA (Financeiro → 🧪), para o cliente e o GerenteAgro (Daniel 19/11/2026):
+// mesma ferramenta das "Simulações da consultoria", guardada num documento da própria fazenda
+const kSimFaz = (f) => `agrocr:simfaz:${f}`;
+const kAdubosFaz = (f) => `agrocr:adubosfaz:${f}`;
 const kPonto = (f, s) => `agrocr:ponto:${f}:${s}`;   // batidas de ponto (por safra)
 const kPontoCfg = (f) => `agrocr:pontocfg:${f}`;  // pessoas, senhas e jornada do ponto   // cotações de peças, diesel e serviços (WhatsApp)
 const kAlmox = (f) => `agrocr:almox:${f}`;   // almoxarifado: entradas, retiradas por máquina, ajustes e mínimos   // manutenções das máquinas
@@ -6269,6 +6273,19 @@ function TelaFazenda({ fazenda, fazendas, grupos, papel, usuario, naNuvem, equip
   const [manutencoes, setManutencoes] = useState([]);
   const [almox, setAlmox] = useState([]);
   const [cotPecas, setCotPecas] = useState([]);
+  const [simsFaz, setSimsFaz] = useState(null);       // simulações de custo desta fazenda (carrega ao abrir a tela)
+  const [adubosFaz, setAdubosFaz] = useState([]);
+  const abrindoSim = secao === "fin" && abaFin === "simulacao";
+  useEffect(() => {
+    if (!abrindoSim) return;
+    if (naNuvem && window.NuvemDados && NuvemDados.observarDoc) {
+      const a = NuvemDados.observarDoc(fazenda.id, "simulacoes", (v) => setSimsFaz(Array.isArray(v) ? v : []));
+      const b = NuvemDados.observarDoc(fazenda.id, "adubosSim", (v) => setAdubosFaz(Array.isArray(v) ? v : []));
+      return () => { try { a && a(); b && b(); } catch (e) {} };
+    }
+    sGet(kSimFaz(fazenda.id), []).then((v) => setSimsFaz(v || []));
+    sGet(kAdubosFaz(fazenda.id), []).then((v) => setAdubosFaz(v || []));
+  }, [fazenda.id, abrindoSim]);
   const [ponto, setPonto] = useState([]);
   const [pontoCfg, setPontoCfg] = useState(null);
   const SECAO_PERMISSAO = { rh: "financeiro", panorama: "panorama", dados: "dadosfazenda", lavoura: "lavoura", solo: "solo", apl: "operacoes", fungicidas: "fungicidas", estoque: "estoque", mapa: "ndvi", chuva: "pluviometria", previsao: "previsao", colheita: "colheita", visitas: "visitas", diesel: "diesel", rel: "relatorios", doc: "documentos", comunidade: "comunidade", suporte: "suporte", cotacoes: "cotacoes", guia: "guia", ponto: "ponto" };
@@ -6435,7 +6452,7 @@ function TelaFazenda({ fazenda, fazendas, grupos, papel, usuario, naNuvem, equip
     prog: ["col", "compras"], apl: ["rec", null], vis: ["col", "visitas"],
     aju: ["col", "ajustes"], chuva: ["col", "chuvas"], colheita: ["col", "colheita"], lavoura: ["col", "lavoura"], ent: ["col", "entregas"], custo: ["col", "custos"], maq: ["colperm", "maquinas"],
     solo: ["colperm", "solo"], comb: ["colperm", "combustivel"], manut: ["colperm", "manutencoes"], almox: ["colperm", "almoxarifado"], cotpec: ["colperm", "cotacoesPecas"], ponto: ["col", "ponto"], pontocfg: ["doc", "pontoConfig"], func: ["colperm", "funcionarios"], notas: ["col", "notas"],
-    log: ["col", "historico"], kml: ["doc", "kml"], fotomapa: ["doc", "fotosMapa"], doc: ["doc", "documentos"], programas: ["doc", "programas"],
+    log: ["col", "historico"], kml: ["doc", "kml"], fotomapa: ["doc", "fotosMapa"], doc: ["doc", "documentos"], programas: ["doc", "programas"], simfaz: ["doc", "simulacoes"], adubosfaz: ["doc", "adubosSim"],
   };
 
   async function gravar(chave, valor, setLocal, anterior) {
@@ -6634,6 +6651,7 @@ function TelaFazenda({ fazenda, fazendas, grupos, papel, usuario, naNuvem, equip
       ["plano", "📋", "Planejamento operacional", "Operações da safra (próprio × terceirizado), projeção por categoria e projetado × real"],
       ["vendas", "🌾", "Venda e travamento", "Soja comprometida e livre para negociar"],
       ["planocompras", "📝", "Planejamento de insumos", "O que falta comprar, por talhão e cultura"],
+      ["simulacao", "🧪", "Simulação de custo", "Safra, safrinha, adubação: quanto custa e quanto sobra — sem mexer na fazenda"],
       ["cotacao", "🧾", "Pedido de cotação", "Volumes somados · PDF e WhatsApp para o fornecedor"],
       ["notas", "🧾", "Notas fiscais", (() => { const p = (notas || []).filter((n) => n.status !== "destinada").length; const v = (notas || []).filter((n) => !n.pago && n.vencimento && n.vencimento < hojeISO()).length; const partes = []; if (p) partes.push(`${p} para destinar`); if (v) partes.push(`⚠️ ${v} vencida${v > 1 ? "s" : ""}`); return partes.length ? partes.join(" · ") : "SEFAZ, XML, foto → custo por categoria"; })()],
     ] : []),
@@ -6828,7 +6846,7 @@ function TelaFazenda({ fazenda, fazendas, grupos, papel, usuario, naNuvem, equip
             const GRUPOS_FIN = [
               ["O que comprar", ["planocompras", "cotacao", "prog", "cotacoes"]],
               ["O que pagar", ["notas", "maq"]],
-              ["Quanto sobrou", ["custos", "caixa", "vendas", "dre", "plano", "relfin"]],
+              ["Quanto sobrou", ["custos", "caixa", "vendas", "dre", "plano", "simulacao", "relfin"]],
             ];
             const grupoDe = (id) => { const g = GRUPOS_FIN.findIndex(([, ids]) => ids.includes(id)); return g < 0 ? GRUPOS_FIN.length - 1 : g; };
             const ordenados = QUADROS_FIN.slice().sort((a, b) => grupoDe(a[0]) - grupoDe(b[0]) || GRUPOS_FIN[grupoDe(a[0])][1].indexOf(a[0]) - GRUPOS_FIN[grupoDe(b[0])][1].indexOf(b[0]));
@@ -6869,6 +6887,12 @@ function TelaFazenda({ fazenda, fazendas, grupos, papel, usuario, naNuvem, equip
               onSalvar={(v) => gravar(kCusto(fazenda.id, safra), v, setCustos, custos)} />
           </div>
         </div>
+      )}
+      {secao === "fin" && veFinanceiro && abaFin === "simulacao" && veCustos && (
+        simsFaz === null ? <div style={{ padding: 20, color: C.cinza }}>Abrindo as simulações…</div> : (
+          <SecaoSimulacoes nomeFazenda={fazenda.nome} simulacoes={simsFaz} onSalvar={(v) => gravar(kSimFaz(fazenda.id), v, setSimsFaz, simsFaz)} produtosCatalogo={produtosCatalogo} usuario={usuario}
+            adubos={adubosFaz} onSalvarAdubos={(v) => gravar(kAdubosFaz(fazenda.id), v, setAdubosFaz, adubosFaz)} />
+        )
       )}
       {secao === "fin" && veFinanceiro && abaFin === "planocompras" && veCustos && (
         <SecaoPlanoCompras programas={programas} onSalvarProgramas={salvarProgramas} fazenda={fazenda} estoque={calcularEstoque()} custos={custos} fornecedores={fornecedores} lavoura={lavoura}
@@ -16608,7 +16632,7 @@ function lucroDaSimulacao({ custoHa, areaHa, precoSaca, produtividade }) {
     margem: receitaHa > 0 ? lucroHa / receitaHa : 0,
   };
 }
-function SecaoSimulacoes({ simulacoes, onSalvar, produtosCatalogo, usuario, adubos, onSalvarAdubos }) {
+function SecaoSimulacoes({ simulacoes, onSalvar, produtosCatalogo, usuario, adubos, onSalvarAdubos, nomeFazenda }) {
   const [aberta, setAberta] = useState(null);     // id da simulação aberta
   const [criando, setCriando] = useState(false);
   const [nome, setNome] = useState("");
@@ -16971,14 +16995,15 @@ function SecaoSimulacoes({ simulacoes, onSalvar, produtosCatalogo, usuario, adub
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-        <div style={{ fontWeight: 900, color: C.navy, fontSize: 16 }}>🧪 Simulações da consultoria</div>
+        <div style={{ fontWeight: 900, color: C.navy, fontSize: 16 }}>🧪 {nomeFazenda ? `Simulação de custo — ${nomeFazenda}` : "Simulações da consultoria"}</div>
         <button onClick={() => setCriando(!criando)} style={{ background: C.verde, color: "#fff", border: "none", borderRadius: 8, padding: "8px 12px", fontWeight: 800, fontSize: 13, flex: "none" }}>
           + Nova simulação
         </button>
       </div>
       <div style={{ fontSize: 12, color: C.cinza, marginBottom: 10 }}>
-        Monte aqui planejamentos-base sem mexer em fazenda nenhuma — compra de safra, de safrinha,
-        adubação. Fica gravado para a equipe toda e depois serve de referência dentro das fazendas.
+        {nomeFazenda
+          ? "Monte aqui quanto custa e quanto sobra — safra, safrinha, adubação — sem mexer nos lançamentos da fazenda. Fica gravado nesta fazenda."
+          : "Monte aqui planejamentos-base sem mexer em fazenda nenhuma — compra de safra, de safrinha, adubação. Fica gravado para a equipe toda e depois serve de referência dentro das fazendas."}
       </div>
       {criando && (
         <div style={{ background: "#fff", border: `1.5px solid ${C.borda}`, borderRadius: 12, padding: 14, marginBottom: 10 }}>
