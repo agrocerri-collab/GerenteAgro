@@ -218,7 +218,9 @@ $avisoDeErro = @'
         "aparelho: " + (navigator.userAgent || "?") + "\n" +
         "falharam: " + ((window.__scriptsErro || []).join(", ") || "nenhum script") + "\n" +
         "React " + (typeof React) + " | ReactDOM " + (typeof ReactDOM) +
-        " | firebase " + (typeof firebase) + " | Nuvem " + (typeof Nuvem);
+        " | firebase " + (typeof firebase) + " | Nuvem " + (typeof Nuvem) +
+        " | app " + (typeof TelaFazenda === "function" ? "chegou" : "NAO chegou (sinal fraco ou arquivo grande)") +
+        " | " + (navigator.onLine ? "com internet" : "SEM internet") + " | " + Math.round((Date.now() - (window.__inicioAbrir || Date.now())) / 1000) + " s";
     } catch (e) { return ""; }
   }
   // O Firestore as vezes corrompe a memoria local do aparelho e trava com
@@ -289,11 +291,22 @@ $avisoDeErro = @'
     if (!document.getElementById("carregando")) return;
     mostrar("Falha: " + (m || "desconhecida"));
   });
-  // se em 20 segundos nada apareceu, o aparelho travou no meio do caminho
+  // 20 s sem abrir: quase sempre e sinal fraco baixando a versao nova (uns 3 MB). Nao e erro:
+  // avisa, oferece tentar de novo e CONTINUA carregando. So com 60 s vira tela de erro.
+  window.__inicioAbrir = Date.now();
   setTimeout(function () {
     var c = document.getElementById("carregando");
-    if (c) mostrar("O aplicativo demorou demais para abrir neste aparelho.");
+    if (!c || document.getElementById("aviso-lento")) return;
+    var d = document.createElement("div"); d.id = "aviso-lento";
+    d.style.cssText = "font-family:system-ui,sans-serif;max-width:420px;margin:16px auto;padding:14px 16px;background:#FFF7E0;border:1.5px solid #E4C860;border-radius:12px;color:#5C4500;font-size:15px;text-align:center";
+    d.innerHTML = "<b>Ainda abrindo...</b><br>O sinal pode estar fraco (o app baixa a versao nova uma vez). Espere mais um pouco ou" +
+      "<br><button onclick='location.reload()' style='margin-top:10px;padding:10px 18px;border:none;border-radius:10px;background:#17335F;color:#fff;font-weight:800;font-size:15px'>Tentar de novo</button>";
+    c.style.flexDirection = "column"; c.appendChild(d);   // embaixo do "Abrindo...", no meio da tela
   }, 20000);
+  setTimeout(function () {
+    var c = document.getElementById("carregando");
+    if (c) mostrar("O aplicativo demorou demais para abrir neste aparelho (60 s).");
+  }, 60000);
 })();
 </script>
 '@
