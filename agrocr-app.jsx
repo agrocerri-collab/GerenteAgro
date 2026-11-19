@@ -3567,7 +3567,140 @@ function ModalEditarCompraGrupo({ produto, base, fazendas, onFechar, onGravou })
 // A visão TÉCNICA de todas as fazendas juntas: hectares por cultura, chuva
 // acumulada e veranico de cada uma, janela de fungicida (15 dias no máximo,
 // alerta a partir de 12) e pendências de aplicação. Só leitura.
+// ---------- Escalonamento da colheita (Daniel, 18/11/2026) ----------
+// Quantos hectares ficam prontos em cada mês / quinzena / semana, com os talhões e a previsão de cada um —
+// para programar máquina, frete e armazém e pensar a safrinha. Previsão = emergência + ciclo da variedade.
+const MESES_COLHEITA = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+function periodoDaColheita(iso, agrupar) {
+  const [a, m, d] = String(iso).slice(0, 10).split("-").map(Number);
+  const dd = (x) => String(x).padStart(2, "0"), ultimo = new Date(Date.UTC(a, m, 0)).getUTCDate(), mesCurto = MESES_COLHEITA[m - 1].slice(0, 3);
+  if (agrupar === "quinzena") {
+    const q = d <= 15 ? 1 : 2;
+    return { chave: `${a}-${dd(m)}-${q}`, rotulo: `${q}ª quinzena de ${mesCurto}/${a}`, inicio: `${a}-${dd(m)}-${q === 1 ? "01" : "16"}`, fim: `${a}-${dd(m)}-${q === 1 ? "15" : dd(ultimo)}` };
+  }
+  if (agrupar === "semana") {
+    const t = Date.UTC(a, m - 1, d), dow = (new Date(t).getUTCDay() + 6) % 7;   // segunda = 0
+    const ini = new Date(t - dow * 86400000), fim = new Date(ini.getTime() + 6 * 86400000);
+    const iso2 = (x) => x.toISOString().slice(0, 10), br = (x) => `${dd(x.getUTCDate())}/${dd(x.getUTCMonth() + 1)}`;
+    return { chave: iso2(ini), rotulo: `semana de ${br(ini)} a ${br(fim)}`, inicio: iso2(ini), fim: iso2(fim) };
+  }
+  return { chave: `${a}-${dd(m)}`, rotulo: `${MESES_COLHEITA[m - 1]}/${a}`, inicio: `${a}-${dd(m)}-01`, fim: `${a}-${dd(m)}-${dd(ultimo)}` };
+}
+function escalonamentoColheita(linhas, opcoes) {
+  const { agrupar = "mes", de = "", ate = "", cultura = "", fazendaId = "", incluirColhidos = false } = opcoes || {};
+  const grupos = {}, semPrevisao = []; let colhidos = 0;
+  for (const l of linhas || []) {
+    if (l.semLavoura) continue;
+    if (cultura && l.cultura !== cultura) continue;
+    if (fazendaId && l.fazendaId !== fazendaId) continue;
+    if (l.colhido && !incluirColhidos) { colhidos++; continue; }
+    if (!l.previsao || !l.previsao.data) { semPrevisao.push(l); continue; }
+    const d = l.previsao.data;
+    if ((de && d < de) || (ate && d > ate)) continue;
+    const p = periodoDaColheita(d, agrupar);
+    if (!grupos[p.chave]) grupos[p.chave] = { ...p, ha: 0, itens: [], porCultura: {} };
+    const g = grupos[p.chave];
+    g.ha += num(l.areaHa); g.itens.push(l);
+    const c = l.cultura || "—"; g.porCultura[c] = (g.porCultura[c] || 0) + num(l.areaHa);
+  }
+  const lista = Object.values(grupos).sort((a, b) => a.inicio.localeCompare(b.inicio));
+  for (const g of lista) { g.ha = Math.round(g.ha * 100) / 100; g.itens.sort((a, b) => a.previsao.data.localeCompare(b.previsao.data) || String(a.talhao).localeCompare(String(b.talhao), "pt-BR", { numeric: true })); }
+  return { grupos: lista, semPrevisao, colhidos, totalHa: Math.round(lista.reduce((s2, g) => s2 + g.ha, 0) * 100) / 100, talhoes: lista.reduce((s2, g) => s2 + g.itens.length, 0) };
+}
+function EscalonamentoColheita({ titulo, linhas, fazendas, fazendaInicial, onFechar }) {
+  const [agrupar, setAgrupar] = useState("mes");
+  const [de, setDe] = useState("");
+  const [ate, setAte] = useState("");
+  const [cultura, setCultura] = useState("");
+  const [fazendaId, setFazendaId] = useState(fazendaInicial || "");
+  const [incluirColhidos, setIncluirColhidos] = useState(false);
+  const culturas = [...new Set((linhas || []).filter((l) => !l.semLavoura && l.cultura).map((l) => l.cultura))].sort();
+  const r = escalonamentoColheita(linhas, { agrupar, de, ate, cultura, fazendaId, incluirColhidos });
+  const maxHa = Math.max(1, ...r.grupos.map((g) => g.ha));
+  const variasFazendas = (fazendas || []).length > 1;
+  const nomeFaz = fazendaId ? ((fazendas || []).find((f) => f.id === fazendaId) || {}).nome : "";
+  const chip = (on) => ({ padding: "7px 11px", borderRadius: 14, fontWeight: 800, fontSize: 12.5, background: on ? C.navy : "#fff", color: on ? "#fff" : C.navyEscuro, border: `1.5px solid ${on ? C.navy : C.borda}` });
+  const COR_CULTURA = { Soja: "#2E7D32", Milho: "#D4A017", "Algodão": "#1F6FA8", "Feijão": "#8D5524", Sorgo: "#C0392B", Gergelim: "#8E44AD" };
+  const corDe = (c) => COR_CULTURA[c] || ["#16A085", "#7F8C8D", "#D35400"][Math.max(0, culturas.indexOf(c)) % 3];
+  const filtroTexto = [agrupar === "mes" ? "por mês" : agrupar === "quinzena" ? "por quinzena" : "por semana", de || ate ? `de ${de ? fmtD(de) : "início"} a ${ate ? fmtD(ate) : "fim"}` : "todo o ciclo", cultura || "todas as culturas", nomeFaz || (variasFazendas ? "todas as fazendas" : "")].filter(Boolean).join(" · ");
+  return (
+    <div>
+      <div className="nao-imprimir" style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
+        <button onClick={onFechar} style={{ padding: "9px 14px", background: "#fff", border: `1.5px solid ${C.borda}`, borderRadius: 10, fontWeight: 800, color: C.navy }}>← Panorama</button>
+        <button onClick={() => { try { window.print(); } catch (e) {} }} style={{ flex: 1, padding: "9px 14px", background: C.navy, color: "#fff", border: "none", borderRadius: 10, fontWeight: 800 }}>🖨️ Gerar PDF</button>
+        <BotaoPdfWhats nome={`escalonamento-colheita-${titulo}`} titulo={`Escalonamento da colheita — ${titulo}`} estilo={{ flex: 1.2 }} />
+      </div>
+      <div className="nao-imprimir" style={{ background: "#fff", border: `1.5px solid ${C.borda}`, borderRadius: 12, padding: "10px 12px", marginBottom: 12, display: "grid", gap: 8 }}>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+          <b style={{ fontSize: 12.5, color: C.navy, marginRight: 4 }}>Somar</b>
+          {[["mes", "por mês"], ["quinzena", "por quinzena"], ["semana", "por semana"]].map(([k, n]) => <button key={k} onClick={() => setAgrupar(k)} style={chip(agrupar === k)}>{n}</button>)}
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
+          <div><label style={{ marginTop: 0, fontSize: 11.5 }}>Colheita de</label><input type="date" value={de} onChange={(e) => setDe(e.target.value)} style={{ marginTop: 2 }} /></div>
+          <div><label style={{ marginTop: 0, fontSize: 11.5 }}>até</label><input type="date" value={ate} onChange={(e) => setAte(e.target.value)} style={{ marginTop: 2 }} /></div>
+          {(de || ate) && <button onClick={() => { setDe(""); setAte(""); }} style={{ ...chip(false), padding: "8px 10px" }}>todo o ciclo</button>}
+        </div>
+        {culturas.length > 1 && (
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            <button onClick={() => setCultura("")} style={chip(!cultura)}>Todas as culturas</button>
+            {culturas.map((c) => <button key={c} onClick={() => setCultura(c)} style={chip(cultura === c)}>{c}</button>)}
+          </div>
+        )}
+        {variasFazendas && (
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            <button onClick={() => setFazendaId("")} style={chip(!fazendaId)}>Todas as fazendas</button>
+            {fazendas.map((f) => <button key={f.id} onClick={() => setFazendaId(f.id)} style={chip(fazendaId === f.id)}>{f.nome}</button>)}
+          </div>
+        )}
+        {r.colhidos > 0 || incluirColhidos ? <button onClick={() => setIncluirColhidos(!incluirColhidos)} style={{ ...chip(incluirColhidos), justifySelf: "start" }}>{incluirColhidos ? "✓ incluindo talhões já colhidos" : `incluir ${r.colhidos} talhão(ões) já colhido(s)`}</button> : null}
+      </div>
+
+      <div className="imprimivel" style={{ background: "#fff", borderRadius: 12, padding: 18, border: `1.5px solid ${C.borda}` }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: `3px solid ${C.verde}`, paddingBottom: 8, marginBottom: 10 }}>
+          <img src={LOGO} alt="" style={{ height: 40 }} />
+          <div style={{ textAlign: "right", fontSize: 12, color: C.cinza }}>ESCALONAMENTO DA COLHEITA<br /><b>{titulo}</b> · {fmtD(hojeISO())}</div>
+        </div>
+        <div style={{ fontSize: 12.5, color: C.cinza }}>{filtroTexto}</div>
+        <div style={{ fontSize: 20, fontWeight: 900, color: C.navy, margin: "4px 0 10px" }}>{fmtN(r.totalHa)} ha para colher <span style={{ fontSize: 13, fontWeight: 700, color: C.cinza }}>· {r.talhoes} talhão(ões) com previsão</span></div>
+        {!r.grupos.length && <div style={{ color: C.cinza, padding: "16px 0" }}>Nenhum talhão com previsão de colheita {de || ate ? "nesse período" : "ainda"}. A previsão sai da emergência + ciclo da variedade, em Dados da lavoura.</div>}
+        {r.grupos.map((g) => (
+          <div key={g.chave} style={{ marginBottom: 14, breakInside: "avoid" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+              <b style={{ color: C.navy, fontSize: 15, textTransform: agrupar === "mes" ? "capitalize" : "none" }}>{g.rotulo}</b>
+              <span style={{ fontWeight: 900, color: C.verdeEscuro, fontSize: 15 }}>{fmtN(g.ha)} ha <span style={{ fontWeight: 600, color: C.cinza, fontSize: 12 }}>· {g.itens.length} talhão(ões)</span></span>
+            </div>
+            <div style={{ display: "flex", height: 14, borderRadius: 7, overflow: "hidden", background: C.fundo, margin: "4px 0", width: `${Math.max(6, (g.ha / maxHa) * 100)}%` }}>
+              {Object.entries(g.porCultura).map(([c, ha]) => <div key={c} title={`${c} ${fmtN(ha)} ha`} style={{ width: `${(ha / g.ha) * 100}%`, background: corDe(c) }} />)}
+            </div>
+            {Object.keys(g.porCultura).length > 1 && <div style={{ fontSize: 11.5, color: C.cinza }}>{Object.entries(g.porCultura).map(([c, ha]) => <span key={c} style={{ marginRight: 10 }}><span style={{ color: corDe(c), fontWeight: 900 }}>■</span> {c} {fmtN(Math.round(ha * 100) / 100)} ha</span>)}</div>}
+            <div style={{ marginTop: 4 }}>
+              {g.itens.map((l, i) => (
+                <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "5px 2px", borderBottom: `1px solid ${C.fundo}`, fontSize: 12.5 }}>
+                  <div style={{ minWidth: 0 }}>
+                    <b style={{ color: C.navy }}>{l.talhao}</b>{l.parte ? <span style={{ color: C.cinza }}> · parte {l.parte}</span> : null}{variasFazendas && !fazendaId ? <span style={{ color: C.cinza }}> · {l.fazenda}</span> : null}
+                    <div style={{ color: C.cinza, fontSize: 12 }}><span style={{ color: corDe(l.cultura), fontWeight: 900 }}>■</span> {l.cultura}{l.variedade ? ` · ${l.variedade}` : ""}{l.safrinha ? <span style={{ color: "#7A5C00", fontWeight: 700 }}> · safrinha: {l.safrinha}</span> : null}</div>
+                  </div>
+                  <div style={{ textAlign: "right", flex: "none" }}>
+                    <b style={{ color: l.colhido ? C.cinza : C.navy }}>{fmtD(l.previsao.data).slice(0, 5)}{l.previsao.peloPlantio ? "*" : ""}</b>{l.colhido ? <span style={{ color: C.verdeEscuro, fontSize: 11 }}> ✓ colhido</span> : null}
+                    <div style={{ fontSize: 12, color: C.navyEscuro }}>{fmtN(l.areaHa)} ha</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+        {r.semPrevisao.length > 0 && (
+          <div style={{ marginTop: 10, background: "#FFF7E0", borderRadius: 10, padding: "8px 10px", fontSize: 12.5, breakInside: "avoid" }}>
+            <b style={{ color: "#7A5C00" }}>Sem previsão ({fmtN(Math.round(r.semPrevisao.reduce((s2, l) => s2 + num(l.areaHa), 0) * 100) / 100)} ha):</b> {r.semPrevisao.map((l) => `${variasFazendas && !fazendaId ? l.fazenda + " · " : ""}${l.talhao} (${fmtN(l.areaHa)} ha)`).join(", ")} — falta a emergência ou o ciclo da variedade em Dados da lavoura.
+          </div>
+        )}
+        <div style={{ fontSize: 11, color: C.cinza, borderTop: `1px solid ${C.borda}`, paddingTop: 6, marginTop: 12 }}>Previsão de colheita = emergência + ciclo da variedade (Dados da lavoura). * contado do plantio, sem emergência lançada.</div>
+      </div>
+    </div>
+  );
+}
 function TelaGrupoPanorama({ grupo, fazendas, onFechar }) {
+  const [escalona, setEscalona] = useState(null);   // null · { fazendaId } — tela do escalonamento da colheita
   const [dados, setDados] = useState({});   // {fazendaId: {chuvas, apls, lavoura}}
   const [talhoesAbertos, setTalhoesAbertos] = useState({});   // fazendaId → qual detalhe está aberto no cartão: "lavoura" | "chuva" | "fung" (nada = cartão curto)
   useEffect(() => {
@@ -3655,6 +3788,12 @@ function TelaGrupoPanorama({ grupo, fazendas, onFechar }) {
       f, safra: safraAtualDe(f), areaHa: talhoes.reduce((s, t) => s + num(t.areaHa), 0),
       culturas, safrinha, colheita, mmTotal, rotuloChuva, seca, diasFung, statusFung, pendencias, idade,
       linhasLavoura: linhasDaLavoura(talhoes, d.lavoura || []),
+      // para o escalonamento: de qual fazenda, a safrinha planejada do talhão e se o talhão já foi colhido (≥ 90% da área)
+      linhasEscalona: linhasDaLavoura(talhoes, d.lavoura || []).map((l) => {
+        const t = talhoes.find((x) => x.id === l.talhaoId) || {};
+        const colhida = (d.colheita || []).filter((k) => k.tipo === "area" && k.talhaoId === l.talhaoId).reduce((s2, k) => s2 + num(k.areaHa), 0);
+        return { ...l, fazendaId: f.id, fazenda: f.nome, safrinha: t.culturaSafrinha || "", colhido: num(t.areaHa) > 0 && colhida >= num(t.areaHa) * 0.9 };
+      }),
     };
   });
 
@@ -3667,6 +3806,8 @@ function TelaGrupoPanorama({ grupo, fazendas, onFechar }) {
   const emAlerta = porFazenda.filter((x) => x.statusFung === "alerta").length;
 
   const cartao = { background: "#fff", border: `1.5px solid ${C.borda}`, borderRadius: 12, padding: "10px 12px" };
+  if (escalona) return <EscalonamentoColheita titulo={grupo.nome} fazendas={fazendas.map((f) => ({ id: f.id, nome: f.nome }))} fazendaInicial={escalona.fazendaId || ""}
+    linhas={porFazenda.flatMap((x) => x.linhasEscalona)} onFechar={() => setEscalona(null)} />;
   const corFung = (st) => (st === "atrasada" ? C.vermelho : st === "alerta" ? "#7A5C00" : C.verdeEscuro);
   const rotFung = (x) => x.diasFung == null ? "sem fungicida aplicado nesta safra"
     : x.statusFung === "atrasada" ? `🔴 ATRASADA — última há ${x.diasFung} dias (máx. ${MAX_FUNG})`
@@ -3685,6 +3826,10 @@ function TelaGrupoPanorama({ grupo, fazendas, onFechar }) {
           style={{ background: C.navy, color: "#fff", border: "none", borderRadius: 8, padding: "8px 12px", fontWeight: 800, fontSize: 12 }}>🖨 PDF</button>
       </div>
 
+      <button className="nao-imprimir" onClick={() => setEscalona({})} style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, textAlign: "left", background: "#FFF7E0", border: "1.5px solid #E4C860", borderRadius: 12, padding: "10px 12px", margin: "8px 0", color: "#5C4500" }}>
+        <span style={{ fontSize: 24 }}>📅</span>
+        <span><b style={{ fontSize: 14.5 }}>Escalonamento da colheita</b><br /><span style={{ fontSize: 12 }}>hectares por mês, quinzena ou semana, talhões com a previsão · relatório em PDF</span></span>
+      </button>
       <div className="imprimivel">
       <div className="so-imprimir" style={{ display: "none", marginBottom: 10 }}>
         <div style={{ fontWeight: 900, fontSize: 18, color: C.navy }}>Panorama geral — {grupo.nome}</div>
@@ -3758,7 +3903,7 @@ function TelaGrupoPanorama({ grupo, fazendas, onFechar }) {
                   return etiqueta("c" + c, "lavoura", `🌱 Safra: ${c} ${fmtN(x.culturas[c])} ha${resto}`, C.verdeEscuro, C.verdeBg);
                 })}
                 {Object.keys(x.safrinha).map((c) => etiqueta("s" + c, "lavoura", `🌽 Safrinha: ${c} ${fmtN(x.safrinha[c])} ha`, "#7A5C00", "#FFF7E0"))}
-                {comPrev.length > 0 && !tudoColhido && etiqueta("col", "lavoura", `🌾 colheita ${fmtD(comPrev[0].previsao.data)}`, "#7A5C00", "#FFF7E0")}
+                {comPrev.length > 0 && !tudoColhido && <button key="col" className="nao-imprimir" onClick={() => setEscalona({ fazendaId: x.f.id })} style={{ background: "#FFF7E0", color: "#7A5C00", border: "none", borderRadius: 8, padding: "6px 9px", fontSize: 12, fontWeight: 800 }}>🌾 colheita a partir de {fmtD(comPrev[0].previsao.data)} · 📅 escalonamento</button>}
                 {etiqueta("chuva", "chuva", `🌧️ ${fmtN(x.mmTotal)} mm`, "#1F6FA8", "#E3F0FA")}
                 {etiqueta("fung", "fung", `🚿 ${txFung}`, tudoColhido ? C.cinza : corFung(x.statusFung), !tudoColhido && x.statusFung === "atrasada" ? "#FFF0F0" : C.fundo)}
               </div>
